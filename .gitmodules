@@ -1,0 +1,12 @@
+[submodule "codenames"]
+	path = codenames
+	url = https://github.com/dcep93/codenames.git
+[submodule "league"]
+	path = league
+	url = https://github.com/dcep93/league.git
+[submodule "pirates"]
+	path = pirates
+	url = https://github.com/dcep93/pirates.git
+[submodule "shared"]
+	path = shared
+	url = https://github.com/dcep93/shared.git
