@@ -1,0 +1,25 @@
+#!/bin/sh
+
+set -e
+
+git push origin master $@
+
+GIT_DIR=$(git rev-parse --git-dir)
+if [[ $(basename $GIT_DIR) != ".git" ]]; then
+	TOP_LEVEL=$(git rev-parse --show-toplevel)
+
+	cmessage=$(git log -1 --pretty=%B)
+
+	cd $TOP_LEVEL/../
+
+	unset GIT_DIR
+
+	PAR_TOP_LEVEL=$(git rev-parse --show-toplevel)
+	submodule="${TOP_LEVEL#$PAR_TOP_LEVEL/}"
+	
+	status=$(git submodule status $submodule | awk -F '[+ ]' '{print $3 " " $2}')
+	git add $submodule
+	git commit -m "$cmessage" -m "$status"
+
+	git spush $@
+fi
