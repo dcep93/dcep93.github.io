@@ -16,3 +16,6 @@
 [submodule "league_match_query"]
 	path = league_match_query
 	url = https://github.com/dcep93/league_match_query.git
+[submodule "dominion"]
+	path = dominion
+	url = https://github.com/dcep93/dominion.git
