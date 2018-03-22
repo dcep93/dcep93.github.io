@@ -19,3 +19,6 @@
 [submodule "dominion"]
 	path = dominion
 	url = https://github.com/dcep93/dominion.git
+[submodule "gameoflife"]
+	path = gameoflife
+	url = https://github.com/dancepeda93/gameoflife.git
