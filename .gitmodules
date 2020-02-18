@@ -10,9 +10,6 @@
 [submodule "shared"]
 	path = shared
 	url = https://github.com/dcep93/shared.git
-[submodule "snatch"]
-	path = snatch
-	url = https://github.com/dcep93/snatch.git
 [submodule "league_match_query"]
 	path = league_match_query
 	url = https://github.com/dcep93/league_match_query.git
