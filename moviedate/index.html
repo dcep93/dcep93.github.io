@@ -1,0 +1,27 @@
+<html>
+	<head>
+		<meta name="viewport" content="width=device-width" />
+	</head>
+	<body>
+		<div style="max-width: 100%;">
+			<video
+				id="video"
+				controls=""
+				autoplay=""
+				name="media"
+				style="width: 100%; height: auto;"
+			></video>
+		</div>
+		<div>
+			<h1>
+				<a
+					href="https://chrome.google.com/webstore/detail/movie-date/iofdkijmnaoabjndjbichhbllhbbkbde"
+					>Get Movie Date Extension</a
+				>
+			</h1>
+		</div>
+	</body>
+	<script>
+		document.getElementById("video").src = location.href.split("src=")[1];
+	</script>
+</html>
