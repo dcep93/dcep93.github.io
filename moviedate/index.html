@@ -1,5 +1,6 @@
 <html>
 	<head>
+		<title>Movie Date</title>
 		<meta name="viewport" content="width=device-width" />
 	</head>
 	<body>
@@ -22,6 +23,8 @@
 		</div>
 	</body>
 	<script>
-		document.getElementById("video").src = location.href.split("src=")[1];
+		document.getElementById("video").src = decodeURIComponent(
+			location.href.split("src=")[1]
+		);
 	</script>
 </html>
