@@ -22,3 +22,6 @@
 [submodule "firegame"]
 	path = firegame
 	url = https://github.com/dcep93/firegame
+[submodule "moviedate"]
+	path = moviedate
+	url = https://github.com/dcep93/moviedate
