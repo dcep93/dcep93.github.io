@@ -18,7 +18,7 @@
 	url = https://github.com/dcep93/dominion.git
 [submodule "gameoflife"]
 	path = gameoflife
-	url = https://github.com/dancepeda93/gameoflife.git
+	url = https://github.com/dcep93/gameoflife.git
 [submodule "firegame"]
 	path = firegame
 	url = https://github.com/dcep93/firegame
