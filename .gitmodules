@@ -25,3 +25,6 @@
 [submodule "moviedate"]
 	path = moviedate
 	url = https://github.com/dcep93/moviedate
+[submodule "chess"]
+	path = chess
+	url = https://github.com/dcep93/chess.git
