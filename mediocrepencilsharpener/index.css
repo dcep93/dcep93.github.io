@@ -1,0 +1,12 @@
+#main-header {
+  text-align: center;
+  background-color: rgb(80, 101, 192);
+  color: rgb(255, 255, 255);
+  font-family: Helvetica, sans-serif, Arial;
+  padding: 10px;
+}
+
+#main-footer {
+  text-align: center;
+  font-size: 18px;
+}
