@@ -19,7 +19,9 @@
         }))
         .then((obj) => ({
             ...obj,
-            found: Array.from(obj.txt.matchAll(obj.regex)).join("\n") || "<none>",
+            found: Array.from(obj.txt.matchAll(obj.regex))
+                .filter((w) => w.length > 3)
+                .join("\n") || "<none>",
         }))
         .then((obj) => [console.log(obj), obj][1])
         .then((obj) => (obj.output.innerText = obj.found))
