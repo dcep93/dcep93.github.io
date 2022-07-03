@@ -1,6 +1,6 @@
-<div style="height: 99vh; display: flex">
+<div style="height: 99vh; display: flex; flex-direction: column">
     <form id="form"><input id="input" /><input hidden type="submit" /></form>
-    <pre style="flex-grow: 1; display: flex" id="output"></pre>
+    <pre style="flex-grow: 1; display: flex; flex-direction: column; flex-wrap: wrap" id="output"></pre>
 </div>
 <script>
     document.getElementById("form").onsubmit = (e) =>
@@ -12,6 +12,7 @@
             input: document.getElementById("input"),
             output: document.getElementById("output"),
         }))
+        .then((obj) => [obj, (obj.output.innerHTML = "")][0])
         .then((obj) => ({
             ...obj,
             regex: new RegExp(
@@ -22,28 +23,30 @@
         .then((obj) => ({
             ...obj,
             raw_found: Array.from(obj.txt.matchAll(obj.regex))
-                .filter((w) => w.length > 3)
-                .join("\n") || "<none>",
+                .map((w) => w[0])
+                .filter((w) => w.length > 3),
         }))
         .then((obj) => ({
             ...obj,
             found: obj.raw_found.length === 0 ? ["<none>"] : obj.raw_found,
         }))
         .then((obj) => ({
-            obj,
+            ...obj,
             promises: obj.found.map((word) =>
                 Promise.resolve()
                 .then(() => document.createElement("span"))
                 .then((span) =>
                     Promise.resolve()
-                    .then(() => (span.style = ""))
+                    .then(() => (span.style = "display: inline-block"))
                     .then(() => (span.innerText = word))
+                    .then(() => obj.output.appendChild(span))
+                    .then(() => console.log(span))
                 )
             ),
         }))
         .then((obj) =>
             Promise.resolve()
-            .then(() => Promise.all(Promise.resolve(obj), ...obj.promises))
+            .then(() => Promise.all([Promise.resolve(obj), ...obj.promises]))
             .then((ps) => ps[0])
         )
         .then((obj) => [obj, console.log(obj)][0])
