@@ -1,5 +1,7 @@
-<form id="form"><input id="input" /><input hidden type="submit" /></form>
-<pre id="output"></pre>
+<div style="height: 99vh; display: flex">
+    <form id="form"><input id="input" /><input hidden type="submit" /></form>
+    <pre style="flex-grow: 1; display: flex" id="output"></pre>
+</div>
 <script>
     document.getElementById("form").onsubmit = (e) =>
         Promise.resolve(e.preventDefault())
@@ -19,12 +21,32 @@
         }))
         .then((obj) => ({
             ...obj,
-            found: Array.from(obj.txt.matchAll(obj.regex))
+            raw_found: Array.from(obj.txt.matchAll(obj.regex))
                 .filter((w) => w.length > 3)
                 .join("\n") || "<none>",
         }))
-        .then((obj) => [console.log(obj), obj][1])
-        .then((obj) => (obj.output.innerText = obj.found))
+        .then((obj) => ({
+            ...obj,
+            found: obj.raw_found.length === 0 ? ["<none>"] : obj.raw_found,
+        }))
+        .then((obj) => ({
+            obj,
+            promises: obj.found.map((word) =>
+                Promise.resolve()
+                .then(() => document.createElement("span"))
+                .then((span) =>
+                    Promise.resolve()
+                    .then(() => (span.style = ""))
+                    .then(() => (span.innerText = word))
+                )
+            ),
+        }))
+        .then((obj) =>
+            Promise.resolve()
+            .then(() => Promise.all(Promise.resolve(obj), ...obj.promises))
+            .then((ps) => ps[0])
+        )
+        .then((obj) => [obj, console.log(obj)][0])
         .catch((err) => {
             alert(err);
             throw err;
