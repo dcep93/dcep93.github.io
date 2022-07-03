@@ -1,0 +1,30 @@
+<form id="form"><input id="input" /><input hidden type="submit" /></form>
+<pre id="output"></pre>
+<script>
+    document.getElementById("form").onsubmit = (e) =>
+        Promise.resolve(e.preventDefault())
+        .then(() => fetch("./sowpods.txt"))
+        .then((resp) => resp.text())
+        .then((txt) => ({
+            txt,
+            input: document.getElementById("input"),
+            output: document.getElementById("output"),
+        }))
+        .then((obj) => ({
+            ...obj,
+            regex: new RegExp(
+                `^[${obj.input.value}]*${obj.input.value[0]}[${obj.input.value}]*$`,
+                "mg"
+            ),
+        }))
+        .then((obj) => ({
+            ...obj,
+            found: Array.from(obj.txt.matchAll(obj.regex)).join("\n") || "<none>",
+        }))
+        .then((obj) => [console.log(obj), obj][1])
+        .then((obj) => (obj.output.innerText = obj.found))
+        .catch((err) => {
+            alert(err);
+            throw err;
+        });
+</script>
