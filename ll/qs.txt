@@ -4,6 +4,7 @@ q/Fictional Bands and Musicians.html
 q/Richard Strauss.html
 q/Just Audio Clues in the Key of C.html
 q/Just Audio 'Country' Classical Music.html
+q/Chess in Pop Culture.html
 q/Just Audio Silence.html
 q/Music Plagiarism.html
 q/Lesser-Known Lyrics to Well-Known Songs.html
