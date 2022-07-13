@@ -1,0 +1,37 @@
+var css;
+
+function main() {
+    init();
+    document.addEventListener("DOMContentLoaded", ready);
+}
+
+function init() {
+    css = document.createElement("style");
+    css.appendChild(document.createTextNode("body { display: none }"));
+    document.head.appendChild(css);
+}
+
+function ready() {
+    Array.from(document.getElementsByClassName("qbox")).forEach((e) => {
+        const qbr = e.getElementsByClassName("qb_r")[0];
+        const ans = Array.from(qbr.children).filter((_, i) => i > 0);
+        const qba = document.createElement("div");
+        qbr.appendChild(qba);
+        $(qba).hover(function() {
+            $(this).css("cursor", "pointer");
+        });
+        const f = () =>
+            ans.forEach((a) => (a.style.opacity = 1 - (a.style.opacity || 1)));
+        ans.forEach((a) => {
+            a.onclick = f;
+            qbr.removeChild(a);
+            qba.appendChild(a);
+        });
+        const money = e.getElementsByClassName("money")[0];
+        if (money) ans.push(money);
+        f();
+    });
+    document.head.removeChild(css);
+}
+
+main();
