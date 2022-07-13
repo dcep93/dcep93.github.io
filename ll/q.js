@@ -20,16 +20,16 @@ function ready() {
     Array.from(document.getElementsByClassName("qbox")).forEach((e) => {
         const qbr = e.getElementsByClassName("qb_r")[0];
         const ans = Array.from(qbr.children).filter((_, i) => i > 0);
+        const f = () =>
+            ans.forEach((a) => (a.style.opacity = 1 - (a.style.opacity || 1)));
         const qba = document.createElement("div");
         qba.style.backgroundColor = "lightgrey";
         qbr.appendChild(qba);
         $(qba).hover(function() {
             $(this).css("cursor", "pointer");
         });
-        const f = () =>
-            ans.forEach((a) => (a.style.opacity = 1 - (a.style.opacity || 1)));
+        qba.onclick = f;
         ans.forEach((a) => {
-            a.onclick = f;
             qbr.removeChild(a);
             qba.appendChild(a);
         });
