@@ -4,16 +4,21 @@
     </li>
 </ul>
 <script>
-    const pages = ["3565"];
+    // find q -type f | tee qs.txt
     const template = document.getElementById("template");
     const ul = document.getElementById("ul");
-    pages.forEach((p) => {
-        const c = template.cloneNode(true);
-        c.hidden = false;
-        const a = c.getElementsByTagName("a")[0];
-        console.log(c.getElementsByTagName("a"));
-        a.innerText = p;
-        a.href = `./q/${p}.html`;
-        ul.appendChild(c);
-    });
+    fetch("./qs.txt")
+        .then((resp) => resp.text())
+        .then((text) => text.split("\n").filter(Boolean))
+        .then((pages) =>
+            pages.forEach((p) => {
+                const c = template.cloneNode(true);
+                c.hidden = false;
+                const a = c.getElementsByTagName("a")[0];
+                console.log(c.getElementsByTagName("a"));
+                a.innerText = p;
+                a.href = p;
+                ul.appendChild(c);
+            })
+        );
 </script>

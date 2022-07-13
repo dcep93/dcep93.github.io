@@ -6,6 +6,7 @@ function main() {
 }
 
 function init() {
+    document.write(`<base href="https://learnedleague.com/" />`);
     css = document.createElement("style");
     css.appendChild(document.createTextNode("body { display: none }"));
     document.head.appendChild(css);
@@ -15,7 +16,7 @@ function ready() {
     const home = document.createElement("a");
     home.innerText = "dcep93 quizzes";
     home.href = `${document.location.href}/../../`;
-    home.style.fontSize = 50;
+    home.style.fontSize = "x-large";
     document.body.prepend(home);
     Array.from(document.getElementsByClassName("qbox")).forEach((e) => {
         const qbr = e.getElementsByClassName("qb_r")[0];
