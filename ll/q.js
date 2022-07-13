@@ -16,6 +16,7 @@ function ready() {
         const qbr = e.getElementsByClassName("qb_r")[0];
         const ans = Array.from(qbr.children).filter((_, i) => i > 0);
         const qba = document.createElement("div");
+        qba.style.backgroundColor = "lightgrey";
         qbr.appendChild(qba);
         $(qba).hover(function() {
             $(this).css("cursor", "pointer");
