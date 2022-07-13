@@ -13,11 +13,21 @@ function init() {
 }
 
 function ready() {
+    setHome();
+    hideAnswers();
+    handleDDAjax();
+    document.head.removeChild(css);
+}
+
+function setHome() {
     const home = document.createElement("a");
     home.innerText = "dcep93 quizzes";
     home.href = `${document.location.href}/../../`;
     home.style.fontSize = "x-large";
     document.body.prepend(home);
+}
+
+function hideAnswers() {
     Array.from(document.getElementsByClassName("qbox")).forEach((e) => {
         const qbr = e.getElementsByClassName("qb_r")[0];
         const ans = Array.from(qbr.children).filter((_, i) => i > 0);
@@ -38,7 +48,19 @@ function ready() {
         if (money) ans.push(money);
         f();
     });
-    document.head.removeChild(css);
+}
+
+function handleDDAjax() {
+    const s = document.createElement("script");
+    s.src = `${window.location.href}/../../ajaxtabs.js`;
+    s.onload = () => {
+        var profiles = new ddajaxtabs("profilestabs", "profilesdivcontainer");
+        profiles.setpersist(true);
+        profiles.setselectedClassTarget("link"); //'link' or 'linkparent'
+        profiles.init();
+    };
+    document.body.appendChild(s);
 }
 
 main();
+//
