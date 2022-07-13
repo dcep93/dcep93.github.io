@@ -15,7 +15,6 @@ function init() {
 function ready() {
     setHome();
     hideAnswers();
-    handleDDAjax();
     document.head.removeChild(css);
 }
 
@@ -48,18 +47,6 @@ function hideAnswers() {
         if (money) ans.push(money);
         f();
     });
-}
-
-function handleDDAjax() {
-    const s = document.createElement("script");
-    s.src = `${window.location.href}/../../ajaxtabs.js`;
-    s.onload = () => {
-        var profiles = new ddajaxtabs("profilestabs", "profilesdivcontainer");
-        profiles.setpersist(true);
-        profiles.setselectedClassTarget("link"); //'link' or 'linkparent'
-        profiles.init();
-    };
-    document.body.appendChild(s);
 }
 
 main();
