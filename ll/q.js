@@ -12,6 +12,11 @@ function init() {
 }
 
 function ready() {
+    const home = document.createElement("a");
+    home.innerText = "dcep93 quizzes";
+    home.href = `${document.location.href}/../../`;
+    home.style.fontSize = 50;
+    document.body.prepend(home);
     Array.from(document.getElementsByClassName("qbox")).forEach((e) => {
         const qbr = e.getElementsByClassName("qb_r")[0];
         const ans = Array.from(qbr.children).filter((_, i) => i > 0);

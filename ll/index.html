@@ -1,0 +1,19 @@
+<ul id="ul">
+    <li hidden id="template">
+        <a></a>
+    </li>
+</ul>
+<script>
+    const pages = ["3565"];
+    const template = document.getElementById("template");
+    const ul = document.getElementById("ul");
+    pages.forEach((p) => {
+        const c = template.cloneNode(true);
+        c.hidden = false;
+        const a = c.getElementsByTagName("a")[0];
+        console.log(c.getElementsByTagName("a"));
+        a.innerText = p;
+        a.href = `./q/${p}.html`;
+        ul.appendChild(c);
+    });
+</script>
