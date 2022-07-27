@@ -19,7 +19,7 @@
             ...obj,
             regex: new RegExp(
                 `^[${obj.input.value}]*${obj.input.value[0]}[${obj.input.value}]*$`,
-                "mg"
+                "mgi"
             ),
         }))
         .then((obj) => ({
