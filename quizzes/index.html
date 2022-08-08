@@ -1,0 +1,50 @@
+<html>
+
+<head>
+    <title>quizzes 1.0.0</title>
+    <link rel="icon" href="https://upload.wikimedia.org/wikipedia/commons/thumb/d/da/LetterQ.svg/1200px-LetterQ.svg.png" />
+</head>
+
+<body style="margin: 0">
+    <div style="height: 100vh; width: 100vw; display: flex; flex-direction: column" id="div">
+        <div style="display: flex; justify-content: space-between">
+            <button onclick="nav(-1)">&lt;</button>
+            <a id="span"></a><button onclick="nav(1)">&gt;</button>
+        </div>
+        <iframe style="border: 0; flex-grow: 1" hidden id="iframe"></iframe>
+    </div>
+</body>
+<script>
+    const urls = [
+        "https://www.spotify.com/heardle/",
+        "https://worldle.teuteuf.fr/",
+        "https://oec.world/en/tradle/",
+        "https://likewisetv.com/arcade/moviedle",
+        "https://likewisetv.com/arcade/posterdle",
+        "https://framed.wtf/",
+        "https://histordle.com/yeardle/",
+        "https://www.nytimes.com/games/wordle/index.html",
+    ];
+    const div = document.getElementById("div");
+    const iframe = document.getElementById("iframe");
+    const span = document.getElementById("span");
+
+    const iframes = urls.map((url) => {
+        const clone = iframe.cloneNode();
+        clone.src = url;
+        div.appendChild(clone);
+        return clone;
+    });
+
+    var index = 0;
+
+    function nav(inc) {
+        iframes[index].hidden = true;
+        index = (iframes.length + index + inc) % iframes.length;
+        span.href = span.innerText = urls[index];
+        iframes[index].hidden = false;
+    }
+    nav(0);
+</script>
+
+</html>
