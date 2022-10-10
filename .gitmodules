@@ -1,6 +1,3 @@
-[submodule "codenames"]
-	path = codenames
-	url = https://github.com/dcep93/codenames.git
 [submodule "league"]
 	path = league
 	url = https://github.com/dcep93/league.git
