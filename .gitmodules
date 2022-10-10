@@ -1,27 +1,6 @@
-[submodule "league"]
-	path = league
-	url = https://github.com/dcep93/league.git
-[submodule "pirates"]
-	path = pirates
-	url = https://github.com/dcep93/pirates.git
-[submodule "shared"]
-	path = shared
-	url = https://github.com/dcep93/shared.git
-[submodule "league_match_query"]
-	path = league_match_query
-	url = https://github.com/dcep93/league_match_query.git
-[submodule "dominion"]
-	path = dominion
-	url = https://github.com/dcep93/dominion.git
 [submodule "gameoflife"]
 	path = gameoflife
 	url = https://github.com/dcep93/gameoflife.git
-[submodule "firegame"]
-	path = firegame
-	url = https://github.com/dcep93/firegame
-[submodule "moviedate"]
-	path = moviedate
-	url = https://github.com/dcep93/moviedate
 [submodule "chess"]
 	path = chess
 	url = https://github.com/dcep93/chess.git
