@@ -101,7 +101,11 @@ function renderElements() {
   Object.assign(scoreDiv.style, {
     position: "absolute",
     fontSize: "xxx-large",
+    margin: 10,
     padding: 10,
+    background: "rgba(255, 255, 255, 0.8)",
+    border: "2px solid black",
+    borderRadius: "10px",
   });
   gameDiv.appendChild(scoreDiv);
 
