@@ -1,9 +1,9 @@
 var vars = {
-  gravity: 1000,
-  power: 300,
+  gravity: 1200,
+  power: 400,
   tick: 10,
   pipeSpeed: 0.35,
-  pipeGapPx: 130,
+  pipeGapPx: 125,
   birdScale: 0.15,
 
   running: false,
@@ -13,10 +13,10 @@ var vars = {
   pipes: [],
 
   worldTranslatePercent: 20,
+  pipeBufferXPx: 25,
   pipeWidthPx: 200,
-  pipeDisappearPx: 1000,
   pipeReappearPx: 1000,
-  pipeSpacingX: 600,
+  pipeSpacingX: 800,
   pipeSpacingXVariance: [0.7, 0.9],
   pipeHeightYVariance: [0.2, 0.7],
   birdHeightPx: 267,
@@ -25,7 +25,7 @@ var vars = {
   birdImgHeightPercentage: 124,
   birdImgOffsetBottomPx: 21,
   birdImgOffsetRightPx: 65,
-  maxRotateDeg: 90,
+  maxRotateDeg: 120,
   rotateThreshold: 180,
 };
 
@@ -59,15 +59,6 @@ function renderElements() {
     zIndex: -1,
   });
   gameDiv.appendChild(bgDiv);
-
-  var scoreDiv = document.createElement("div");
-  scoreDiv.id = "score";
-  Object.assign(scoreDiv.style, {
-    position: "absolute",
-    fontSize: "xxx-large",
-    padding: 10,
-  });
-  gameDiv.appendChild(scoreDiv);
 
   var worldDiv = document.createElement("div");
   worldDiv.id = "world";
@@ -105,6 +96,15 @@ function renderElements() {
   });
   birdDiv.appendChild(birdImg);
 
+  var scoreDiv = document.createElement("div");
+  scoreDiv.id = "score";
+  Object.assign(scoreDiv.style, {
+    position: "absolute",
+    fontSize: "xxx-large",
+    padding: 10,
+  });
+  gameDiv.appendChild(scoreDiv);
+
   draw();
 }
 
@@ -141,11 +141,13 @@ function randomBetween(low, high) {
 function updatePipes() {
   var nextPipes = [];
   var maxX = 0;
+  var pipeDisappearPx =
+    (1.5 * document.body.offsetWidth * vars.worldTranslatePercent) / 100;
   for (var pipe of vars.pipes) {
     pipe.lastX = pipe.x;
     pipe.x -= vars.tick * vars.pipeSpeed;
     maxX = Math.max(maxX, pipe.x);
-    if (pipe.x > -vars.pipeDisappearPx) {
+    if (pipe.x > -pipeDisappearPx) {
       nextPipes.push(pipe);
     }
   }
@@ -184,7 +186,13 @@ function startGame() {
   vars.running = true;
   vars.score = 0;
   vars.altitude = 0;
-  vars.pipes = [];
+  vars.pipes = [
+    {
+      x: document.body.offsetWidth * (1 - vars.worldTranslatePercent / 100),
+      y:
+        document.body.offsetHeight * randomBetween(...vars.pipeHeightYVariance),
+    },
+  ];
 }
 
 function draw() {
@@ -201,7 +209,7 @@ function draw() {
     var pipesDiv = document.createElement("div");
     pipesDiv.className = "pipes";
     Object.assign(pipesDiv.style, {
-      left: pipe.x,
+      left: pipe.x - vars.pipeBufferXPx,
       position: "absolute",
       height: "100%",
       width: vars.pipeWidthPx,
