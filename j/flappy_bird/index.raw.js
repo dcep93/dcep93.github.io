@@ -1,15 +1,22 @@
 var vars = {
-  gravity: 400,
+  gravity: 1000,
   power: 300,
   tick: 10,
   birdScale: 0.2,
 
   velocity: 0,
+  altitude: 0,
+
   interval: undefined,
+  started: false,
+  maxRotateDeg: 90,
+  rotateThreshold: 180,
   birdHeightPx: 267,
-  birdWidthPx: 446,
-  birdOffsetBottomPx: 22,
-  birdOffsetRightPx: 66,
+  birdWidthPx: 444,
+  birdImgAspectRatio: 600 / 333,
+  birdImgHeightPercentage: 124,
+  birdImgOffsetBottomPx: 21,
+  birdImgOffsetRightPx: 65,
 };
 
 function ready() {
@@ -25,6 +32,7 @@ function renderElements() {
   var div = document.createElement("div");
   div.style.height = "100%";
   div.style.position = "relative";
+  div.style.overflow = "hidden";
   document.body.appendChild(div);
 
   var bg = document.createElement("div");
@@ -35,31 +43,55 @@ function renderElements() {
   bg.style.position = "absolute";
   div.appendChild(bg);
 
-  var bird = document.createElement("div");
-  bird.id = "bird";
-  bird.style.position = "absolute";
-  bird.style.transform = `scale(${vars.birdScale})`;
-  bird.style.transformOrigin = "top left";
-  bird.style.backgroundColor = "red";
-  div.appendChild(bird);
-  var space = document.createElement("div");
-  space.style.width = vars.birdWidthPx;
-  space.style.height = vars.birdHeightPx;
-  bird.appendChild(space);
-  var subBird = document.createElement("img");
-  subBird.src = "./assets/bird.png";
-  subBird.style.position = "absolute";
-  subBird.style.bottom = -vars.birdOffsetBottomPx;
-  subBird.style.right = -vars.birdOffsetRightPx;
-  bird.appendChild(subBird);
+  var birdWrapper = document.createElement("div");
+  birdWrapper.id = "bird";
+  birdWrapper.style.position = "absolute";
+  birdWrapper.style.width = vars.birdWidthPx * vars.birdScale;
+  birdWrapper.style.height = vars.birdHeightPx * vars.birdScale;
+  birdWrapper.style.backgroundColor = "red";
+  div.appendChild(birdWrapper);
+  var birdImg = document.createElement("img");
+  birdImg.src = "./assets/bird.png";
+  birdImg.style.position = "absolute";
+  birdImg.style.height = `${vars.birdImgHeightPercentage}%`;
+  birdImg.style.aspectRatio = vars.birdImgAspectRatio;
+  birdImg.style.bottom = -vars.birdImgOffsetBottomPx * vars.birdScale;
+  birdImg.style.right = -vars.birdImgOffsetRightPx * vars.birdScale;
+  birdWrapper.appendChild(birdImg);
+
+  drawBird();
 }
 
 function flap() {
-  console.log("flap");
+  vars.started = true;
+  vars.velocity = vars.power;
 }
 
 function tick() {
-  // console.log("tick");
+  if (!vars.started) return;
+  console.log(vars.velocity, vars.altitude);
+  vars.velocity -= (vars.gravity * vars.tick) / 1000;
+  vars.altitude = vars.altitude + (vars.velocity * vars.tick) / 1000;
+  if (vars.altitude < 0) {
+    vars.altitude = 0;
+    drawBird();
+    endGame();
+    return;
+  }
+  drawBird();
+}
+
+function drawBird() {
+  var bird = document.getElementById("bird");
+  bird.style.bottom = vars.altitude;
+  var rotate =
+    (-vars.maxRotateDeg * Math.atan(vars.velocity / vars.rotateThreshold)) /
+    (Math.PI / 2);
+  bird.style.transform = `rotate(${rotate}deg)`;
+}
+
+function endGame() {
+  vars.started = false;
 }
 
 var functions = Object.keys({
@@ -68,6 +100,8 @@ var functions = Object.keys({
   ready,
   flap,
   tick,
+  drawBird,
+  endGame,
 });
 
 ////
