@@ -2,7 +2,7 @@ var vars = {
   gravity: 1000,
   power: 300,
   tick: 10,
-  pipeSpeed: 0.3,
+  pipeSpeed: 0.35,
   pipeGapPx: 130,
   birdScale: 0.15,
 
@@ -12,8 +12,8 @@ var vars = {
   score: 0,
   pipes: [],
 
-  worldTranslate: "20%",
-  pipeWidthPx: 100,
+  worldTranslatePercent: 20,
+  pipeWidthPx: 200,
   pipeDisappearPx: 1000,
   pipeReappearPx: 1000,
   pipeSpacingX: 600,
@@ -75,7 +75,7 @@ function renderElements() {
     position: "absolute",
     height: "100%",
     width: "100%",
-    transform: `translate(${vars.worldTranslate})`,
+    transform: `translate(${vars.worldTranslatePercent}%)`,
   });
   gameDiv.appendChild(worldDiv);
 
