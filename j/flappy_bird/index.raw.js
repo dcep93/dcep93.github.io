@@ -10,14 +10,15 @@ var vars = {
   score: 0,
   pipes: [],
 
-  maxRotateDeg: 90,
-  rotateThreshold: 180,
   birdHeightPx: 267,
   birdWidthPx: 444,
   birdImgAspectRatio: 600 / 333,
   birdImgHeightPercentage: 124,
   birdImgOffsetBottomPx: 21,
   birdImgOffsetRightPx: 65,
+  maxRotateDeg: 90,
+  rotateThreshold: 180,
+  worldTranslate: "20%",
 };
 
 function ready() {
@@ -31,41 +32,60 @@ function ready() {
 
 function renderElements() {
   var gameDiv = document.createElement("div");
-  gameDiv.style.height = "100%";
-  gameDiv.style.position = "relative";
-  gameDiv.style.overflow = "hidden";
-  gameDiv.style.userSelect = "none";
+  Object.assign(gameDiv.style, {
+    height: "100%",
+    position: "relative",
+    overflow: "hidden",
+    userSelect: "none",
+  });
   document.body.appendChild(gameDiv);
 
-  var bg = document.createElement("div");
-  bg.style.background = "url(assets/background.png)";
-  bg.style.backgroundSize = "100% 100%";
-  bg.style.width = "100%";
-  bg.style.height = "100%";
-  bg.style.position = "absolute";
-  bg.style.zIndex = -1;
-  gameDiv.appendChild(bg);
+  var bgDiv = document.createElement("div");
+  Object.assign(bgDiv.style, {
+    background: "url(assets/background.png)",
+    backgroundSize: "100% 100%",
+    width: "100%",
+    height: "100%",
+    position: "absolute",
+    zIndex: -1,
+  });
+  gameDiv.appendChild(bgDiv);
 
   var scoreDiv = document.createElement("div");
   scoreDiv.id = "score";
-  scoreDiv.style.fontSize = "xxx-large";
-  scoreDiv.style.padding = 10;
+  Object.assign(scoreDiv.style, {
+    position: "absolute",
+    fontSize: "xxx-large",
+    padding: 10,
+  });
   gameDiv.appendChild(scoreDiv);
+
+  var worldDiv = document.createElement("div");
+  Object.assign(worldDiv.style, {
+    position: "absolute",
+    height: "100%",
+    width: "100%",
+    transform: `translate(${vars.worldTranslate})`,
+  });
+  gameDiv.appendChild(worldDiv);
 
   var birdDiv = document.createElement("div");
   birdDiv.id = "bird";
-  birdDiv.style.position = "absolute";
-  birdDiv.style.width = vars.birdWidthPx * vars.birdScale;
-  birdDiv.style.height = vars.birdHeightPx * vars.birdScale;
-  birdDiv.style.backgroundColor = "red";
-  gameDiv.appendChild(birdDiv);
+  Object.assign(birdDiv.style, {
+    position: "absolute",
+    width: vars.birdWidthPx * vars.birdScale,
+    height: vars.birdHeightPx * vars.birdScale,
+  });
+  worldDiv.appendChild(birdDiv);
   var birdImg = document.createElement("img");
   birdImg.src = "./assets/bird.png";
-  birdImg.style.position = "absolute";
-  birdImg.style.height = `${vars.birdImgHeightPercentage}%`;
-  birdImg.style.aspectRatio = vars.birdImgAspectRatio;
-  birdImg.style.bottom = -vars.birdImgOffsetBottomPx * vars.birdScale;
-  birdImg.style.right = -vars.birdImgOffsetRightPx * vars.birdScale;
+  Object.assign(birdImg.style, {
+    position: "absolute",
+    height: `${vars.birdImgHeightPercentage}%`,
+    aspectRatio: vars.birdImgAspectRatio,
+    bottom: -vars.birdImgOffsetBottomPx * vars.birdScale,
+    right: -vars.birdImgOffsetRightPx * vars.birdScale,
+  });
   birdDiv.appendChild(birdImg);
 
   draw();
