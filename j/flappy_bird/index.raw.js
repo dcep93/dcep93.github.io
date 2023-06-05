@@ -131,14 +131,23 @@ function tick() {
 
 function updatePipes() {
   for (var pipe of vars.pipes) {
+    pipe.lastX = pipe.x;
     pipe.x -= vars.tick * vars.pipeSpeed;
   }
   // TODO addPipe
 }
 
 function isHittingAPipe() {
+  var center = vars.altitude - vars.birdHeightPx / 2;
   for (var pipe of vars.pipes) {
-    return true; // TODO isHittingAPipe
+    if (pipe.lastX > 0 && pipe.x < 0) {
+      if (center < pipe.y) {
+        return true;
+      }
+      if (center > pipe.y + vars.pipeSpacePx) {
+        return true;
+      }
+    }
   }
   return false;
 }
