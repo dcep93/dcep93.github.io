@@ -14,13 +14,15 @@ function ready() {
   vars.interval = setInterval(() => tick(), window.vars.tickTime);
 }
 
-function flap() {}
-
-function tick() {
-  console.log("tick1");
+function flap() {
+  console.log("flap");
 }
 
-var functions = Object.keys({ vars, ready, tick, flap });
+function tick() {
+  console.log("tick");
+}
+
+var functions = Object.keys({ vars, ready, flap, tick });
 
 ////
 
