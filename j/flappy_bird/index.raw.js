@@ -4,12 +4,12 @@ var vars = {
   tick: 10,
   birdScale: 0.2,
 
+  started: false,
   speed: 0,
   altitude: 0,
   score: 0,
+  pipes: [],
 
-  interval: undefined,
-  started: false,
   maxRotateDeg: 90,
   rotateThreshold: 180,
   birdHeightPx: 267,
@@ -26,7 +26,7 @@ function ready() {
     if (e.key == " " || e.code == "Space" || e.keyCode == 32) flap();
   };
   document.body.onclick = () => flap();
-  vars.interval = setInterval(() => tick(), vars.tick);
+  setInterval(() => tick(), vars.tick);
 }
 
 function renderElements() {
@@ -85,18 +85,18 @@ function tick() {
   vars.score += vars.tick / 100;
   vars.speed -= (vars.gravity * vars.tick) / 1000;
   vars.altitude = vars.altitude + (vars.speed * vars.tick) / 1000;
+  draw();
   if (vars.altitude < 0) {
-    vars.altitude = 0;
-    draw();
     endGame();
     return;
   }
-  draw();
 }
 
 function startGame() {
   vars.started = true;
   vars.score = 0;
+  vars.altitude = 0;
+  vars.pipes = [];
 }
 
 function draw() {
@@ -108,15 +108,15 @@ function draw() {
   scoreDiv.innerText = vars.score.toFixed(2);
 }
 
+function endGame() {
+  vars.started = false;
+}
+
 function getRotate() {
   return (
     (-vars.maxRotateDeg * Math.atan(vars.speed / vars.rotateThreshold)) /
     (Math.PI / 2)
   );
-}
-
-function endGame() {
-  vars.started = false;
 }
 
 var functions = Object.keys({
