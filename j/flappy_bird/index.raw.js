@@ -2,14 +2,17 @@ var vars = {
   gravity: 1000,
   power: 300,
   tick: 10,
+  pipeSpeed: 0.3,
+  pipeSpacePx: 120,
   birdScale: 0.2,
 
-  started: false,
+  running: false,
   speed: 0,
   altitude: 0,
   score: 0,
   pipes: [],
 
+  pipeWidthPx: 100,
   birdHeightPx: 267,
   birdWidthPx: 444,
   birdImgAspectRatio: 600 / 333,
@@ -26,12 +29,12 @@ function ready() {
   document.body.onkeydown = function (e) {
     if (e.key == " " || e.code == "Space" || e.keyCode == 32) flap();
   };
-  document.body.onclick = () => flap();
   setInterval(() => tick(), vars.tick);
 }
 
 function renderElements() {
   var gameDiv = document.createElement("div");
+  gameDiv.id = "game";
   Object.assign(gameDiv.style, {
     height: "100%",
     position: "relative",
@@ -41,6 +44,7 @@ function renderElements() {
   document.body.appendChild(gameDiv);
 
   var bgDiv = document.createElement("div");
+  bgDiv.id = "bg";
   Object.assign(bgDiv.style, {
     background: "url(assets/background.png)",
     backgroundSize: "100% 100%",
@@ -61,6 +65,7 @@ function renderElements() {
   gameDiv.appendChild(scoreDiv);
 
   var worldDiv = document.createElement("div");
+  worldDiv.id = "world";
   Object.assign(worldDiv.style, {
     position: "absolute",
     height: "100%",
@@ -68,6 +73,11 @@ function renderElements() {
     transform: `translate(${vars.worldTranslate})`,
   });
   gameDiv.appendChild(worldDiv);
+
+  var allPipesDiv = document.createElement("div");
+  allPipesDiv.id = "all_pipes";
+  Object.assign(allPipesDiv.style, { height: "100%" });
+  worldDiv.appendChild(allPipesDiv);
 
   var birdDiv = document.createElement("div");
   birdDiv.id = "bird";
@@ -77,7 +87,9 @@ function renderElements() {
     height: vars.birdHeightPx * vars.birdScale,
   });
   worldDiv.appendChild(birdDiv);
+
   var birdImg = document.createElement("img");
+  birdImg.id = "bird_img";
   birdImg.src = "./assets/bird.png";
   Object.assign(birdImg.style, {
     position: "absolute",
@@ -92,28 +104,47 @@ function renderElements() {
 }
 
 function flap() {
-  if (!vars.started) {
+  if (!vars.running) {
     startGame();
   }
   vars.speed = vars.power;
 }
 
 function tick() {
-  if (!vars.started) {
+  if (!vars.running) {
     return;
   }
   vars.score += vars.tick / 100;
   vars.speed -= (vars.gravity * vars.tick) / 1000;
   vars.altitude = vars.altitude + (vars.speed * vars.tick) / 1000;
+  updatePipes();
   draw();
   if (vars.altitude < 0) {
     endGame();
     return;
   }
+  if (isHittingAPipe()) {
+    endGame();
+    return;
+  }
+}
+
+function updatePipes() {
+  for (var pipe of vars.pipes) {
+    pipe.x -= vars.tick * vars.pipeSpeed;
+  }
+  // TODO addPipe
+}
+
+function isHittingAPipe() {
+  for (var pipe of vars.pipes) {
+    return true; // TODO isHittingAPipe
+  }
+  return false;
 }
 
 function startGame() {
-  vars.started = true;
+  vars.running = true;
   vars.score = 0;
   vars.altitude = 0;
   vars.pipes = [];
@@ -126,10 +157,63 @@ function draw() {
 
   var scoreDiv = document.getElementById("score");
   scoreDiv.innerText = vars.score.toFixed(2);
+
+  var allPipesDiv = document.getElementById("all_pipes");
+  allPipesDiv.replaceChildren();
+  for (var pipe of vars.pipes) {
+    var pipesDiv = document.createElement("div");
+    pipesDiv.className = "pipes";
+    Object.assign(pipesDiv.style, {
+      left: pipe.x,
+      position: "relative",
+      height: "100%",
+      width: vars.pipeWidthPx,
+    });
+    allPipesDiv.appendChild(pipesDiv);
+
+    // TODO extend pipes
+
+    var bottomPipeWrapper = document.createElement("div");
+    bottomPipeWrapper.className = "pipe_wrapper";
+    Object.assign(bottomPipeWrapper.style, {
+      position: "absolute",
+      width: "100%",
+      height: "100%",
+      height: pipe.y,
+      bottom: 0,
+    });
+    pipesDiv.appendChild(bottomPipeWrapper);
+    var bottomPipe = document.createElement("img");
+    bottomPipe.className = "bottom_pipe";
+    bottomPipe.src = "./assets/pipe.png";
+    Object.assign(bottomPipe.style, {
+      width: "100%",
+    });
+    bottomPipeWrapper.appendChild(bottomPipe);
+
+    var topPipeWrapper = document.createElement("div");
+    topPipeWrapper.className = "pipe_wrapper";
+    Object.assign(topPipeWrapper.style, {
+      position: "absolute",
+      width: "100%",
+      height: "100%",
+      bottom: pipe.y + vars.pipeSpacePx,
+      transform: "scaleX(-1)",
+      transform: "scaleY(-1)",
+    });
+    pipesDiv.appendChild(topPipeWrapper);
+    var topPipe = document.createElement("img");
+    topPipe.className = "top_pipe";
+    topPipe.src = "./assets/pipe.png";
+    Object.assign(topPipe.style, {
+      width: "100%",
+    });
+    topPipeWrapper.appendChild(topPipe);
+  }
 }
 
 function endGame() {
-  vars.started = false;
+  vars.running = false;
 }
 
 function getRotate() {
@@ -145,6 +229,8 @@ var functions = Object.keys({
   ready,
   flap,
   tick,
+  updatePipes,
+  isHittingAPipe,
   draw,
   getRotate,
   endGame,
