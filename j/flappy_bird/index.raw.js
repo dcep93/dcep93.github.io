@@ -3,7 +3,7 @@ var vars = {
   power: 300,
   tick: 10,
   pipeSpeed: 0.3,
-  pipeSpacePx: 120,
+  pipeGapPx: 120,
   birdScale: 0.2,
 
   running: false,
@@ -12,7 +12,13 @@ var vars = {
   score: 0,
   pipes: [],
 
+  worldTranslate: "20%",
   pipeWidthPx: 100,
+  pipeDisappearPx: 200,
+  pipeReappearPx: 1000,
+  pipeSpacingX: 100,
+  pipeSpacingXVariance: [0.1, 0.5],
+  pipeHeightYVariance: [0.3, 0.7],
   birdHeightPx: 267,
   birdWidthPx: 444,
   birdImgAspectRatio: 600 / 333,
@@ -21,7 +27,6 @@ var vars = {
   birdImgOffsetRightPx: 65,
   maxRotateDeg: 90,
   rotateThreshold: 180,
-  worldTranslate: "20%",
 };
 
 function ready() {
@@ -129,12 +134,35 @@ function tick() {
   }
 }
 
+function randomBetween(low, high) {
+  return low + (high - low) * Math.random();
+}
+
 function updatePipes() {
+  var nextPipes = [];
+  var maxX = 0;
   for (var pipe of vars.pipes) {
     pipe.lastX = pipe.x;
     pipe.x -= vars.tick * vars.pipeSpeed;
+    maxX = Math.max(maxX, pipe.x);
+    if (pipe.x > -vars.pipeDisappearPx) {
+      nextPipes.push(pipe);
+    } else {
+      console.log("disappear", pipe);
+    }
   }
-  // TODO addPipe
+  vars.pipes = nextPipes;
+  if (maxX < vars.pipeReappearPx) {
+    var x =
+      vars.pipeReappearPx +
+      vars.pipeSpacingX * randomBetween(...vars.pipeSpacingXVariance);
+    var y =
+      document.body.offsetHeight * randomBetween(...vars.pipeHeightYVariance);
+    vars.pipes.push({
+      x,
+      y,
+    });
+  }
 }
 
 function isHittingAPipe() {
@@ -144,7 +172,7 @@ function isHittingAPipe() {
       if (center < pipe.y) {
         return true;
       }
-      if (center > pipe.y + vars.pipeSpacePx) {
+      if (center > pipe.y + vars.pipeGapPx) {
         return true;
       }
     }
@@ -206,7 +234,7 @@ function draw() {
       position: "absolute",
       width: "100%",
       height: "100%",
-      bottom: pipe.y + vars.pipeSpacePx,
+      bottom: pipe.y + vars.pipeGapPx,
       transform: "scaleX(-1)",
       transform: "scaleY(-1)",
     });
