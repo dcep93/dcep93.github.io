@@ -11,7 +11,7 @@ function ready() {
     if (e.key == " " || e.code == "Space" || e.keyCode == 32) flap();
   };
   document.body.onclick = () => flap();
-  vars.interval = setInterval(() => tick(), window.vars.tickTime);
+  vars.interval = setInterval(() => tick(), vars.tickTime);
 }
 
 function flap() {
