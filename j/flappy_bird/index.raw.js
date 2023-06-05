@@ -160,18 +160,19 @@ function updatePipes() {
       x,
       y,
     });
-    console.log("appear", x, maxX, vars.pipeReappearPx);
   }
 }
 
 function isHittingAPipe() {
-  var center = vars.altitude - vars.birdHeightPx / 2;
   for (var pipe of vars.pipes) {
     if (pipe.lastX > 0 && pipe.x < 0) {
-      if (center < pipe.y) {
+      if (vars.altitude < pipe.y) {
         return true;
       }
-      if (center > pipe.y + vars.pipeGapPx) {
+      if (
+        vars.altitude + vars.birdHeightPx * vars.birdScale >
+        pipe.y + vars.pipeGapPx
+      ) {
         return true;
       }
     }
