@@ -101,7 +101,12 @@ function renderElements() {
   Object.assign(scoreDiv.style, {
     position: "absolute",
     fontSize: "xxx-large",
+    margin: 10,
     padding: 10,
+    background: "rgba(255, 255, 255, 0.8)",
+    border: "2px solid black",
+    borderRadius: "10px",
+    zIndex: 1,
   });
   gameDiv.appendChild(scoreDiv);
 
@@ -216,16 +221,12 @@ function draw() {
     });
     allPipesDiv.appendChild(pipesDiv);
 
-    // TODO extend pipes
-
     var bottomPipeWrapper = document.createElement("div");
-    bottomPipeWrapper.className = "pipe_wrapper";
+    bottomPipeWrapper.className = "bottom_pipe_wrapper";
     Object.assign(bottomPipeWrapper.style, {
       position: "absolute",
       width: "100%",
       height: "100%",
-      height: pipe.y,
-      bottom: 0,
     });
     pipesDiv.appendChild(bottomPipeWrapper);
     var bottomPipe = document.createElement("img");
@@ -233,18 +234,30 @@ function draw() {
     bottomPipe.src = "./assets/pipe.png";
     Object.assign(bottomPipe.style, {
       width: "100%",
+      position: "absolute",
+      bottom: pipe.y,
+      transform: "translateY(100%)",
     });
     bottomPipeWrapper.appendChild(bottomPipe);
+    var bottomPipeFlipped = document.createElement("img");
+    bottomPipeFlipped.className = "bottom_pipe_flipped";
+    bottomPipeFlipped.src = "./assets/pipe.png";
+    Object.assign(bottomPipeFlipped.style, {
+      width: "100%",
+      position: "absolute",
+      bottom: pipe.y,
+      transform: "translateY(100%) scaleY(-1)",
+      zIndex: -1,
+      height: "100%",
+    });
+    bottomPipeWrapper.appendChild(bottomPipeFlipped);
 
     var topPipeWrapper = document.createElement("div");
-    topPipeWrapper.className = "pipe_wrapper";
+    topPipeWrapper.className = "top_pipe_wrapper";
     Object.assign(topPipeWrapper.style, {
       position: "absolute",
       width: "100%",
       height: "100%",
-      bottom: pipe.y + vars.pipeGapPx,
-      transform: "scaleX(-1)",
-      transform: "scaleY(-1)",
     });
     pipesDiv.appendChild(topPipeWrapper);
     var topPipe = document.createElement("img");
@@ -252,8 +265,23 @@ function draw() {
     topPipe.src = "./assets/pipe.png";
     Object.assign(topPipe.style, {
       width: "100%",
+      position: "absolute",
+      bottom: pipe.y + vars.pipeGapPx,
+      transform: "scaleX(-1) scaleY(-1)",
     });
     topPipeWrapper.appendChild(topPipe);
+    var topPipeFlipped = document.createElement("img");
+    topPipeFlipped.className = "top_pipe_flipped";
+    topPipeFlipped.src = "./assets/pipe.png";
+    Object.assign(topPipeFlipped.style, {
+      width: "100%",
+      position: "absolute",
+      bottom: pipe.y + vars.pipeGapPx,
+      transform: "scaleX(-1)",
+      zIndex: -1,
+      height: "100%",
+    });
+    topPipeWrapper.appendChild(topPipeFlipped);
   }
 }
 
