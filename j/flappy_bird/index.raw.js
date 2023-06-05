@@ -165,7 +165,6 @@ function updatePipes() {
 }
 
 function isHittingAPipe() {
-  return false;
   var center = vars.altitude - vars.birdHeightPx / 2;
   for (var pipe of vars.pipes) {
     if (pipe.lastX > 0 && pipe.x < 0) {
