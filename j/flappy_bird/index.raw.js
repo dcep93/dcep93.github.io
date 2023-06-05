@@ -4,8 +4,9 @@ var vars = {
   tick: 10,
   birdScale: 0.2,
 
-  velocity: 0,
+  speed: 0,
   altitude: 0,
+  score: 0,
 
   interval: undefined,
   started: false,
@@ -29,11 +30,12 @@ function ready() {
 }
 
 function renderElements() {
-  var div = document.createElement("div");
-  div.style.height = "100%";
-  div.style.position = "relative";
-  div.style.overflow = "hidden";
-  document.body.appendChild(div);
+  var gameDiv = document.createElement("div");
+  gameDiv.style.height = "100%";
+  gameDiv.style.position = "relative";
+  gameDiv.style.overflow = "hidden";
+  gameDiv.style.userSelect = "none";
+  document.body.appendChild(gameDiv);
 
   var bg = document.createElement("div");
   bg.style.background = "url(assets/background.png)";
@@ -41,15 +43,20 @@ function renderElements() {
   bg.style.width = "100%";
   bg.style.height = "100%";
   bg.style.position = "absolute";
-  div.appendChild(bg);
+  bg.style.zIndex = -1;
+  gameDiv.appendChild(bg);
 
-  var birdWrapper = document.createElement("div");
-  birdWrapper.id = "bird";
-  birdWrapper.style.position = "absolute";
-  birdWrapper.style.width = vars.birdWidthPx * vars.birdScale;
-  birdWrapper.style.height = vars.birdHeightPx * vars.birdScale;
-  birdWrapper.style.backgroundColor = "red";
-  div.appendChild(birdWrapper);
+  var scoreDiv = document.createElement("div");
+  scoreDiv.id = "score";
+  gameDiv.appendChild(scoreDiv);
+
+  var birdDiv = document.createElement("div");
+  birdDiv.id = "bird";
+  birdDiv.style.position = "absolute";
+  birdDiv.style.width = vars.birdWidthPx * vars.birdScale;
+  birdDiv.style.height = vars.birdHeightPx * vars.birdScale;
+  birdDiv.style.backgroundColor = "red";
+  gameDiv.appendChild(birdDiv);
   var birdImg = document.createElement("img");
   birdImg.src = "./assets/bird.png";
   birdImg.style.position = "absolute";
@@ -57,37 +64,53 @@ function renderElements() {
   birdImg.style.aspectRatio = vars.birdImgAspectRatio;
   birdImg.style.bottom = -vars.birdImgOffsetBottomPx * vars.birdScale;
   birdImg.style.right = -vars.birdImgOffsetRightPx * vars.birdScale;
-  birdWrapper.appendChild(birdImg);
+  birdDiv.appendChild(birdImg);
 
-  drawBird();
+  draw();
 }
 
 function flap() {
-  vars.started = true;
-  vars.velocity = vars.power;
+  if (!vars.started) {
+    startGame();
+  }
+  vars.speed = vars.power;
 }
 
 function tick() {
-  if (!vars.started) return;
-  console.log(vars.velocity, vars.altitude);
-  vars.velocity -= (vars.gravity * vars.tick) / 1000;
-  vars.altitude = vars.altitude + (vars.velocity * vars.tick) / 1000;
+  if (!vars.started) {
+    return;
+  }
+  vars.score += vars.tick / 1000;
+  vars.speed -= (vars.gravity * vars.tick) / 1000;
+  vars.altitude = vars.altitude + (vars.speed * vars.tick) / 1000;
   if (vars.altitude < 0) {
     vars.altitude = 0;
-    drawBird();
+    draw();
     endGame();
     return;
   }
-  drawBird();
+  draw();
 }
 
-function drawBird() {
-  var bird = document.getElementById("bird");
-  bird.style.bottom = vars.altitude;
-  var rotate =
-    (-vars.maxRotateDeg * Math.atan(vars.velocity / vars.rotateThreshold)) /
-    (Math.PI / 2);
-  bird.style.transform = `rotate(${rotate}deg)`;
+function startGame() {
+  vars.started = true;
+  vars.score = 0;
+}
+
+function draw() {
+  var birdDiv = document.getElementById("bird");
+  birdDiv.style.bottom = vars.altitude;
+  birdDiv.style.transform = `rotate(${getRotate()}deg)`;
+
+  var scoreDiv = document.getElementById("score");
+  scoreDiv.innerText = vars.score.toFixed(2);
+}
+
+function getRotate() {
+  return (
+    (-vars.maxRotateDeg * Math.atan(vars.speed / vars.rotateThreshold)) /
+    (Math.PI / 2)
+  );
 }
 
 function endGame() {
@@ -100,8 +123,10 @@ var functions = Object.keys({
   ready,
   flap,
   tick,
-  drawBird,
+  draw,
+  getRotate,
   endGame,
+  startGame,
 });
 
 ////
