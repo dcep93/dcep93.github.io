@@ -3,8 +3,8 @@ var vars = {
   power: 300,
   tick: 10,
   pipeSpeed: 0.3,
-  pipeGapPx: 120,
-  birdScale: 0.2,
+  pipeGapPx: 130,
+  birdScale: 0.15,
 
   running: false,
   speed: 0,
@@ -14,11 +14,11 @@ var vars = {
 
   worldTranslate: "20%",
   pipeWidthPx: 100,
-  pipeDisappearPx: 200,
+  pipeDisappearPx: 1000,
   pipeReappearPx: 1000,
-  pipeSpacingX: 100,
-  pipeSpacingXVariance: [0.1, 0.5],
-  pipeHeightYVariance: [0.3, 0.7],
+  pipeSpacingX: 600,
+  pipeSpacingXVariance: [0.7, 0.9],
+  pipeHeightYVariance: [0.2, 0.7],
   birdHeightPx: 267,
   birdWidthPx: 444,
   birdImgAspectRatio: 600 / 333,
@@ -147,8 +147,6 @@ function updatePipes() {
     maxX = Math.max(maxX, pipe.x);
     if (pipe.x > -vars.pipeDisappearPx) {
       nextPipes.push(pipe);
-    } else {
-      console.log("disappear", pipe);
     }
   }
   vars.pipes = nextPipes;
@@ -162,10 +160,12 @@ function updatePipes() {
       x,
       y,
     });
+    console.log("appear", x, maxX, vars.pipeReappearPx);
   }
 }
 
 function isHittingAPipe() {
+  return false;
   var center = vars.altitude - vars.birdHeightPx / 2;
   for (var pipe of vars.pipes) {
     if (pipe.lastX > 0 && pipe.x < 0) {
@@ -202,7 +202,7 @@ function draw() {
     pipesDiv.className = "pipes";
     Object.assign(pipesDiv.style, {
       left: pipe.x,
-      position: "relative",
+      position: "absolute",
       height: "100%",
       width: vars.pipeWidthPx,
     });
