@@ -48,6 +48,8 @@ function renderElements() {
 
   var scoreDiv = document.createElement("div");
   scoreDiv.id = "score";
+  scoreDiv.style.fontSize = "xxx-large";
+  scoreDiv.style.padding = 10;
   gameDiv.appendChild(scoreDiv);
 
   var birdDiv = document.createElement("div");
@@ -80,7 +82,7 @@ function tick() {
   if (!vars.started) {
     return;
   }
-  vars.score += vars.tick / 1000;
+  vars.score += vars.tick / 100;
   vars.speed -= (vars.gravity * vars.tick) / 1000;
   vars.altitude = vars.altitude + (vars.speed * vars.tick) / 1000;
   if (vars.altitude < 0) {
