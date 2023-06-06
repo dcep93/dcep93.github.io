@@ -38,13 +38,197 @@ var visualConfig = {
 };
 
 function ready() {
-  // override
   renderElements();
+  draw();
   document.body.onkeydown = function (e) {
-    if (e.key == " " || e.code == "Space" || e.keyCode == 32) flap();
+    if (
+      (e.key == " " || e.code == "Space" || e.keyCode == 32) &&
+      state.gameIsRunning
+    )
+      flap();
   };
   document.body.onclick = () => startGame();
   setInterval(() => tick(), visualConfig.tick * 1000);
+}
+
+function tick() {
+  if (!state.gameIsRunning) {
+    return;
+  }
+  state.score += visualConfig.tick * 10;
+  updateBird();
+  updatePipes();
+  maybeMakeNewPipe();
+  draw();
+  if (state.altitude < 0) {
+    endGame();
+    return;
+  }
+  if (isHittingAPipe()) {
+    endGame();
+    return;
+  }
+}
+
+function startGame() {
+  state.score = 0;
+  state.altitude = 0;
+  state.pipes = [];
+  flap();
+  makeFirstPipe();
+  state.gameIsRunning = true;
+}
+
+function drawBird() {
+  var birdDiv = document.getElementById("bird");
+  birdDiv.style.bottom = state.altitude;
+  birdDiv.style.transform = `rotate(${getRotate()}deg)`;
+}
+
+function drawScore() {
+  var scoreDiv = document.getElementById("score");
+  scoreDiv.innerText = state.score.toFixed(2);
+}
+
+function drawPipe(pipe) {
+  var allPipesDiv = document.getElementById("all_pipes");
+  var pipesDiv = document.createElement("div");
+  pipesDiv.className = "pipes";
+  Object.assign(pipesDiv.style, {
+    left: pipe.x - visualConfig.pipeVisualBufferXPx,
+    position: "absolute",
+    height: "100%",
+    width: visualConfig.pipeWidthPx,
+  });
+  allPipesDiv.appendChild(pipesDiv);
+
+  var bottomPipeWrapper = document.createElement("div");
+  bottomPipeWrapper.className = "bottom_pipe_wrapper";
+  Object.assign(bottomPipeWrapper.style, {
+    position: "absolute",
+    width: "100%",
+    height: "100%",
+  });
+  pipesDiv.appendChild(bottomPipeWrapper);
+  var bottomPipe = document.createElement("img");
+  bottomPipe.className = "bottom_pipe";
+  bottomPipe.src = "./assets/pipe.png";
+  Object.assign(bottomPipe.style, {
+    width: "100%",
+    position: "absolute",
+    bottom: pipe.y,
+    transform: "translateY(100%)",
+  });
+  bottomPipeWrapper.appendChild(bottomPipe);
+  var bottomPipeFlipped = document.createElement("img");
+  bottomPipeFlipped.className = "bottom_pipe_flipped";
+  bottomPipeFlipped.src = "./assets/pipe.png";
+  Object.assign(bottomPipeFlipped.style, {
+    width: "100%",
+    position: "absolute",
+    bottom: pipe.y,
+    transform: "translateY(100%) scaleY(-1)",
+    zIndex: -1,
+    height: "100%",
+  });
+  bottomPipeWrapper.appendChild(bottomPipeFlipped);
+
+  var topPipeWrapper = document.createElement("div");
+  topPipeWrapper.className = "top_pipe_wrapper";
+  Object.assign(topPipeWrapper.style, {
+    position: "absolute",
+    width: "100%",
+    height: "100%",
+  });
+  pipesDiv.appendChild(topPipeWrapper);
+  var topPipe = document.createElement("img");
+  topPipe.className = "top_pipe";
+  topPipe.src = "./assets/pipe.png";
+  Object.assign(topPipe.style, {
+    width: "100%",
+    position: "absolute",
+    bottom: pipe.y + config.pipeVerticalGapPx,
+    transform: "scaleX(-1) scaleY(-1)",
+  });
+  topPipeWrapper.appendChild(topPipe);
+  var topPipeFlipped = document.createElement("img");
+  topPipeFlipped.className = "top_pipe_flipped";
+  topPipeFlipped.src = "./assets/pipe.png";
+  Object.assign(topPipeFlipped.style, {
+    width: "100%",
+    position: "absolute",
+    bottom: pipe.y + config.pipeVerticalGapPx,
+    transform: "scaleX(-1)",
+    zIndex: -1,
+    height: "100%",
+  });
+  topPipeWrapper.appendChild(topPipeFlipped);
+}
+
+function drawPipes() {
+  var allPipesDiv = document.getElementById("all_pipes");
+  allPipesDiv.replaceChildren();
+  for (var pipe of state.pipes) {
+    drawPipe(pipe);
+  }
+}
+
+function draw() {
+  drawBird();
+  drawScore();
+  drawPipes();
+}
+
+function endGame() {
+  state.gameIsRunning = false;
+}
+
+function updatePipes() {
+  for (var pipe of state.pipes) {
+    pipe.x -= visualConfig.tick * config.pipeSpeed;
+  }
+}
+
+// dont override
+
+function getRotate() {
+  return (
+    (-visualConfig.maxRotateDeg *
+      Math.atan(state.speed / visualConfig.rotateThreshold)) /
+    (Math.PI / 2)
+  );
+}
+
+function makeFirstPipe() {
+  makePipe(
+    document.body.offsetWidth * (1 - visualConfig.worldTranslatePercent / 100) -
+      0.5 * visualConfig.pipeWidthPx
+  );
+}
+
+function makePipe(x) {
+  state.pipes.push({
+    x,
+    y:
+      document.body.offsetHeight * randomBetween(...config.pipeHeightYVariance),
+  });
+}
+
+function isHittingAPipe() {
+  for (var pipe of state.pipes) {
+    if (pipe.x < 0 && -pipe.x < visualConfig.birdWidthPx * config.birdScale) {
+      if (state.altitude < pipe.y) {
+        return true;
+      }
+      if (
+        state.altitude + visualConfig.birdHeightPx * config.birdScale >
+        pipe.y + config.pipeVerticalGapPx
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 function renderElements() {
@@ -136,42 +320,22 @@ function renderElements() {
     zIndex: 1,
   });
   gameDiv.appendChild(controlsDiv);
-
-  draw();
 }
 
 function flap() {
-  if (!state.gameIsRunning) {
-    return;
-  }
   state.speed = config.power;
 }
 
-function tick() {
-  // override
-  if (!state.gameIsRunning) {
-    return;
-  }
-  state.score += visualConfig.tick * 10;
+function updateBird() {
   state.speed -= config.gravity * visualConfig.tick;
   state.altitude = state.altitude + state.speed * visualConfig.tick;
-  updatePipes();
-  draw();
-  if (state.altitude < 0) {
-    endGame();
-    return;
-  }
-  if (isHittingAPipe()) {
-    endGame();
-    return;
-  }
 }
 
 function randomBetween(low, high) {
   return low + (high - low) * Math.random();
 }
 
-function updatePipes() {
+function maybeMakeNewPipe() {
   var nextPipes = [];
   var maxX = 0;
   var pipeDisappearPx =
@@ -179,7 +343,6 @@ function updatePipes() {
     1.5 *
     (visualConfig.worldTranslatePercent / 100);
   for (var pipe of state.pipes) {
-    pipe.x -= visualConfig.tick * config.pipeSpeed;
     maxX = Math.max(maxX, pipe.x);
     if (pipe.x > -pipeDisappearPx) {
       nextPipes.push(pipe);
@@ -187,150 +350,11 @@ function updatePipes() {
   }
   state.pipes = nextPipes;
   if (maxX < config.pipeReappearPx) {
-    var x =
+    makePipe(
       config.pipeReappearPx +
-      config.pipeSpacingX * randomBetween(...config.pipeSpacingXVariance);
-    var y =
-      document.body.offsetHeight * randomBetween(...config.pipeHeightYVariance);
-    state.pipes.push({
-      x,
-      y,
-    });
+        config.pipeSpacingX * randomBetween(...config.pipeSpacingXVariance)
+    );
   }
-}
-
-function isHittingAPipe() {
-  for (var pipe of state.pipes) {
-    if (pipe.x < 0 && -pipe.x < visualConfig.birdWidthPx * config.birdScale) {
-      if (state.altitude < pipe.y) {
-        return true;
-      }
-      if (
-        state.altitude + visualConfig.birdHeightPx * config.birdScale >
-        pipe.y + config.pipeVerticalGapPx
-      ) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-function startGame() {
-  // override
-  state.gameIsRunning = true;
-  state.score = 0;
-  state.altitude = 0;
-  state.speed = config.power;
-  state.pipes = [
-    {
-      x:
-        document.body.offsetWidth *
-        (1 - visualConfig.worldTranslatePercent / 100),
-      y:
-        document.body.offsetHeight *
-        randomBetween(...config.pipeHeightYVariance),
-    },
-  ];
-}
-
-function draw() {
-  // override
-  var birdDiv = document.getElementById("bird");
-  birdDiv.style.bottom = state.altitude;
-  birdDiv.style.transform = `rotate(${getRotate()}deg)`;
-
-  var scoreDiv = document.getElementById("score");
-  scoreDiv.innerText = state.score.toFixed(2);
-
-  var allPipesDiv = document.getElementById("all_pipes");
-  allPipesDiv.replaceChildren();
-  for (var pipe of state.pipes) {
-    var pipesDiv = document.createElement("div");
-    pipesDiv.className = "pipes";
-    Object.assign(pipesDiv.style, {
-      left: pipe.x - visualConfig.pipeVisualBufferXPx,
-      position: "absolute",
-      height: "100%",
-      width: visualConfig.pipeWidthPx,
-    });
-    allPipesDiv.appendChild(pipesDiv);
-
-    var bottomPipeWrapper = document.createElement("div");
-    bottomPipeWrapper.className = "bottom_pipe_wrapper";
-    Object.assign(bottomPipeWrapper.style, {
-      position: "absolute",
-      width: "100%",
-      height: "100%",
-    });
-    pipesDiv.appendChild(bottomPipeWrapper);
-    var bottomPipe = document.createElement("img");
-    bottomPipe.className = "bottom_pipe";
-    bottomPipe.src = "./assets/pipe.png";
-    Object.assign(bottomPipe.style, {
-      width: "100%",
-      position: "absolute",
-      bottom: pipe.y,
-      transform: "translateY(100%)",
-    });
-    bottomPipeWrapper.appendChild(bottomPipe);
-    var bottomPipeFlipped = document.createElement("img");
-    bottomPipeFlipped.className = "bottom_pipe_flipped";
-    bottomPipeFlipped.src = "./assets/pipe.png";
-    Object.assign(bottomPipeFlipped.style, {
-      width: "100%",
-      position: "absolute",
-      bottom: pipe.y,
-      transform: "translateY(100%) scaleY(-1)",
-      zIndex: -1,
-      height: "100%",
-    });
-    bottomPipeWrapper.appendChild(bottomPipeFlipped);
-
-    var topPipeWrapper = document.createElement("div");
-    topPipeWrapper.className = "top_pipe_wrapper";
-    Object.assign(topPipeWrapper.style, {
-      position: "absolute",
-      width: "100%",
-      height: "100%",
-    });
-    pipesDiv.appendChild(topPipeWrapper);
-    var topPipe = document.createElement("img");
-    topPipe.className = "top_pipe";
-    topPipe.src = "./assets/pipe.png";
-    Object.assign(topPipe.style, {
-      width: "100%",
-      position: "absolute",
-      bottom: pipe.y + config.pipeVerticalGapPx,
-      transform: "scaleX(-1) scaleY(-1)",
-    });
-    topPipeWrapper.appendChild(topPipe);
-    var topPipeFlipped = document.createElement("img");
-    topPipeFlipped.className = "top_pipe_flipped";
-    topPipeFlipped.src = "./assets/pipe.png";
-    Object.assign(topPipeFlipped.style, {
-      width: "100%",
-      position: "absolute",
-      bottom: pipe.y + config.pipeVerticalGapPx,
-      transform: "scaleX(-1)",
-      zIndex: -1,
-      height: "100%",
-    });
-    topPipeWrapper.appendChild(topPipeFlipped);
-  }
-}
-
-function endGame() {
-  // override
-  state.gameIsRunning = false;
-}
-
-function getRotate() {
-  return (
-    (-visualConfig.maxRotateDeg *
-      Math.atan(state.speed / visualConfig.rotateThreshold)) /
-    (Math.PI / 2)
-  );
 }
 
 var functions = Object.keys({
@@ -338,6 +362,7 @@ var functions = Object.keys({
   state,
   visualConfig,
   renderElements,
+  updateBird,
   ready,
   flap,
   tick,
@@ -347,6 +372,12 @@ var functions = Object.keys({
   getRotate,
   endGame,
   startGame,
+  makeFirstPipe,
+  drawPipes,
+  drawPipe,
+  drawScore,
+  drawBird,
+  maybeMakeNewPipe,
 });
 
 ////
