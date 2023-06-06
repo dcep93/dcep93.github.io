@@ -19,9 +19,9 @@ var state = {
 };
 
 var visualConfig = {
-  tick: 10,
+  tick: 5,
   worldTranslatePercent: 20,
-  pipeVisualBufferXPx: 25,
+  pipeVisualBufferXPx: 20,
   pipeWidthPx: 200,
   birdHeightPx: 267,
   birdWidthPx: 444,
@@ -38,6 +38,7 @@ function ready() {
   document.body.onkeydown = function (e) {
     if (e.key == " " || e.code == "Space" || e.keyCode == 32) flap();
   };
+  document.body.onclick = () => startGame();
   setInterval(() => tick(), visualConfig.tick);
 }
 
@@ -119,7 +120,7 @@ function renderElements() {
 
 function flap() {
   if (!state.gameIsRunning) {
-    startGame();
+    return;
   }
   state.speed = config.power;
 }
@@ -154,7 +155,6 @@ function updatePipes() {
     (1.5 * document.body.offsetWidth * visualConfig.worldTranslatePercent) /
     100;
   for (var pipe of state.pipes) {
-    pipe.lastX = pipe.x;
     pipe.x -= visualConfig.tick * config.pipeSpeed;
     maxX = Math.max(maxX, pipe.x);
     if (pipe.x > -pipeDisappearPx) {
@@ -177,7 +177,7 @@ function updatePipes() {
 
 function isHittingAPipe() {
   for (var pipe of state.pipes) {
-    if (pipe.lastX > 0 && pipe.x < 0) {
+    if (pipe.x < 0 && -pipe.x < visualConfig.birdWidthPx * config.birdScale) {
       if (state.altitude < pipe.y) {
         return true;
       }
@@ -196,6 +196,7 @@ function startGame() {
   state.gameIsRunning = true;
   state.score = 0;
   state.altitude = 0;
+  state.speed = config.power;
   state.pipes = [
     {
       x:
@@ -309,6 +310,7 @@ function getRotate() {
 var functions = Object.keys({
   config,
   state,
+  visualConfig,
   renderElements,
   ready,
   flap,
