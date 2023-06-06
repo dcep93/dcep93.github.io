@@ -3,7 +3,7 @@ var config = {
   power: 500,
   pipeSpeed: 400,
   pipeVerticalGapPx: 120,
-  birdSize: 60,
+  birdSize: 40,
   pipeReappearPx: 1000,
   pipeSpacingX: 800,
   pipeSpacingXVariance: [0.7, 0.9],
@@ -142,9 +142,10 @@ function isHittingAPipe() {
       birdBox.left <= pipeBoxRect.right &&
       pipeBoxRect.left <= birdBox.right &&
       birdBox.top <= pipeBoxRect.bottom &&
-      pipeBoxRect.left <= birdBox.right
-    )
+      pipeBoxRect.top <= birdBox.bottom
+    ) {
       return true;
+    }
   }
   return false;
 }
@@ -249,7 +250,7 @@ function drawPipe(pipe) {
     bottom: pipe.y + config.pipeVerticalGapPx,
     transform: "translateY(-2px)",
   });
-  // topPipeWrapper.appendChild(topPipeBox);
+  topPipeWrapper.appendChild(topPipeBox);
 }
 
 function renderElements() {
