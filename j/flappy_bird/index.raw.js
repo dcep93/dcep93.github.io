@@ -21,9 +21,9 @@ var state = {
 var visualConfig = {
   tick: 0.005,
   worldTranslatePercent: 20,
-  // pipeVisualBufferXPx: 20,
-  pipeVisualBufferXPx: 48,
   pipeWidthPx: 200,
+  pipeBoxWidth: 29,
+  pipeBoxLeft: 85,
   birdHeightPx: 267,
   // birdWidthPx: 444,
   birdWidthPx: 267,
@@ -141,18 +141,27 @@ function makePipe(x) {
 }
 
 function isHittingAPipe() {
-  for (var pipe of state.pipes) {
-    if (pipe.x < 0 && -pipe.x < visualConfig.birdWidthPx * config.birdScale) {
-      if (state.altitude < pipe.y) {
-        return true;
-      }
-      if (
-        state.altitude + visualConfig.birdHeightPx * config.birdScale >
-        pipe.y + config.pipeVerticalGapPx
-      ) {
-        return true;
-      }
-    }
+  var birdImgBox = document.getElementById("bird_img").getBoundingClientRect();
+  var pipeBoxes = document.getElementsByClassName("pipe_box");
+  for (var pipeBox of pipeBoxes) {
+    var pipeBoxRect = pipeBox.getBoundingClientRect();
+    console.log(
+      pipeBoxRect.left,
+      birdImgBox.left,
+      pipeBoxRect.right,
+      birdImgBox.right,
+      pipeBoxRect.bottom,
+      birdImgBox.bottom,
+      pipeBoxRect.top,
+      birdImgBox.top
+    );
+    if (
+      birdImgBox.left <= pipeBoxRect.right &&
+      pipeBoxRect.left <= birdImgBox.right &&
+      birdImgBox.top <= pipeBoxRect.bottom &&
+      pipeBoxRect.left <= birdImgBox.right
+    )
+      return true;
   }
   return false;
 }
@@ -162,7 +171,7 @@ function drawPipe(pipe) {
   var pipesDiv = document.createElement("div");
   pipesDiv.className = "pipes_pair";
   Object.assign(pipesDiv.style, {
-    left: pipe.x - visualConfig.pipeVisualBufferXPx,
+    left: pipe.x,
     position: "absolute",
     height: "100%",
     width: visualConfig.pipeWidthPx,
@@ -177,6 +186,7 @@ function drawPipe(pipe) {
     height: "100%",
   });
   pipesDiv.appendChild(bottomPipeWrapper);
+
   var bottomPipe = document.createElement("img");
   bottomPipe.className = "bottom_pipe";
   bottomPipe.src = "./assets/pipe.png";
@@ -187,6 +197,7 @@ function drawPipe(pipe) {
     transform: "translateY(100%)",
   });
   bottomPipeWrapper.appendChild(bottomPipe);
+
   var bottomPipeFlipped = document.createElement("img");
   bottomPipeFlipped.className = "bottom_pipe_flipped";
   bottomPipeFlipped.src = "./assets/pipe.png";
@@ -200,6 +211,18 @@ function drawPipe(pipe) {
   });
   bottomPipeWrapper.appendChild(bottomPipeFlipped);
 
+  var bottomPipeBox = document.createElement("div");
+  bottomPipeBox.className = "pipe_box";
+  Object.assign(bottomPipeBox.style, {
+    position: "absolute",
+    width: visualConfig.pipeBoxWidth || 29,
+    left: visualConfig.pipeBoxLeft || 85,
+    height: "100%",
+    bottom: pipe.y,
+    transform: "translateY(100%) translateY(2px)",
+  });
+  bottomPipeWrapper.appendChild(bottomPipeBox);
+
   var topPipeWrapper = document.createElement("div");
   topPipeWrapper.className = "top_pipe_wrapper";
   Object.assign(topPipeWrapper.style, {
@@ -208,6 +231,7 @@ function drawPipe(pipe) {
     height: "100%",
   });
   pipesDiv.appendChild(topPipeWrapper);
+
   var topPipe = document.createElement("img");
   topPipe.className = "top_pipe";
   topPipe.src = "./assets/pipe.png";
@@ -218,6 +242,7 @@ function drawPipe(pipe) {
     transform: "scaleX(-1) scaleY(-1)",
   });
   topPipeWrapper.appendChild(topPipe);
+
   var topPipeFlipped = document.createElement("img");
   topPipeFlipped.className = "top_pipe_flipped";
   topPipeFlipped.src = "./assets/pipe.png";
@@ -230,6 +255,18 @@ function drawPipe(pipe) {
     height: "100%",
   });
   topPipeWrapper.appendChild(topPipeFlipped);
+
+  var topPipeBox = document.createElement("div");
+  topPipeBox.className = "pipe_box";
+  Object.assign(topPipeBox.style, {
+    position: "absolute",
+    width: visualConfig.pipeBoxWidth,
+    left: visualConfig.pipeBoxLeft,
+    height: "100%",
+    bottom: pipe.y + config.pipeVerticalGapPx,
+    transform: "translateY(-2px)",
+  });
+  // topPipeWrapper.appendChild(topPipeBox);
 }
 
 function renderElements() {
@@ -307,7 +344,7 @@ function renderElements() {
 
   var controlsDiv = document.createElement("div");
   controlsDiv.id = "controls";
-  controlsDiv.innerText = "click to start\nspace to flap";
+  controlsDiv.innerText = "space to flap\nclick to restart";
   Object.assign(controlsDiv.style, {
     position: "absolute",
     fontSize: "xxx-large",
@@ -337,6 +374,7 @@ function randomBetween(low, high) {
 }
 
 function maybeMakeNewPipe() {
+  return;
   var nextPipes = [];
   var maxX = 0;
   var pipeDisappearPx =
