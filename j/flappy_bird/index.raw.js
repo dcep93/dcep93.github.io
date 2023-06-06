@@ -1,11 +1,11 @@
 var config = {
   gravity: 1200,
   power: 400,
-  pipeSpeed: 0.35,
-  pipeVerticalGapPx: 125,
+  pipeSpeed: 350,
+  pipeVerticalGapPx: 120,
   birdScale: 0.15,
   pipeReappearPx: 1000,
-  pipeSpacingX: 800, // TODO single var
+  pipeSpacingX: 800,
   pipeSpacingXVariance: [0.7, 0.9],
   pipeHeightYVariance: [0.2, 0.7],
 };
@@ -19,7 +19,7 @@ var state = {
 };
 
 var visualConfig = {
-  tick: 5,
+  tick: 0.005,
   worldTranslatePercent: 20,
   pipeVisualBufferXPx: 20,
   pipeWidthPx: 200,
@@ -34,12 +34,13 @@ var visualConfig = {
 };
 
 function ready() {
+  // override
   renderElements();
   document.body.onkeydown = function (e) {
     if (e.key == " " || e.code == "Space" || e.keyCode == 32) flap();
   };
   document.body.onclick = () => startGame();
-  setInterval(() => tick(), visualConfig.tick);
+  setInterval(() => tick(), visualConfig.tick * 1000);
 }
 
 function renderElements() {
@@ -126,12 +127,13 @@ function flap() {
 }
 
 function tick() {
+  // override
   if (!state.gameIsRunning) {
     return;
   }
-  state.score += visualConfig.tick / 100;
-  state.speed -= (config.gravity * visualConfig.tick) / 1000;
-  state.altitude = state.altitude + (state.speed * visualConfig.tick) / 1000;
+  state.score += visualConfig.tick * 10;
+  state.speed -= config.gravity * visualConfig.tick;
+  state.altitude = state.altitude + state.speed * visualConfig.tick;
   updatePipes();
   draw();
   if (state.altitude < 0) {
@@ -152,8 +154,9 @@ function updatePipes() {
   var nextPipes = [];
   var maxX = 0;
   var pipeDisappearPx =
-    (1.5 * document.body.offsetWidth * visualConfig.worldTranslatePercent) /
-    100;
+    document.body.offsetWidth *
+    1.5 *
+    (visualConfig.worldTranslatePercent / 100);
   for (var pipe of state.pipes) {
     pipe.x -= visualConfig.tick * config.pipeSpeed;
     maxX = Math.max(maxX, pipe.x);
@@ -193,6 +196,7 @@ function isHittingAPipe() {
 }
 
 function startGame() {
+  // override
   state.gameIsRunning = true;
   state.score = 0;
   state.altitude = 0;
@@ -210,7 +214,7 @@ function startGame() {
 }
 
 function draw() {
-  // TODO percentages
+  // override
   var birdDiv = document.getElementById("bird");
   birdDiv.style.bottom = state.altitude;
   birdDiv.style.transform = `rotate(${getRotate()}deg)`;
@@ -296,6 +300,7 @@ function draw() {
 }
 
 function endGame() {
+  // override
   state.gameIsRunning = false;
 }
 
