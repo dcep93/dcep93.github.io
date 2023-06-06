@@ -49,6 +49,7 @@ function ready() {
   };
   document.body.onclick = () => startGame();
   setInterval(() => tick(), visualConfig.tick * 1000);
+  startGame();
 }
 
 function tick() {
@@ -90,10 +91,76 @@ function drawScore() {
   scoreDiv.innerText = state.score.toFixed(2);
 }
 
+function drawPipes() {
+  var allPipesDiv = document.getElementById("all_pipes");
+  allPipesDiv.replaceChildren();
+  for (var pipe of state.pipes) {
+    drawPipe(pipe);
+  }
+}
+
+function draw() {
+  drawBird();
+  drawScore();
+  drawPipes();
+}
+
+function endGame() {
+  state.gameIsRunning = false;
+}
+
+function updatePipes() {
+  for (var pipe of state.pipes) {
+    pipe.x -= visualConfig.tick * config.pipeSpeed;
+  }
+}
+
+// dont override
+
+function getRotate() {
+  return (
+    (-visualConfig.maxRotateDeg *
+      Math.atan(state.speed / visualConfig.rotateThreshold)) /
+    (Math.PI / 2)
+  );
+}
+
+function makeFirstPipe() {
+  makePipe(
+    document.body.offsetWidth * (1 - visualConfig.worldTranslatePercent / 100) -
+      0.5 * visualConfig.pipeWidthPx
+  );
+}
+
+function makePipe(x) {
+  state.pipes.push({
+    x,
+    y:
+      document.body.offsetHeight * randomBetween(...config.pipeHeightYVariance),
+  });
+}
+
+function isHittingAPipe() {
+  for (var pipe of state.pipes) {
+    if (pipe.x < 0 && -pipe.x < visualConfig.birdWidthPx * config.birdScale) {
+      if (state.altitude < pipe.y) {
+        return true;
+      }
+      if (
+        state.altitude + visualConfig.birdHeightPx * config.birdScale >
+        pipe.y + config.pipeVerticalGapPx
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 function drawPipe(pipe) {
   var allPipesDiv = document.getElementById("all_pipes");
   var pipesDiv = document.createElement("div");
-  pipesDiv.className = "pipes";
+  pipesDiv.className = "pipes_pair";
   Object.assign(pipesDiv.style, {
     left: pipe.x - visualConfig.pipeVisualBufferXPx,
     position: "absolute",
@@ -163,72 +230,6 @@ function drawPipe(pipe) {
     height: "100%",
   });
   topPipeWrapper.appendChild(topPipeFlipped);
-}
-
-function drawPipes() {
-  var allPipesDiv = document.getElementById("all_pipes");
-  allPipesDiv.replaceChildren();
-  for (var pipe of state.pipes) {
-    drawPipe(pipe);
-  }
-}
-
-function draw() {
-  drawBird();
-  drawScore();
-  drawPipes();
-}
-
-function endGame() {
-  state.gameIsRunning = false;
-}
-
-function updatePipes() {
-  for (var pipe of state.pipes) {
-    pipe.x -= visualConfig.tick * config.pipeSpeed;
-  }
-}
-
-// dont override
-
-function getRotate() {
-  return (
-    (-visualConfig.maxRotateDeg *
-      Math.atan(state.speed / visualConfig.rotateThreshold)) /
-    (Math.PI / 2)
-  );
-}
-
-function makeFirstPipe() {
-  makePipe(
-    document.body.offsetWidth * (1 - visualConfig.worldTranslatePercent / 100) -
-      0.5 * visualConfig.pipeWidthPx
-  );
-}
-
-function makePipe(x) {
-  state.pipes.push({
-    x,
-    y:
-      document.body.offsetHeight * randomBetween(...config.pipeHeightYVariance),
-  });
-}
-
-function isHittingAPipe() {
-  for (var pipe of state.pipes) {
-    if (pipe.x < 0 && -pipe.x < visualConfig.birdWidthPx * config.birdScale) {
-      if (state.altitude < pipe.y) {
-        return true;
-      }
-      if (
-        state.altitude + visualConfig.birdHeightPx * config.birdScale >
-        pipe.y + config.pipeVerticalGapPx
-      ) {
-        return true;
-      }
-    }
-  }
-  return false;
 }
 
 function renderElements() {
