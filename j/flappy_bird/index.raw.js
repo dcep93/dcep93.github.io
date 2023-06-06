@@ -3,7 +3,7 @@ var config = {
   power: 500,
   pipeSpeed: 400,
   pipeVerticalGapPx: 120,
-  birdScale: 0.2,
+  birdSize: 60,
   pipeReappearPx: 1000,
   pipeSpacingX: 800,
   pipeSpacingXVariance: [0.7, 0.9],
@@ -24,14 +24,7 @@ var visualConfig = {
   pipeWidthPx: 200,
   pipeBoxWidth: 29,
   pipeBoxLeft: 85,
-  birdHeightPx: 267,
-  // birdWidthPx: 444,
-  birdWidthPx: 267,
-  // birdImgAspectRatio: 600 / 333,
-  birdImgAspectRatio: 1,
-  birdImgHeightPercentage: 124,
   birdImgOffsetBottomPx: 21,
-  // birdImgOffsetRightPx: 65,
   birdImgOffsetRightPx: 25,
   maxRotateDeg: 120,
   rotateThreshold: 180,
@@ -141,25 +134,15 @@ function makePipe(x) {
 }
 
 function isHittingAPipe() {
-  var birdImgBox = document.getElementById("bird_img").getBoundingClientRect();
+  var birdBox = document.getElementById("bird").getBoundingClientRect();
   var pipeBoxes = document.getElementsByClassName("pipe_box");
   for (var pipeBox of pipeBoxes) {
     var pipeBoxRect = pipeBox.getBoundingClientRect();
-    console.log(
-      pipeBoxRect.left,
-      birdImgBox.left,
-      pipeBoxRect.right,
-      birdImgBox.right,
-      pipeBoxRect.bottom,
-      birdImgBox.bottom,
-      pipeBoxRect.top,
-      birdImgBox.top
-    );
     if (
-      birdImgBox.left <= pipeBoxRect.right &&
-      pipeBoxRect.left <= birdImgBox.right &&
-      birdImgBox.top <= pipeBoxRect.bottom &&
-      pipeBoxRect.left <= birdImgBox.right
+      birdBox.left <= pipeBoxRect.right &&
+      pipeBoxRect.left <= birdBox.right &&
+      birdBox.top <= pipeBoxRect.bottom &&
+      pipeBoxRect.left <= birdBox.right
     )
       return true;
   }
@@ -311,22 +294,30 @@ function renderElements() {
   birdDiv.id = "bird";
   Object.assign(birdDiv.style, {
     position: "absolute",
-    width: visualConfig.birdWidthPx * config.birdScale,
-    height: visualConfig.birdHeightPx * config.birdScale,
+    width: config.birdSize,
+    height: config.birdSize,
   });
   worldDiv.appendChild(birdDiv);
+
+  var birdWrapper = document.createElement("div");
+  Object.assign(birdWrapper.style, {
+    position: "absolute",
+    bottom: -0.16 * config.birdSize,
+    top: -0.25 * config.birdSize,
+    right: -0.25 * config.birdSize,
+    left: -0.25 * config.birdSize,
+  });
+  birdDiv.appendChild(birdWrapper);
 
   var birdImg = document.createElement("img");
   birdImg.id = "bird_img";
   birdImg.src = "./assets/bird.png";
   Object.assign(birdImg.style, {
     position: "absolute",
-    height: `${visualConfig.birdImgHeightPercentage}%`,
-    aspectRatio: visualConfig.birdImgAspectRatio,
-    bottom: -visualConfig.birdImgOffsetBottomPx * config.birdScale,
-    right: -visualConfig.birdImgOffsetRightPx * config.birdScale,
+    height: "100%",
+    width: "100%",
   });
-  birdDiv.appendChild(birdImg);
+  birdWrapper.appendChild(birdImg);
 
   var scoreDiv = document.createElement("div");
   scoreDiv.id = "score";
@@ -374,7 +365,6 @@ function randomBetween(low, high) {
 }
 
 function maybeMakeNewPipe() {
-  return;
   var nextPipes = [];
   var maxX = 0;
   var pipeDisappearPx =
