@@ -1,24 +1,28 @@
-var vars = {
+var config = {
   gravity: 1200,
   power: 400,
-  tick: 10,
   pipeSpeed: 0.35,
-  pipeGapPx: 125,
+  pipeVerticalGapPx: 125,
   birdScale: 0.15,
+  pipeReappearPx: 1000,
+  pipeSpacingX: 800, // TODO single var
+  pipeSpacingXVariance: [0.7, 0.9],
+  pipeHeightYVariance: [0.2, 0.7],
+};
 
-  running: false,
+var state = {
+  gameIsRunning: false,
   speed: 0,
   altitude: 0,
   score: 0,
   pipes: [],
+};
 
+var visualConfig = {
+  tick: 10,
   worldTranslatePercent: 20,
-  pipeBufferXPx: 25,
+  pipeVisualBufferXPx: 25,
   pipeWidthPx: 200,
-  pipeReappearPx: 1000,
-  pipeSpacingX: 800,
-  pipeSpacingXVariance: [0.7, 0.9],
-  pipeHeightYVariance: [0.2, 0.7],
   birdHeightPx: 267,
   birdWidthPx: 444,
   birdImgAspectRatio: 600 / 333,
@@ -34,7 +38,7 @@ function ready() {
   document.body.onkeydown = function (e) {
     if (e.key == " " || e.code == "Space" || e.keyCode == 32) flap();
   };
-  setInterval(() => tick(), vars.tick);
+  setInterval(() => tick(), visualConfig.tick);
 }
 
 function renderElements() {
@@ -66,7 +70,7 @@ function renderElements() {
     position: "absolute",
     height: "100%",
     width: "100%",
-    transform: `translate(${vars.worldTranslatePercent}%)`,
+    transform: `translate(${visualConfig.worldTranslatePercent}%)`,
   });
   gameDiv.appendChild(worldDiv);
 
@@ -79,8 +83,8 @@ function renderElements() {
   birdDiv.id = "bird";
   Object.assign(birdDiv.style, {
     position: "absolute",
-    width: vars.birdWidthPx * vars.birdScale,
-    height: vars.birdHeightPx * vars.birdScale,
+    width: visualConfig.birdWidthPx * config.birdScale,
+    height: visualConfig.birdHeightPx * config.birdScale,
   });
   worldDiv.appendChild(birdDiv);
 
@@ -89,10 +93,10 @@ function renderElements() {
   birdImg.src = "./assets/bird.png";
   Object.assign(birdImg.style, {
     position: "absolute",
-    height: `${vars.birdImgHeightPercentage}%`,
-    aspectRatio: vars.birdImgAspectRatio,
-    bottom: -vars.birdImgOffsetBottomPx * vars.birdScale,
-    right: -vars.birdImgOffsetRightPx * vars.birdScale,
+    height: `${visualConfig.birdImgHeightPercentage}%`,
+    aspectRatio: visualConfig.birdImgAspectRatio,
+    bottom: -visualConfig.birdImgOffsetBottomPx * config.birdScale,
+    right: -visualConfig.birdImgOffsetRightPx * config.birdScale,
   });
   birdDiv.appendChild(birdImg);
 
@@ -114,22 +118,22 @@ function renderElements() {
 }
 
 function flap() {
-  if (!vars.running) {
+  if (!state.gameIsRunning) {
     startGame();
   }
-  vars.speed = vars.power;
+  state.speed = config.power;
 }
 
 function tick() {
-  if (!vars.running) {
+  if (!state.gameIsRunning) {
     return;
   }
-  vars.score += vars.tick / 100;
-  vars.speed -= (vars.gravity * vars.tick) / 1000;
-  vars.altitude = vars.altitude + (vars.speed * vars.tick) / 1000;
+  state.score += visualConfig.tick / 100;
+  state.speed -= (config.gravity * visualConfig.tick) / 1000;
+  state.altitude = state.altitude + (state.speed * visualConfig.tick) / 1000;
   updatePipes();
   draw();
-  if (vars.altitude < 0) {
+  if (state.altitude < 0) {
     endGame();
     return;
   }
@@ -147,23 +151,24 @@ function updatePipes() {
   var nextPipes = [];
   var maxX = 0;
   var pipeDisappearPx =
-    (1.5 * document.body.offsetWidth * vars.worldTranslatePercent) / 100;
-  for (var pipe of vars.pipes) {
+    (1.5 * document.body.offsetWidth * visualConfig.worldTranslatePercent) /
+    100;
+  for (var pipe of state.pipes) {
     pipe.lastX = pipe.x;
-    pipe.x -= vars.tick * vars.pipeSpeed;
+    pipe.x -= visualConfig.tick * config.pipeSpeed;
     maxX = Math.max(maxX, pipe.x);
     if (pipe.x > -pipeDisappearPx) {
       nextPipes.push(pipe);
     }
   }
-  vars.pipes = nextPipes;
-  if (maxX < vars.pipeReappearPx) {
+  state.pipes = nextPipes;
+  if (maxX < config.pipeReappearPx) {
     var x =
-      vars.pipeReappearPx +
-      vars.pipeSpacingX * randomBetween(...vars.pipeSpacingXVariance);
+      config.pipeReappearPx +
+      config.pipeSpacingX * randomBetween(...config.pipeSpacingXVariance);
     var y =
-      document.body.offsetHeight * randomBetween(...vars.pipeHeightYVariance);
-    vars.pipes.push({
+      document.body.offsetHeight * randomBetween(...config.pipeHeightYVariance);
+    state.pipes.push({
       x,
       y,
     });
@@ -171,14 +176,14 @@ function updatePipes() {
 }
 
 function isHittingAPipe() {
-  for (var pipe of vars.pipes) {
+  for (var pipe of state.pipes) {
     if (pipe.lastX > 0 && pipe.x < 0) {
-      if (vars.altitude < pipe.y) {
+      if (state.altitude < pipe.y) {
         return true;
       }
       if (
-        vars.altitude + vars.birdHeightPx * vars.birdScale >
-        pipe.y + vars.pipeGapPx
+        state.altitude + visualConfig.birdHeightPx * config.birdScale >
+        pipe.y + config.pipeVerticalGapPx
       ) {
         return true;
       }
@@ -188,36 +193,40 @@ function isHittingAPipe() {
 }
 
 function startGame() {
-  vars.running = true;
-  vars.score = 0;
-  vars.altitude = 0;
-  vars.pipes = [
+  state.gameIsRunning = true;
+  state.score = 0;
+  state.altitude = 0;
+  state.pipes = [
     {
-      x: document.body.offsetWidth * (1 - vars.worldTranslatePercent / 100),
+      x:
+        document.body.offsetWidth *
+        (1 - visualConfig.worldTranslatePercent / 100),
       y:
-        document.body.offsetHeight * randomBetween(...vars.pipeHeightYVariance),
+        document.body.offsetHeight *
+        randomBetween(...config.pipeHeightYVariance),
     },
   ];
 }
 
 function draw() {
+  // TODO percentages
   var birdDiv = document.getElementById("bird");
-  birdDiv.style.bottom = vars.altitude;
+  birdDiv.style.bottom = state.altitude;
   birdDiv.style.transform = `rotate(${getRotate()}deg)`;
 
   var scoreDiv = document.getElementById("score");
-  scoreDiv.innerText = vars.score.toFixed(2);
+  scoreDiv.innerText = state.score.toFixed(2);
 
   var allPipesDiv = document.getElementById("all_pipes");
   allPipesDiv.replaceChildren();
-  for (var pipe of vars.pipes) {
+  for (var pipe of state.pipes) {
     var pipesDiv = document.createElement("div");
     pipesDiv.className = "pipes";
     Object.assign(pipesDiv.style, {
-      left: pipe.x - vars.pipeBufferXPx,
+      left: pipe.x - visualConfig.pipeVisualBufferXPx,
       position: "absolute",
       height: "100%",
-      width: vars.pipeWidthPx,
+      width: visualConfig.pipeWidthPx,
     });
     allPipesDiv.appendChild(pipesDiv);
 
@@ -266,7 +275,7 @@ function draw() {
     Object.assign(topPipe.style, {
       width: "100%",
       position: "absolute",
-      bottom: pipe.y + vars.pipeGapPx,
+      bottom: pipe.y + config.pipeVerticalGapPx,
       transform: "scaleX(-1) scaleY(-1)",
     });
     topPipeWrapper.appendChild(topPipe);
@@ -276,7 +285,7 @@ function draw() {
     Object.assign(topPipeFlipped.style, {
       width: "100%",
       position: "absolute",
-      bottom: pipe.y + vars.pipeGapPx,
+      bottom: pipe.y + config.pipeVerticalGapPx,
       transform: "scaleX(-1)",
       zIndex: -1,
       height: "100%",
@@ -286,18 +295,20 @@ function draw() {
 }
 
 function endGame() {
-  vars.running = false;
+  state.gameIsRunning = false;
 }
 
 function getRotate() {
   return (
-    (-vars.maxRotateDeg * Math.atan(vars.speed / vars.rotateThreshold)) /
+    (-visualConfig.maxRotateDeg *
+      Math.atan(state.speed / visualConfig.rotateThreshold)) /
     (Math.PI / 2)
   );
 }
 
 var functions = Object.keys({
-  vars,
+  config,
+  state,
   renderElements,
   ready,
   flap,

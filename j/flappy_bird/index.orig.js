@@ -114,14 +114,14 @@ function renderElements() {
 }
 
 function flap() {
-  if (!vars.running) {
+  if (!vars.gameIsRunning) {
     startGame();
   }
   vars.speed = vars.power;
 }
 
 function tick() {
-  if (!vars.running) {
+  if (!vars.gameIsRunning) {
     return;
   }
   vars.score += vars.tick / 100;
@@ -178,7 +178,7 @@ function isHittingAPipe() {
       }
       if (
         vars.altitude + vars.birdHeightPx * vars.birdScale >
-        pipe.y + vars.pipeGapPx
+        pipe.y + vars.pipeVerticalGapPx
       ) {
         return true;
       }
@@ -188,7 +188,7 @@ function isHittingAPipe() {
 }
 
 function startGame() {
-  vars.running = true;
+  vars.gameIsRunning = true;
   vars.score = 0;
   vars.altitude = 0;
   vars.pipes = [
@@ -214,7 +214,7 @@ function draw() {
     var pipesDiv = document.createElement("div");
     pipesDiv.className = "pipes";
     Object.assign(pipesDiv.style, {
-      left: pipe.x - vars.pipeBufferXPx,
+      left: pipe.x - vars.pipeVisualBufferXPx,
       position: "absolute",
       height: "100%",
       width: vars.pipeWidthPx,
@@ -266,7 +266,7 @@ function draw() {
     Object.assign(topPipe.style, {
       width: "100%",
       position: "absolute",
-      bottom: pipe.y + vars.pipeGapPx,
+      bottom: pipe.y + vars.pipeVerticalGapPx,
       transform: "scaleX(-1) scaleY(-1)",
     });
     topPipeWrapper.appendChild(topPipe);
@@ -276,7 +276,7 @@ function draw() {
     Object.assign(topPipeFlipped.style, {
       width: "100%",
       position: "absolute",
-      bottom: pipe.y + vars.pipeGapPx,
+      bottom: pipe.y + vars.pipeVerticalGapPx,
       transform: "scaleX(-1)",
       zIndex: -1,
       height: "100%",
@@ -286,7 +286,7 @@ function draw() {
 }
 
 function endGame() {
-  vars.running = false;
+  vars.gameIsRunning = false;
 }
 
 function getRotate() {
