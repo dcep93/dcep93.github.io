@@ -120,6 +120,23 @@ function renderElements() {
   });
   gameDiv.appendChild(scoreDiv);
 
+  var controlsDiv = document.createElement("div");
+  controlsDiv.id = "controls";
+  controlsDiv.innerText = "click to start\nspace to flap";
+  Object.assign(controlsDiv.style, {
+    position: "absolute",
+    fontSize: "xxx-large",
+    bottom: 0,
+    right: 0,
+    margin: 10,
+    padding: 10,
+    background: "rgba(255, 255, 255, 0.8)",
+    border: "2px solid black",
+    borderRadius: "10px",
+    zIndex: 1,
+  });
+  gameDiv.appendChild(controlsDiv);
+
   draw();
 }
 
