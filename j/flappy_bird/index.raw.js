@@ -74,9 +74,10 @@ function startGame() {
 }
 
 function drawBird() {
-  var birdDiv = document.getElementById("bird");
-  birdDiv.style.bottom = state.altitude;
-  birdDiv.style.transform = `rotate(${getRotate()}deg)`;
+  document.getElementById("bird").style.bottom = state.altitude;
+  document.getElementById(
+    "bird_img"
+  ).style.transform = `rotate(${getRotate()}deg)`;
 }
 
 function drawScore() {
@@ -409,8 +410,6 @@ var functions = Object.keys({
   drawBird,
   maybeMakeNewPipe,
 });
-
-////
 
 (function () {
   function main() {
