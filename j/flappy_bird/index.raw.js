@@ -411,7 +411,6 @@ var vars = Object.keys({
   drawScore,
   drawBird,
   maybeMakeNewPipe,
-  version: "1.3",
 });
 
 (function () {
