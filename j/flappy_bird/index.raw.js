@@ -1,4 +1,4 @@
-console.log("version 1.1");
+console.log("version 1.3");
 
 var config = {
   gravity: 1300,
@@ -390,7 +390,7 @@ function maybeMakeNewPipe() {
   }
 }
 
-var vars = {
+var vars = Object.keys({
   config,
   state,
   visualConfig,
@@ -411,11 +411,6 @@ var vars = {
   drawScore,
   drawBird,
   maybeMakeNewPipe,
-};
-
-window.vars = Object.keys(vars);
-window.vars.forEach(function (varName) {
-  window[varName] = vars[varName];
 });
 
 (function () {
