@@ -388,7 +388,7 @@ function maybeMakeNewPipe() {
   }
 }
 
-window.vars = Object.keys({
+var vars = {
   config,
   state,
   visualConfig,
@@ -409,6 +409,11 @@ window.vars = Object.keys({
   drawScore,
   drawBird,
   maybeMakeNewPipe,
+};
+
+window.vars = Object.keys(vars);
+window.vars.forEach(function (varName) {
+  window[varName] = vars[varName];
 });
 
 (function () {
