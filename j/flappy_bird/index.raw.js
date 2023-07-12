@@ -388,7 +388,7 @@ function maybeMakeNewPipe() {
   }
 }
 
-var functions = Object.keys({
+window.vars = Object.keys({
   config,
   state,
   visualConfig,
