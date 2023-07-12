@@ -1,3 +1,5 @@
+console.log("version 1.0");
+
 var config = {
   gravity: 1300,
   power: 500,
