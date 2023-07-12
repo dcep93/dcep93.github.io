@@ -1,4 +1,4 @@
-console.log("version 1.0");
+console.log("version 1.1");
 
 var config = {
   gravity: 1300,
