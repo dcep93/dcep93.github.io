@@ -33,18 +33,18 @@ var visualConfig = {
 };
 
 function ready() {
-  renderElements();
-  draw();
-  document.body.onkeydown = function (e) {
-    if (
-      (e.key == " " || e.code == "Space" || e.keyCode == 32) &&
-      state.gameIsRunning
-    )
-      flap();
-  };
-  document.body.onclick = () => startGame();
-  setInterval(() => tick(), visualConfig.tick * 1000);
-  startGame();
+  // renderElements();
+  // draw();
+  // document.body.onkeydown = function (e) {
+  //   if (
+  //     (e.key == " " || e.code == "Space" || e.keyCode == 32) &&
+  //     state.gameIsRunning
+  //   )
+  //     flap();
+  // };
+  // document.body.onclick = () => startGame();
+  // setInterval(() => tick(), visualConfig.tick * 1000);
+  // startGame();
 }
 
 function tick() {
