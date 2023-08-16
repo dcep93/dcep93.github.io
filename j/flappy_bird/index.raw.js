@@ -415,7 +415,7 @@ var vars = Object.keys({
 
 (function () {
   function main() {
-    document.addEventListener("DOMContentLoaded", ready);
+    document.addEventListener("DOMContentLoaded", () => ready());
   }
 
   main();
