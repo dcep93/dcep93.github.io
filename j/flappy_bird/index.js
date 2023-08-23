@@ -33,11 +33,11 @@ var visualConfig = {
 };
 
 function ready() {
-  renderElements();
-  draw();
-  assignButtons();
-  startTick();
-  startGame();
+  // renderElements();
+  // draw();
+  // assignButtons();
+  // startTick();
+  // startGame();
 }
 
 function assignButtons() {
