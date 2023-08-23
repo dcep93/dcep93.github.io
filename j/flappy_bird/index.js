@@ -41,14 +41,14 @@ function ready() {
 }
 
 function assignButtons() {
-  document.body.onkeydown = function (e) {
-    if (
-      (e.key == " " || e.code == "Space" || e.keyCode == 32) &&
-      state.gameIsRunning
-    )
-      flap();
-  };
-  document.body.onclick = () => startGame();
+  // document.body.onkeydown = function (e) {
+  //   if (
+  //     (e.key == " " || e.code == "Space" || e.keyCode == 32) &&
+  //     state.gameIsRunning
+  //   )
+  //     flap();
+  // };
+  // document.body.onclick = () => startGame();
 }
 
 function startTick() {
