@@ -1,3 +1,5 @@
+console.log("version 1.4");
+
 var config = {
   gravity: 1300,
   power: 500,
@@ -33,6 +35,12 @@ var visualConfig = {
 function ready() {
   renderElements();
   draw();
+  assignButtons();
+  setInterval(() => tick(), visualConfig.tick * 1000);
+  startGame();
+}
+
+function assignButtons() {
   document.body.onkeydown = function (e) {
     if (
       (e.key == " " || e.code == "Space" || e.keyCode == 32) &&
@@ -41,8 +49,6 @@ function ready() {
       flap();
   };
   document.body.onclick = () => startGame();
-  setInterval(() => tick(), visualConfig.tick * 1000);
-  startGame();
 }
 
 function tick() {
@@ -388,13 +394,14 @@ function maybeMakeNewPipe() {
   }
 }
 
-var functions = Object.keys({
+var vars = Object.keys({
   config,
   state,
   visualConfig,
   renderElements,
   updateBird,
   ready,
+  assignButtons,
   flap,
   tick,
   updatePipes,
@@ -413,7 +420,7 @@ var functions = Object.keys({
 
 (function () {
   function main() {
-    document.addEventListener("DOMContentLoaded", ready);
+    document.addEventListener("DOMContentLoaded", () => ready());
   }
 
   main();
