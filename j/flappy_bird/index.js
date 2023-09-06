@@ -56,22 +56,22 @@ function startTick() {
 }
 
 function tick() {
-  if (!state.gameIsRunning) {
-    return;
-  }
-  state.score += visualConfig.tick * 10;
-  updateBird();
-  updatePipes();
-  maybeMakeNewPipe();
-  draw();
-  if (state.altitude < 0) {
-    endGame();
-    return;
-  }
-  if (isHittingAPipe()) {
-    endGame();
-    return;
-  }
+  // if (!state.gameIsRunning) {
+  //   return;
+  // }
+  // state.score += visualConfig.tick * 10;
+  // updateBird();
+  // updatePipes();
+  // maybeMakeNewPipe();
+  // draw();
+  // if (state.altitude < 0) {
+  //   endGame();
+  //   return;
+  // }
+  // if (isHittingAPipe()) {
+  //   endGame();
+  //   return;
+  // }
 }
 
 function startGame() {
