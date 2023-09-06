@@ -52,7 +52,7 @@ function assignButtons() {
 }
 
 function startTick() {
-  setInterval(() => tick(), visualConfig.tick * 1000);
+  // setInterval(() => tick(), visualConfig.tick * 1000);
 }
 
 function tick() {
