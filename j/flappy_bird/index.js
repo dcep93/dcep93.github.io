@@ -91,8 +91,8 @@ function drawBird() {
 }
 
 function drawScore() {
-  var scoreDiv = document.getElementById("score");
-  scoreDiv.innerText = state.score.toFixed(2);
+  // var scoreDiv = document.getElementById("score");
+  // scoreDiv.innerText = state.score.toFixed(2);
 }
 
 function drawPipes() {
