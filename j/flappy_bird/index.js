@@ -75,12 +75,12 @@ function tick() {
 }
 
 function startGame() {
-  state.score = 0;
-  state.altitude = 0;
-  state.pipes = [];
-  flap();
-  makeFirstPipe();
-  state.gameIsRunning = true;
+  // state.score = 0;
+  // state.altitude = 0;
+  // state.pipes = [];
+  // flap();
+  // makeFirstPipe();
+  // state.gameIsRunning = true;
 }
 
 function drawBird() {
