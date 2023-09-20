@@ -146,6 +146,7 @@ function makePipe(x) {
 
 function isHittingAPipe() {
   var birdBox = document.getElementById("bird").getBoundingClientRect();
+  if (birdBox.bottom > document.body.offsetHeight) return false;
   var pipeBoxes = document.getElementsByClassName("pipe_box");
   for (var pipeBox of pipeBoxes) {
     var pipeBoxRect = pipeBox.getBoundingClientRect();
