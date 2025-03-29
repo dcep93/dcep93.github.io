@@ -20,3 +20,4 @@ q/ChatGPT.html
 q/StuffOrElse.3.10.html
 q/Silly Sounding Words.html
 q/The Simpsons Treehouse of Horror.html
+q/The Stormlight Archive.html
