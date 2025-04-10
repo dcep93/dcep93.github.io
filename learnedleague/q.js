@@ -28,7 +28,7 @@ function setHome() {
 
 function hideAnswers() {
   Array.from(document.getElementsByClassName("qbox")).forEach((e) => {
-    const qbr = e.getElementsByClassName("qb_r")[0];
+    const qbr = e.getElementsByClassName("qb_r")[0] || e;
     const ans = Array.from(qbr.children).filter((_, i) => i > 0);
     const f = () =>
       ans.forEach((a) => (a.style.opacity = 1 - (a.style.opacity || 1)));
