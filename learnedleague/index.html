@@ -1,24 +1,26 @@
 <ul id="ul">
-    <li hidden id="template">
-        <a></a>
-    </li>
+  <li hidden id="template">
+    <a></a>
+  </li>
 </ul>
 <script>
-    // find q -type f | tee qs.txt
-    const template = document.getElementById("template");
-    const ul = document.getElementById("ul");
-    fetch("./qs.txt")
-        .then((resp) => resp.text())
-        .then((text) => text.split("\n").filter(Boolean))
-        .then((pages) =>
-            pages.forEach((p) => {
-                const c = template.cloneNode(true);
-                c.hidden = false;
-                const a = c.getElementsByTagName("a")[0];
-                console.log(c.getElementsByTagName("a"));
-                a.innerText = p;
-                a.href = p;
-                ul.appendChild(c);
-            })
-        );
+  // find q -type f | tee qs.txt
+  const template = document.getElementById("template");
+  const ul = document.getElementById("ul");
+  fetch(
+    "https://api.github.com/repos/dcep93/dcep93.github.io/contents/learnedleague/q"
+  )
+    .then((resp) => resp.json())
+    .then((j) => j.map((jj) => jj.path))
+    .then((pages) =>
+      pages.forEach((p) => {
+        const c = template.cloneNode(true);
+        c.hidden = false;
+        const a = c.getElementsByTagName("a")[0];
+        console.log(c.getElementsByTagName("a"));
+        a.innerText = p;
+        a.href = p;
+        ul.appendChild(c);
+      })
+    );
 </script>
