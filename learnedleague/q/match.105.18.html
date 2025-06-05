@@ -1,0 +1,980 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" dir="ltr" lang="en-gb" xml:lang="en-gb">
+<head>
+		<script type="text/javascript" src="../q.js"></script>
+
+<meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+
+<title>LearnedLeague</title>
+
+
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1,maximum-scale=1" />
+
+
+<link rel="stylesheet" href="/assets/css/main2.css" />
+
+
+<link REL="icon" HREF="/images/logos/clownball_transparent.ico" TYPE="image/ico">
+<link rel="shortcut icon" type="image/x-icon" href="/images/logos/clownball_transparent.ico" />
+
+<META name="description" content="The Greatest Trivia League in All the Land.">
+<META name="keywords" content="trivia, league, learnedleague, thorsten, integrity, one-day, minileague">
+<meta name="format-detection" content="telephone=no" />
+
+<script type="text/javascript"><!--
+	var spoiler_show = "[Reveal]";
+	var spoiler_hide = "[Obscure]";
+//--></script>
+
+<!-- <script type="text/javascript" src="./styles/subsilver2/template/prime_bbcode_spoiler.js"></script> THIS IS NOW BELOW -->
+
+<script type="text/javascript"><!--
+			var spoiler_collapse = true;
+			document.write('<style type="text/css">\n.spoiler-hidden{visibility:hidden}' + (spoiler_collapse ? '\ndiv.spoiler-hidden{display:none}' : '') + '\n<\/style>');
+			function spoilerToggle(o, reset)
+			{
+				var c, t, v, i, j;
+				reset = reset || false;
+				if (o && (c = o.className.match(/\bspoiler-link|spoiler-box\b/)))
+				{
+					v = (c == 'spoiler-box');
+					o = !v ? o.parentNode.nextSibling : o;
+					c = o.firstChild;
+					v = reset || !(v || c.className == 'spoiler-hidden');
+					c.className = v ? 'spoiler-hidden' : 'spoiler-visible';
+
+					if (o.previousSibling && (t = o.previousSibling.childNodes[0]))
+					{
+						t.innerHTML = v ? spoiler_show : spoiler_hide;
+					}
+					if (v && (c = c.childNodes))
+					{
+						for (i = 0; i < c.length; i++)
+						{
+							if (c[i].className && c[i].className.indexOf('spoiler') >= 0)
+							{
+								for(j = 0, t = c[i].childNodes; j < t.length; j++)
+								{
+									spoilerToggle(t[j], true);
+								}
+							}
+						}
+					}
+				}
+				return(false);
+			}
+//--></script>
+
+		<style>
+			<!--
+
+				/* Hidden: make text and background the same color, for when JavaScript is unavailable. */
+				.spoiler-box, .spoiler-hidden {
+					color:LightSlateGray;
+					background-color:LightSlateGray;
+					display:inline-block;
+
+				}
+
+				/* Visible */
+				.spoiler-visible {
+					color:#990000;
+					font-weight:bold;
+					font-family:'Lato', sans-serif;
+					background-color:#EFEFEF;
+					visibility:visible;
+					display:inline-block;
+
+				}
+
+				div.spoiler-visible {
+					display:block;
+				}
+
+				/* Common */
+				div.spoiler {
+					margin: 0.5em 1px 0 25px;
+					padding:0;
+					border: 0px solid #A9B8C2;
+					display: inline-block;
+				}
+
+				div.spoiler-top {
+					font-style: normal;
+					font-weight: bold;
+					font-size: 0.9em;
+					padding: 0 4px;
+					background-color: #A9B8C2;
+				}
+
+				div.spoiler-box {
+					font-size: 0.95em;
+				}
+
+				span.spoiler-hidden, span.spoiler-visible {
+					padding:0.2em 0.9em;
+				}
+
+				div.spoiler-hidden, div.spoiler-visible {
+					padding: 5px;
+				}
+
+				/* Nested spoilers */
+				div.spoiler div.spoiler {
+					margin-left:15px;
+				}
+
+			-->
+		</style>
+
+<!-- <link href="./styles/subsilver2/theme/prime_bbcode_spoiler.css" rel="stylesheet" type="text/css" /> NOW ABOVE -->
+
+
+<style>
+<!--
+_body {font-size:90%;}
+
+img.logohead {border:0px;margin:0;width: 50vw;max-width:420px;margin-bottom:0.3em;margin-top:0.3em;}
+span.welcome {font-size:1.05em;font-weight:bold;font-family: "Lato", sans-serif;}
+img.fhead {width:3.5em;}
+div.welcdiv {display: flex;align-items: center;}
+
+@media screen and (min-width: 1680px) {
+img.logohead_ggg {margin-left:2em;}
+}
+
+@media screen and (max-width: 950px) {
+img.logofhead {max-width:300px;}
+span.welcome {display:none;}
+img.fhead {width:2.5em;}
+div.welcdiv {align-items: flex-start;margin-top:0.9em;}
+}
+
+@media screen and (max-width: 500px) {
+img.logohead {margin-top:0.4em;}
+}
+
+@media screen and (max-width: 420px) {
+img.logohead {margin-left:0.8em;}
+}
+
+-->
+</style>
+</head>
+<body class="is-preload">
+<script type="text/javascript" src="/scripts/wz_tooltip.js"></script>
+
+
+	<!-- Wrapper -->
+		<div id="wrapper">
+
+			<!-- Main -->
+				<div id="main">
+					
+					<div class="inner" >
+
+						<!-- Header -->
+							<header id="header" style='vertical-align:bottom;text-align:left;background-color:white;booorder:0px solid #990000;margin-top:0;'>
+								
+								<a href="/" style='border:0px;flex-grow:0;'>
+			<img src='/images/logos/LLTEXT4.png' alt='LearnedLeague' class='logohead' style='' />
+			</a>	
+
+								
+									<ul class="icons">
+										<li>
+											<div style='' class='welcdiv'>
+												
+
+												<!-- <a href="./ucp.php?i=pm&amp;folder=inbox">0 0 0</a> -->
+											
+												<span class='welcome'>Welcome, CepedaDimmadome!</span>&nbsp;
+												
+													<a href="/profiles.php?54686" class='flag'><img src="https://www.learnedleague.com/images/fa/2024/546/54686_2ycglxl.gif" class='flag fhead'></a>
+												
+											</div> 
+										</li>
+									</ul>
+								
+
+							</header>
+
+						<!-- Banner -->
+							<!--
+							<section id="banner">
+								<div class="content">
+									<header>
+									</header>
+									<p></p>
+									<ul class="actions">
+										<li><a href="#" class="button big"></a></li>
+									</ul>
+								</div>
+							</section>
+							-->
+<!-- ***************** HEADER END ***************** -->
+
+<script src='/scripts/validate.js'></script>
+
+<script type='text/javascript' src='/scripts/revealanswer.js'></script>
+<script type="text/javascript">var GB_ROOT_DIR = "https://www.learnedleague.com/scripts/greybox/";</script>
+<script type="text/javascript" src="/scripts/greybox/AJS.js"></script>
+<script type="text/javascript" src="/scripts/greybox/AJS_fx.js"></script>
+<script type="text/javascript" src="/scripts/greybox/gb_scripts.js"></script>
+<link href="/scripts/greybox/gb_styles.css" rel="stylesheet" type="text/css" />
+<SCRIPT SRC="/scripts/mktree.js" LANGUAGE="JavaScript"></SCRIPT>
+<LINK REL="stylesheet" HREF="/stylesheets/mktree.css"> 
+
+<style>
+<!--
+ul.ul_open {background-color:Moccasin;font-weight:bold;padding:4px 0px 4px 8px;border: 1px solid Coral;}
+
+div.pb			{font-size:1.25em;font-family: "Lato", sans-serif; font-weight:bold;margin-right:0.3em;margin-top:0.75em;}
+div.instrbox	{font-size:0.95em;font-weight:bold;margin-bottom:0.75em;}
+
+div.ans_area {display: flex;align-items: center;margin-bottom:0.3em;margin-top:0.6em;}
+div.ans_1 {width:100%;border:1px solid Coral;background-color:Moccasin;font-weight:bold;font-size:1.0em;padding:.3em .5em;margin-top:0.8em;}
+div.ans_2 {width:100%;font-weight:bold;font-size:1em;color:#990000;_text-transform:uppercase;text-align:right;padding:.3em .9em;margin-top:0.3em;font-family: "Lato", sans-serif;}
+div.ans_3 {width:100%;border:1px solid Moccasin;background-color:#FAFAF8;font-weight:bold;font-size:1.0em;padding:.3em ;margin-top:0.8em;width:3em;text-align:center;margin-left:1em;}
+div.ans_4 {border:1px solid DarkGreen;background-color:Honeydew;}
+
+form {margin:0;}
+
+div.qbox {width:100%;padding:1.0em 0.75em;margin:0;border-top:1px solid #999999;font-size:1.0em;}
+div.qb_l {float:left; }
+div.qb_r {float:left;width:100%; }
+div.qb_od {background-color:#F6F7F2;}
+
+input[type=text].ansbox {margin-right:0.75em;font-size:1.05em;}
+input[type=number].pts {border:2px solid Moccasin;width:2.0em;height:2.0em;padding:0.1em; font-size:1.5em;font-weight:bold;-moz-appearance:textfield;text-align: center;}
+input[type=number].pvt {border:2px solid DarkGreen;background-color:Honeydew;margin-left:1em;-moz-appearance:textfield;}
+input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button {  -webkit-appearance: none;  margin: 0; }
+
+div.dont-break-out {
+
+  /* These are technically the same, but use both */
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+
+  -ms-word-break: break-all;
+  /* This is the dangerous one in WebKit, as it breaks things wherever */
+  word-break: break-all;
+  /* Instead use this non-standard one: */
+  word-break: break-word;
+
+  /* Adds a hyphen where the word breaks, if supported (No Blink) 
+  -ms-hyphens: auto;
+  -moz-hyphens: auto;
+  -webkit-hyphens: auto;
+  hyphens: auto;
+  */
+
+}
+
+div.msg {font-family:Lato, sans-serif;border:1px solid #990000;background-color:MistyRose;font-weight:bold;padding:1em;color:#990000;font-size:1.1em;max-width:700px;border-radius:8px;display: flex;align-items: center;margin-bottom:1em;}
+
+div.fd {margin-top:0em;float:left;}
+div.fdl {width:100%;}
+div.fdr {width:100%;}
+
+@media screen and (min-width: 720px) {
+div.fdl {width:325px;margin-right:1em;}
+div.fdr {width: calc(100% - 355px);}
+}
+
+
+
+@media screen and (min-width: 780px) {
+div.fdl {width:365px;margin-right:1em;}
+div.fdr {width: calc(100% - 395px);}
+}
+
+
+@media screen and (min-width: 880px) {
+div.fdl {width:465px;margin-right:1em;}
+div.fdr {width: calc(100% - 495px);}
+}
+
+@media screen and (min-width: 1020px) {
+div.fdl {width:565px;}
+div.fdr {width: calc(100% - 595px);}
+}
+
+@media screen and (min-width: 1160px) {
+div.fdl {width:665px;}
+div.fdr {width: calc(100% - 695px);}
+}
+
+/*
+@media screen and (max-width: 1692px) {
+div.fdl {width:700px;}
+div.fdr {width: calc(100% - 750px);}
+}
+
+@media screen and (max-width: 1528px) {
+div.fdl {width:600px;}
+div.fdr {width: calc(100% - 650px);}
+}
+
+@media screen and (max-width: 1428px) {
+div.fdl {width:500px;}
+div.fdr {width: calc(100% - 535px);}
+}
+
+@media screen and (max-width: 1320px) {
+div.fdl {width:465px;}
+div.fdr {width: calc(100% - 500px);}
+}
+
+@media screen and (max-width: 1280px) {
+div.fdl {width:600px;}
+div.fdr {width: calc(100% - 650px);}
+}
+
+@media screen and (max-width: 1038px) {
+div.fdl {width:465px;}
+div.fdr {width: calc(100% - 500px);}
+}
+
+
+
+@media screen and (max-width: 935px) {
+div.fdl {width:100%;max-width:1200px;}
+div.fdr {width:100%;max-width:1200px;}
+}
+*/
+
+
+-->
+</style>
+
+<div style='width:100%;'>
+
+	<!-- Begin left and right padding for this column -->
+	<div class="fd fdl" id="lft">
+		
+		<h1 class="matchday">June 5, 2025:&nbsp;LL105 Match Day 18</h1>
+
+		
+		
+		<div style='padding-bottom:0.5em;' class=''>
+			<a href='match.php?105&17'>
+			<< Match Day 17
+			</a>
+		</div>
+		
+
+		<div style="margin-bottom:1em;">
+			<div style='display: flex;align-items: center;'>
+				<div class='pb'>Player:</div>
+				<div class='pb'><img src="https://www.learnedleague.com/images/fa/2024/546/54686_2ycglxl.gif" style="height:32px;" class='flag'> </div>
+				<div class='pb'>CepedaDimmadome</div>
+			</div>
+		</div>	
+
+
+		
+
+			<div class='instrbox' style="font-family: 'Lato', sans-serif; font-weight:bold;border:1px solid DarkGreen;background-color: #DEF7DE;padding:1em;border-radius:10px;margin-top:1.5em;">
+				<span style="color:DarkGreen;">SUBMITTED</span> <img src='/images/misc/submitted.png' style='height:15px;margin:0;vertical-align: text-bottom;'>	on June 5, 2025 at 2:43 PM (PT) 
+			</div>
+
+			
+
+		<div class='qbox qb_od'>
+			<div class='dont-break-out'>1.&nbsp;<span oncopy='DSWST_1()' id='q_field1'>Sitcom characters Richie Cunningham, Arthur Fonzarelli, Warren &quot;Potsie&quot; Weber, and Ralph Malph were all residents of what city?</span></div>
+					<div class='ans_area' style=''>
+						<div class='ans_1'>milwaukee
+						</div>
+						<div class='ans_3'>1
+						</div>
+					<!--
+					<div style='float:left;font-size:12px;color:#293A55;z-index:10;height:30px;padding:2px;margin:3px;border:0px solid #c6c7c2;vertical-align:text-bottom;position:relative;width:80px;'>
+						<div class='list-indent' style = 'position:absolute;bottom:0; left:5; width:80px;white-space:nowrap;border:0px solid #990000;'>Your Answer:</div>
+					</div>
+
+					<div style='float:left;font-size:20px;background-color:Moccasin; color:#293A55;z-index:10;height:30px;padding:3px 3px 3px 8px;margin:3px;border:0px solid #c6c7c2;width:365px;'>milwaukee</div>
+
+					<div style='float:left;font-size:12px;color:#293A55;z-index:10;height:30px;padding:2px;margin:3px;border:0px solid #c6c7c2;vertical-align:text-bottom;position:relative;width:30px'>
+						<div class='list-indent' style = 'position:absolute;bottom:10; left:5; width:50px;'>Pts:</div>
+					</div>
+	
+					<div style='float:left;font-size:20px;background-color:Moccasin; color:#293A55;z-index:10;height:30px;padding:3px 3px 3px 8px;margin:3px;border:0px solid #c6c7c2;width:40px;'>1</div>
+					
+					--><div style='clear:both'></div></div>
+					
+
+								<div id='xyz1' class='ans_2'>MILWAUKEE
+								</div>
+					<!--
+					<div style='width:95%;text-align:right;font-size:14px;color:#990000;z-index:10;height:30px;padding:3px 3px 3px 8px; margin:3px; border:0px solid #c6c7c2;font-weight:bold;'>
+						
+						<div id='xyz1' style='font-size: 15px; height:30px;font-family:arial;'>MILWAUKEE</div>
+					</div>
+					-->
+					</div><div class='qbox '>
+			<div class='dont-break-out'>2.&nbsp;<span oncopy='DSWST_2()' id='q_field2'>A physician returns home after serving in the Second Anglo-Afghan War of 1878-80 and connects with an eccentric thirtysomething to share a flat near London's Regent's Park. So begins an 1887 novel by whom?</span></div>
+					<div class='ans_area' style=''>
+						<div class='ans_1'>arthur conan doyle
+						</div>
+						<div class='ans_3'>0
+						</div>
+					<!--
+					<div style='float:left;font-size:12px;color:#293A55;z-index:10;height:30px;padding:2px;margin:3px;border:0px solid #c6c7c2;vertical-align:text-bottom;position:relative;width:80px;'>
+						<div class='list-indent' style = 'position:absolute;bottom:0; left:5; width:80px;white-space:nowrap;border:0px solid #990000;'>Your Answer:</div>
+					</div>
+
+					<div style='float:left;font-size:20px;background-color:Moccasin; color:#293A55;z-index:10;height:30px;padding:3px 3px 3px 8px;margin:3px;border:0px solid #c6c7c2;width:365px;'>arthur conan doyle</div>
+
+					<div style='float:left;font-size:12px;color:#293A55;z-index:10;height:30px;padding:2px;margin:3px;border:0px solid #c6c7c2;vertical-align:text-bottom;position:relative;width:30px'>
+						<div class='list-indent' style = 'position:absolute;bottom:10; left:5; width:50px;'>Pts:</div>
+					</div>
+	
+					<div style='float:left;font-size:20px;background-color:Moccasin; color:#293A55;z-index:10;height:30px;padding:3px 3px 3px 8px;margin:3px;border:0px solid #c6c7c2;width:40px;'>0</div>
+					
+					--><div style='clear:both'></div></div>
+					
+
+								<div id='xyz2' class='ans_2'>ARTHUR CONAN DOYLE
+								</div>
+					<!--
+					<div style='width:95%;text-align:right;font-size:14px;color:#990000;z-index:10;height:30px;padding:3px 3px 3px 8px; margin:3px; border:0px solid #c6c7c2;font-weight:bold;'>
+						
+						<div id='xyz2' style='font-size: 15px; height:30px;font-family:arial;'>ARTHUR CONAN DOYLE</div>
+					</div>
+					-->
+					</div><div class='qbox qb_od'>
+			<div class='dont-break-out'>3.&nbsp;<span oncopy='DSWST_3()' id='q_field3'>Identify any one of the three countries that occupy land on Europe's Istrian Peninsula.</span></div>
+					<div class='ans_area' style=''>
+						<div class='ans_1'>italy
+						</div>
+						<div class='ans_3'>2
+						</div>
+					<!--
+					<div style='float:left;font-size:12px;color:#293A55;z-index:10;height:30px;padding:2px;margin:3px;border:0px solid #c6c7c2;vertical-align:text-bottom;position:relative;width:80px;'>
+						<div class='list-indent' style = 'position:absolute;bottom:0; left:5; width:80px;white-space:nowrap;border:0px solid #990000;'>Your Answer:</div>
+					</div>
+
+					<div style='float:left;font-size:20px;background-color:Moccasin; color:#293A55;z-index:10;height:30px;padding:3px 3px 3px 8px;margin:3px;border:0px solid #c6c7c2;width:365px;'>italy</div>
+
+					<div style='float:left;font-size:12px;color:#293A55;z-index:10;height:30px;padding:2px;margin:3px;border:0px solid #c6c7c2;vertical-align:text-bottom;position:relative;width:30px'>
+						<div class='list-indent' style = 'position:absolute;bottom:10; left:5; width:50px;'>Pts:</div>
+					</div>
+	
+					<div style='float:left;font-size:20px;background-color:Moccasin; color:#293A55;z-index:10;height:30px;padding:3px 3px 3px 8px;margin:3px;border:0px solid #c6c7c2;width:40px;'>2</div>
+					
+					--><div style='clear:both'></div></div>
+					
+
+								<div id='xyz3' class='ans_2'>CROATIA, ITALY, SLOVENIA
+								</div>
+					<!--
+					<div style='width:95%;text-align:right;font-size:14px;color:#990000;z-index:10;height:30px;padding:3px 3px 3px 8px; margin:3px; border:0px solid #c6c7c2;font-weight:bold;'>
+						
+						<div id='xyz3' style='font-size: 15px; height:30px;font-family:arial;'>CROATIA, ITALY, SLOVENIA</div>
+					</div>
+					-->
+					</div><div class='qbox '>
+			<div class='dont-break-out'>4.&nbsp;<span oncopy='DSWST_4()' id='q_field4'>Marsh gas, also known as swamp gas, which is formed by rotting vegetation in wetlands, consists primarily of what organic compound?</span></div>
+					<div class='ans_area' style=''>
+						<div class='ans_1'>alcohol
+						</div>
+						<div class='ans_3'>3
+						</div>
+					<!--
+					<div style='float:left;font-size:12px;color:#293A55;z-index:10;height:30px;padding:2px;margin:3px;border:0px solid #c6c7c2;vertical-align:text-bottom;position:relative;width:80px;'>
+						<div class='list-indent' style = 'position:absolute;bottom:0; left:5; width:80px;white-space:nowrap;border:0px solid #990000;'>Your Answer:</div>
+					</div>
+
+					<div style='float:left;font-size:20px;background-color:Moccasin; color:#293A55;z-index:10;height:30px;padding:3px 3px 3px 8px;margin:3px;border:0px solid #c6c7c2;width:365px;'>alcohol</div>
+
+					<div style='float:left;font-size:12px;color:#293A55;z-index:10;height:30px;padding:2px;margin:3px;border:0px solid #c6c7c2;vertical-align:text-bottom;position:relative;width:30px'>
+						<div class='list-indent' style = 'position:absolute;bottom:10; left:5; width:50px;'>Pts:</div>
+					</div>
+	
+					<div style='float:left;font-size:20px;background-color:Moccasin; color:#293A55;z-index:10;height:30px;padding:3px 3px 3px 8px;margin:3px;border:0px solid #c6c7c2;width:40px;'>3</div>
+					
+					--><div style='clear:both'></div></div>
+					
+
+								<div id='xyz4' class='ans_2'>METHANE
+								</div>
+					<!--
+					<div style='width:95%;text-align:right;font-size:14px;color:#990000;z-index:10;height:30px;padding:3px 3px 3px 8px; margin:3px; border:0px solid #c6c7c2;font-weight:bold;'>
+						
+						<div id='xyz4' style='font-size: 15px; height:30px;font-family:arial;'>METHANE</div>
+					</div>
+					-->
+					</div><div class='qbox qb_od'>
+			<div class='dont-break-out'>5.&nbsp;<span oncopy='DSWST_5()' id='q_field5'>What specific distinction do the losing major-party nominees in the U.S. presidential elections of 1960, 1968, 2000, and 2024 most notably have in common with one another and the <I>winning</I> candidate in 1988, but unambiguously with no other major-party nominees of the last century (including, among others, the winners of the 1924 and 1968 elections)?</span></div>
+					<div class='ans_area' style=''>
+						<div class='ans_1'>lost minnesota
+						</div>
+						<div class='ans_3'>2
+						</div>
+					<!--
+					<div style='float:left;font-size:12px;color:#293A55;z-index:10;height:30px;padding:2px;margin:3px;border:0px solid #c6c7c2;vertical-align:text-bottom;position:relative;width:80px;'>
+						<div class='list-indent' style = 'position:absolute;bottom:0; left:5; width:80px;white-space:nowrap;border:0px solid #990000;'>Your Answer:</div>
+					</div>
+
+					<div style='float:left;font-size:20px;background-color:Moccasin; color:#293A55;z-index:10;height:30px;padding:3px 3px 3px 8px;margin:3px;border:0px solid #c6c7c2;width:365px;'>lost minnesota</div>
+
+					<div style='float:left;font-size:12px;color:#293A55;z-index:10;height:30px;padding:2px;margin:3px;border:0px solid #c6c7c2;vertical-align:text-bottom;position:relative;width:30px'>
+						<div class='list-indent' style = 'position:absolute;bottom:10; left:5; width:50px;'>Pts:</div>
+					</div>
+	
+					<div style='float:left;font-size:20px;background-color:Moccasin; color:#293A55;z-index:10;height:30px;padding:3px 3px 3px 8px;margin:3px;border:0px solid #c6c7c2;width:40px;'>2</div>
+					
+					--><div style='clear:both'></div></div>
+					
+
+								<div id='xyz5' class='ans_2'>SITTING/INCUMBENT VICE-PRESIDENT
+								</div>
+					<!--
+					<div style='width:95%;text-align:right;font-size:14px;color:#990000;z-index:10;height:30px;padding:3px 3px 3px 8px; margin:3px; border:0px solid #c6c7c2;font-weight:bold;'>
+						
+						<div id='xyz5' style='font-size: 15px; height:30px;font-family:arial;'>SITTING/INCUMBENT VICE-PRESIDENT</div>
+					</div>
+					-->
+					</div><div class='qbox '>
+			<div class='dont-break-out'>6.&nbsp;<span oncopy='DSWST_6()' id='q_field6'>In craps, what two-word term (or three-word term, if &quot;Bet&quot; is included) names the game's most common and fundamental bet, which often has one of the lowest house edges of any bet in a casino, and also refers to the labeled area where the bet is placed on the table?</span></div>
+					<div class='ans_area' style=''>
+						<div class='ans_1'>pass through
+						</div>
+						<div class='ans_3'>1
+						</div>
+					<!--
+					<div style='float:left;font-size:12px;color:#293A55;z-index:10;height:30px;padding:2px;margin:3px;border:0px solid #c6c7c2;vertical-align:text-bottom;position:relative;width:80px;'>
+						<div class='list-indent' style = 'position:absolute;bottom:0; left:5; width:80px;white-space:nowrap;border:0px solid #990000;'>Your Answer:</div>
+					</div>
+
+					<div style='float:left;font-size:20px;background-color:Moccasin; color:#293A55;z-index:10;height:30px;padding:3px 3px 3px 8px;margin:3px;border:0px solid #c6c7c2;width:365px;'>pass through</div>
+
+					<div style='float:left;font-size:12px;color:#293A55;z-index:10;height:30px;padding:2px;margin:3px;border:0px solid #c6c7c2;vertical-align:text-bottom;position:relative;width:30px'>
+						<div class='list-indent' style = 'position:absolute;bottom:10; left:5; width:50px;'>Pts:</div>
+					</div>
+	
+					<div style='float:left;font-size:20px;background-color:Moccasin; color:#293A55;z-index:10;height:30px;padding:3px 3px 3px 8px;margin:3px;border:0px solid #c6c7c2;width:40px;'>1</div>
+					
+					--><div style='clear:both'></div></div>
+					
+
+								<div id='xyz6' class='ans_2'>PASS LINE
+								</div>
+					<!--
+					<div style='width:95%;text-align:right;font-size:14px;color:#990000;z-index:10;height:30px;padding:3px 3px 3px 8px; margin:3px; border:0px solid #c6c7c2;font-weight:bold;'>
+						
+						<div id='xyz6' style='font-size: 15px; height:30px;font-family:arial;'>PASS LINE</div>
+					</div>
+					-->
+					</div>
+
+		
+			<div class='' style='border-top:1px solid #999999;width:100%;'></div>
+		
+
+	</div>
+
+	<div class="fd fdr" id="rght" style=''>		
+		<style>
+	table.std {margin:0;}
+	table.std td {background-color:transparent;}
+	tr.datarow td{padding:0.2em;}
+
+
+	ul.mktree		{ margin:0; } 
+	ul.mktree  li	{ list-style: none; } 
+	/* Control how "spaced out" the tree is */
+	ul.mktree, ul.mktree ul , ul.mktree li { padding:1px 0px 1px 2px;margin:0; }
+	/* Provide space for our own "bullet" inside the LI */
+	ul.mktree  li           .bullet { padding: 3px 3px 0px 15px; font-size:1.0em;font-weight:normal;}
+	/* Show "bullets" in the links, depending on the class of the LI that the link's in */
+	ul.mktree  li.liOpen    .bullet { cursor: pointer; background: url(/images/minus.gif)  center left no-repeat; }
+	ul.mktree  li.liClosed  .bullet { cursor: pointer; background: url(/images/plus.gif)   center left no-repeat; }
+	ul.mktree  li.liBullet  .bullet { cursor: default; background: none; }
+	/* Sublists are visible or not based on class of parent LI */
+	ul.mktree  li.liOpen    ul { display: block;}
+	ul.mktree  li.liClosed  ul { display: none; }
+	/* Format menu items differently depending on what level of the tree they are in */
+	ul.mktree  li {}
+	ul.mktree  li ul {padding: 1px 0px 1px 20px;font-size:1.0em;}
+	ul.mktree  li ul li ul li {}
+	ul.mktree  li ul li ul li ul li {}
+</style>
+	
+
+	<script type="text/javascript" src="/scripts/sorttable.js"></script>
+	
+	
+
+	<div class='infobox' style="">
+		<div class='yellolbl' style='margin-bottom:0;'><h4>Today's Opponent</h4></div>
+		<div style='padding:0.5em;background-color: Moccasin;'>
+			<div style="font-size:0.9em;font-weight:normal;margin-bottom:0.5em;">
+				<a href='/profiles.php?57196' class='flag' target="_blank">
+				<img src='/images/r/89/mmd.gif' class='flagimg' title='MercadoK' alt='MercadoK'></a>&nbsp;&nbsp;
+				<span style="font-size:1.4em;font-weight:bold;font-family: 'Lato', sans-serif; ">MercadoK</span>
+				<BR><span style="font-size:1.0em;font-weight:bold;"> E Plateau Div 1: 11-3-3 (1<sup>st</sup> of 22)</span>
+			</div>
+			
+			<div style="font-size:0.9em;font-weight:normal;margin-bottom:0.5em;">
+				
+				
+						Gender: Male<BR>
+					
+						Pronouns: he/him<BR>
+					Location: Baltimore, Maryland<BR>College: Dartmouth College				
+			</div>
+			
+			
+						<div style='overflow-x:auto;font-size:1.0em;'>
+						<table style='width:100%;max-width:500px;' class='std sortable'>
+							<thead>
+								<tr class=''>
+									<td class='std-left'>Category</td>
+									<td class='std-mid'>Career</td>
+									<td class='std-mid sorttable_sorted'>%</td>
+								</tr>
+							</thead>								
+								<tbody>
+									<tr class='datarow'><td class='std-left' >GAMES/SPORT</td><td class='std-mid' >120-208</td><td class='std-mid' >.577</td></tr>
+<tr class='datarow'><td class='std-left' >GEOGRAPHY</td><td class='std-mid' >97-175</td><td class='std-mid' >.554</td></tr>
+<tr class='datarow'><td class='std-left' >FOOD/DRINK</td><td class='std-mid' >73-143</td><td class='std-mid' >.510</td></tr>
+<tr class='datarow'><td class='std-left' >CURR EVENTS</td><td class='std-mid' >25-55</td><td class='std-mid' >.455</td></tr>
+<tr class='datarow'><td class='std-left' >TELEVISION</td><td class='std-mid' >63-148</td><td class='std-mid' >.426</td></tr>
+<tr class='datarow'><td class='std-left' >SCIENCE</td><td class='std-mid' >106-264</td><td class='std-mid' >.402</td></tr>
+<tr class='datarow'><td class='std-left' >BUS/ECON</td><td class='std-mid' >37-93</td><td class='std-mid' >.398</td></tr>
+<tr class='datarow'><td class='std-left' >MATH</td><td class='std-mid' >20-51</td><td class='std-mid' >.392</td></tr>
+<tr class='datarow'><td class='std-left' >LIFESTYLE</td><td class='std-mid' >49-127</td><td class='std-mid' >.386</td></tr>
+<tr class='datarow'><td class='std-left' >AMER HIST</td><td class='std-mid' >39-106</td><td class='std-mid' >.368</td></tr>
+<tr class='datarow'><td class='std-left' >WORLD HIST</td><td class='std-mid' >76-228</td><td class='std-mid' >.333</td></tr>
+<tr class='datarow'><td class='std-left' >POP MUSIC</td><td class='std-mid' >47-162</td><td class='std-mid' >.290</td></tr>
+<tr class='datarow'><td class='std-left' >LANGUAGE</td><td class='std-mid' >26-94</td><td class='std-mid' >.277</td></tr>
+<tr class='datarow'><td class='std-left' >FILM</td><td class='std-mid' >46-169</td><td class='std-mid' >.272</td></tr>
+<tr class='datarow'><td class='std-left' >ART</td><td class='std-mid' >31-116</td><td class='std-mid' >.267</td></tr>
+<tr class='datarow'><td class='std-left' >LITERATURE</td><td class='std-mid' >56-227</td><td class='std-mid' >.247</td></tr>
+<tr class='datarow'><td class='std-left' >CLASS MUSIC</td><td class='std-mid' >16-68</td><td class='std-mid' >.235</td></tr>
+<tr class='datarow'><td class='std-left' >THEATRE</td><td class='std-mid' >12-62</td><td class='std-mid' >.194</td></tr>
+
+								</tbody>
+							<tfoot>
+								<tr><td class='std-left' style=''>TOTALS</td><td class='std-mid' style=''>939-2496</td><td class='std-mid' style=''>.376</td></tr>
+							</tfoot>
+						</table>
+						</div>
+					
+		<div style='margin-top:0.5em;'>
+			<h4>All-time record v. MercadoK</h4>
+			<B>2</B> Wins <B>0</B> Losses <B>1</B> Ties | <span style='font-size:0.9em;'><a href='/headtohead.php?54686&57196' target='_blank'>Matches >></a></span>
+		</div>
+		</div>
+	</div>
+			
+	<div class='infobox'>
+	<div class='yellolbl'><h4>Today's Rundle E Plateau Div 1 Schedule</h4></div>
+		<ul class='mktree' id='tree1'>
+			<li style='font-size:0.9em;'>
+			Rundle E Plateau Div 1<ul><a href='/profiles.php?74113' target='p' class='flag'><img src='/images/r/96/bsm.gif' class='flag' style=''></a> BangP v. 
+										<a href='/profiles.php?84133' target='p' class='flag'><img src='/images/r/100/ksm.gif' class='flag' style=''></a> KatzB2</ul><ul><a href='/profiles.php?77902' target='p' class='flag'><img src='/images/r/97/bsm.gif' class='flag' style=''></a> BlizzardJ v. 
+										<a href='/profiles.php?93748' target='p' class='flag'><img src='/images/r/103/wsm.gif' class='flag' style=''></a> WangDaniel</ul><ul class='ul_open'><a href='/profiles.php?54686' target='p' class='flag'><img src='/images/fa/2024/546/54686_2ycglsm.gif' class='flag' style=''></a> CepedaDimmadome v. 
+										<a href='/profiles.php?57196' target='p' class='flag'><img src='/images/r/89/msm.gif' class='flag' style=''></a> MercadoK</ul><ul><a href='/profiles.php?83052' target='p' class='flag'><img src='/images/r/99/csm.gif' class='flag' style=''></a> CharnoffR v. 
+										<a href='/profiles.php?81533' target='p' class='flag'><img src='/images/r/99/ssm.gif' class='flag' style=''></a> ShimR</ul><ul><a href='/profiles.php?65427' target='p' class='flag'><img src='/images/r/93/hsm.gif' class='flag' style=''></a> HartE2 v. 
+										<a href='/profiles.php?86516' target='p' class='flag'><img src='/images/r/100/wsm.gif' class='flag' style=''></a> WolfP2</ul><ul><a href='/profiles.php?79624' target='p' class='flag'><img src='/images/r/98/hsm.gif' class='flag' style=''></a> HuS v. 
+										<a href='/profiles.php?86473' target='p' class='flag'><img src='/images/r/100/csm.gif' class='flag' style=''></a> CohenA6</ul><ul><a href='/profiles.php?77885' target='p' class='flag'><img src='/images/r/97/ksm.gif' class='flag' style=''></a> KasdanA v. 
+										<a href='/profiles.php?98069' target='p' class='flag'><img src='/images/r/104/zsm.gif' class='flag' style=''></a> ZhengK1</ul><ul><a href='/profiles.php?97273' target='p' class='flag'><img src='/images/r/104/ksm.gif' class='flag' style=''></a> KellnC v. 
+										<a href='/profiles.php?88271' target='p' class='flag'><img src='/images/r/101/esm.gif' class='flag' style=''></a> EmmertE1</ul><ul><a href='/profiles.php?54607' target='p' class='flag'><img src='/images/r/88/psm.gif' class='flag' style=''></a> PetrosA v. 
+										<a href='/profiles.php?91928' target='p' class='flag'><img src='/images/r/102/ysm.gif' class='flag' style=''></a> YangJ6</ul><ul><a href='/profiles.php?80057' target='p' class='flag'><img src='/images/r/98/ssm.gif' class='flag' style=''></a> SahotaY v. 
+										<a href='/profiles.php?81872' target='p' class='flag'><img src='/images/r/99/dsm.gif' class='flag' style=''></a> DaiE44</ul><ul><a href='/profiles.php?92957' target='p' class='flag'><img src='/images/fl/170/17069sm.gif' class='flag' style=''></a> van RenterghemD v. 
+										<a href='/profiles.php?76436' target='p' class='flag'><img src='/images/r/97/csm.gif' class='flag' style=''></a> CorkranA</ul>
+			</li>
+		</ul>
+	</div>
+
+
+	
+		
+	</div>
+	<div style='clear:both;'></div>
+</div>
+
+<div style='margin-bottom:5em;'></div>
+
+<script type="text/javascript">
+    function getST() {
+        var text = "";
+        if (typeof window.getSelection != "undefined") {
+            text = window.getSelection().toString();
+        } else if (typeof document.selection != "undefined" && document.selection.type == "Text") {
+            text = document.selection.createRange().text;
+        }
+        return text;
+    }
+    
+    function DSWST_1()	{var sT = getST();if (sT) {document.getElementById("copy").value +='1 ' + sT + "|";}}
+	function DSWST_2()	{var sT = getST();if (sT) {document.getElementById("copy").value +='2 ' + sT + "|";}}
+	function DSWST_3()	{var sT = getST();if (sT) {document.getElementById("copy").value +='3 ' + sT + "|";}}
+	function DSWST_4()	{var sT = getST();if (sT) {document.getElementById("copy").value +='4 ' + sT + "|";}}
+	function DSWST_5()	{var sT = getST();if (sT) {document.getElementById("copy").value +='5 ' + sT + "|";}}
+	function DSWST_6()	{var sT = getST();if (sT) {document.getElementById("copy").value +='6 ' + sT + "|";}}
+    
+	$(document).ready(function() {$("#af_1"  ).bind('paste', function(e) {var pD = e.originalEvent.clipboardData.getData('text');document.getElementById("paste").value +='1 ' + pD + "|";});});	
+	$(document).ready(function() {$("#af_2"  ).bind('paste', function(e) {var pD = e.originalEvent.clipboardData.getData('text');document.getElementById("paste").value +='2 ' + pD + "|";});});	
+	$(document).ready(function() {$("#af_3"  ).bind('paste', function(e) {var pD = e.originalEvent.clipboardData.getData('text');document.getElementById("paste").value +='3 ' + pD + "|";});});	
+	$(document).ready(function() {$("#af_4"  ).bind('paste', function(e) {var pD = e.originalEvent.clipboardData.getData('text');document.getElementById("paste").value +='4 ' + pD + "|";});});	
+	$(document).ready(function() {$("#af_5"  ).bind('paste', function(e) {var pD = e.originalEvent.clipboardData.getData('text');document.getElementById("paste").value +='5 ' + pD + "|";});});	
+	$(document).ready(function() {$("#af_6"  ).bind('paste', function(e) {var pD = e.originalEvent.clipboardData.getData('text');document.getElementById("paste").value +='6 ' + pD + "|";});});	
+</script>
+
+<script>
+	// THIS SCRIPT DISABLES THE SCROLL WHEEL IN NUMBER FIELDS, SO SCROLLING DOESN'T CHANGE THE POINTS ASSIGNMENT VALUE
+	document.addEventListener("wheel", function(event){
+		if(document.activeElement.type === "number"){
+			document.activeElement.blur();
+		}
+	});
+</script>
+
+
+<!-- ***************** FOOTER BEGIN ***************** -->
+						<div style='height:3.5em;'></div>
+						</div><!-- main inner -->
+					</div><!-- main -->
+
+
+				<style type="text/css">
+					/* Formatting search box */
+					.search-box{
+						
+						position: relative;
+						display: inline-block;
+						
+					}
+					.search-box input[type="text"]{
+						
+						
+					}
+					.result{
+						position: absolute;        
+						z-index: 999;
+						top: 100%;
+						left: 0;
+					}
+					.search-box input[type="text"], .result{
+						width: 100%;
+						box-sizing: border-box;
+					}
+					/* Formatting result items */
+					.result p{
+						margin: 0;
+						padding: 0.2em 0.4em;
+						border: 1px solid #999999;
+						border-top: none;
+						cursor: pointer;
+						background: White;
+						font-size:0.9em;
+					}
+					.result p:hover{
+						background: #336666;
+						color:white;
+					}
+
+				#menu > ul
+					{
+						text-transform:none;
+						letter-spacing: 0.1em;
+						font-weight:300;
+						
+
+					}
+
+				#menu > ul > li
+					{
+						padding-left:0.2em;
+						text-transform:none;
+						letter-spacing: 0.1em;
+						font-weight:300;
+
+					}
+
+				#menu > ul > li a:hover
+					{
+						background-color:white;
+					}
+
+				#menu > ul > li > ul
+					{
+						text-transform:none;
+
+					}
+
+				#search form::before {
+						transform: scaleX(-1);
+						color: #7f888f;
+						content: '\f002';
+						cursor: default;
+						display: block;
+						font-size: 1.3em;
+						height: 1.8em;
+						line-height: 1.8em;
+						opacity: 0.325;
+						position: absolute;
+						right: 0;
+						text-align: center;
+						top: 0;
+						width: 1.8em;
+				}
+
+			#sidebar > .inner > .alt {
+				background-color:#336666;
+			}
+
+				</style>
+				<!-- Sidebar -->
+					<div id="sidebar">
+					
+						<div class="inner">
+						
+
+							<!-- Search -->
+								<section id="search" class="alt search-box" style='margin-bottom:1em;padding:0.5em;'>
+									
+									<form method="post" action="#">
+										<input type="text" name="query" id="query" autocomplete="off" maxlength="12" placeholder=" Player Search" style='font-size: 10pt;' />
+										<div class="result"></div>
+									</form>
+									
+									
+								</section>
+
+
+							<!-- INCL /ll/content_index_membership.html --><!-- Menu -->
+								<nav id="menu" style='margin-bottom:0;padding-bottom:0;border-bottom:0;'>
+									<!--<header class="major">
+										<h2 style='font-family: "Lato", sans-serif;margin-bottom:1em;'>Menu</h2>
+									</header>-->
+									<ul>
+										<li><a href="/">LL Home</a></li>
+										<li><a href="/standings.php?105">LL105 Standings</a></li>
+
+										<li>
+											<span class="opener">Thorsten's Desk</span>
+											<ul>
+												<li><a href="/thorsten/">Thorsten's Desk Home</a></li>
+												<li><a href="/thorsten/therules.php">Complete Rules</a></li>
+												<li><a href="/thorsten/freq.php">FAQ</a></li>
+												<li><a href="/thorsten/review.php">Request Scoring Review</a></li><li><a href="/thorsten/notifications.php">Notifications</a></li><li><a href="/thorsten/advance.php">Advance Access</a></li><li><a href="/thorsten/pastanswers.php">Past Answers</a></li><li><a href="/thorsten/glossary.php">Glossary</a></li><li><a href="/thorsten/flags.php">Flags</a></li>
+												<li><a href="/thorsten/privacy.php">Privacy Policy</a></li>
+												<li><a href="/thorsten/withdrawal.php">Withdrawal</a></li>
+												<li><a href="/thorsten/inmemoriam.php">In Memoriam</a></li>
+												<li><a href="/thorsten/">More...</a></li>
+											</ul>
+										</li>
+										
+										<li><a href="/tracker.php">Player Tracker</a></li><li><a href="/private.php">Private Rundles</a></li>
+
+										<li><a href="/membercenter.php">Member Center</a></li>
+										<li><a href="/refer.php">Refer a Player</a></li>
+	
+										<li><a href="/hist/">History</a></li>
+										<li><a href="/mini/">MiniLeagues</a></li>
+																			
+										<li>
+											<span class="opener">One-Days</span>
+											<ul>
+												<li><a href="/oneday/">One-Days Home</a></li>
+												<li><a href="/tester.php">One-Day Testing</a></li>
+												<li><a href="/thorsten/proposal.php">Propose a One-Day</a></li>
+												<li><a href="/oneday/leaguescup.php?104">1DS Leagues Cup (LL104)</a></li>
+											</ul>
+										</li>										
+										
+										<!--<li><a href="/oneday/">One-Days</a></li>-->
+
+										<li><a href="/boards.php">Message Board</a></li><li><a href="/ucp.php?i=pm&folder=inbox">Private Messaging</a></li>		
+
+										<li><a href="/memberhosted.php">Member-Hosted Events & Podcasts</a></li>
+
+										<li><a href="/thorsten/contact.php">Contact the League</a></li>
+										<li></li>
+									</ul>
+								</nav>
+							
+							
+								<div style='font-family: "Lato", sans-serif;font-size:1.0em;font-weight:bold;margin-top:0.3em;border-bottom:0;margin-bottom:1em;padding-bottom:0;;' class='sn_log'>	
+									<a href="./ucp.php?mode=logout&amp;sid=02e4582a5efcbe94682da4c751a2a821" class="button small primary" style='margin-right:0.5em;width:16em;'>Log Out</a>
+									<BR>
+									<a href="/ucp.php?i=profile&mode=reg_details" class="button small" style='margin-right:0.2em;margin-top:0.5em;width:16em'>Change Email/Pwd</a>
+									
+								</div>
+							
+
+
+					<!-- sitechooser note 
+						<div style='border:4px solid #F9EAED;padding:0.6em;font-size:0.8em;color:#666666;margin-top:1.5em;margin-bottom:0.4em;border-radius:5px;'>
+							You are using the beta version of the new LL website. <a href='/thorsten/sitechooser.php'>Click here</a> to switch back to the classic site.
+						</div>
+					 end sitechooser note -->
+
+
+							<!-- Footer -->
+								<footer id="footer" style='border-top:1px solid #666666;padding-top:0.75em;margin-top:2em;'>
+									<p class="copyright" style='font-size:0.85em;'>Copyright &copy; 1998-2025 LearnedLeague LLC | <a href="/thorsten/statement.php">Terms of Service</a> | All Rights Reserved | <a href="/thorsten/privacy.php">Privacy Policy</a> | <a href="/thorsten/cookies.php">Cookie Policy</a></p>
+								</footer>
+
+						</div><!-- sidebar inner. -->
+					</div><!-- sidebar -->
+
+
+
+
+			</div><!-- wrapper --><!-- Scripts -->
+			<script src="/assets/js/jquery.min.js"></script>
+			<script src="/assets/js/browser.min.js"></script>
+			<script src="/assets/js/breakpoints.min.js"></script>
+			<script src="/assets/js/util.js"></script>
+			<script src="/assets/js/main4.js"></script>
+
+			<!--<script src="https://code.jquery.com/jquery-1.12.4.min.js"></script>-->
+			<script type="text/javascript">
+			$(document).ready(function(){
+				$('.search-box input[type="text"]').on("keyup input", function(){
+					/* Get input value on change */
+					var inputVal = $(this).val();
+					var resultDropdown = $(this).siblings(".result");
+					if(inputVal.length){
+						$.get("/backend-search.php", {term: inputVal}).done(function(data){
+							// Display the returned data in browser
+							resultDropdown.html(data);
+						});
+					} else{
+						resultDropdown.empty();
+					}
+				});
+				
+				// Set search input value on click of result item
+				$(document).on("click", ".result p", function(){
+					$(this).parents(".search-box").find('input[type="text"]').val($(this).text());
+					$(this).parent(".result").empty();
+				});
+			});
+			</script>
+
+
+
+		<!--
+		<div style="display: none">  
+			IF not S_IS_BOT 
+					<img src="./cron.php?cron_type=queue" width="1" height="1" />
+			ENDIF 
+		</div> 
+		-->
+
+
+
+
+
+
+	</body>
+</html>
