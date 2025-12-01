@@ -18,6 +18,10 @@ function execute() {
       p: /https:\/\/letterboxd\.com.*/,
       jss: ["letterboxd.js"],
     },
+    {
+      p: /https:\/\/www\.reddit\.com.*/,
+      jss: ["reddit.js"],
+    },
   ];
 
   const jss = paths
