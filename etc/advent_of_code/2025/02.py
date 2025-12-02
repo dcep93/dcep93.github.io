@@ -46,7 +46,7 @@ class part1:
         strlen = math.ceil(math.log10(lower + 1))
         next_lower = 10**strlen
         if strlen % 2 == 1:
-            invalid_sum = 0
+            invalid_sum = cls.get_odd_invalid_sums(lower, strlen)
         else:
             first = lower // (10 ** (strlen / 2))
             second = lower % (10 ** (strlen / 2))
@@ -57,9 +57,15 @@ class part1:
             invalid_sum = int(((count + 1) * (bottom + top)) // 2)
         return invalid_sum, next_lower
 
+    @classmethod
+    def get_odd_invalid_sums(cls, lower, strlen):
+        return 0
+
 
 class part2(part1):
-    pass
+    @classmethod
+    def get_odd_invalid_sums(cls, lower, strlen):
+        return 0
 
 
 EXAMPLE = """
