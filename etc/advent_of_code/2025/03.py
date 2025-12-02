@@ -15,6 +15,7 @@ def get_lines():
 
 def main():
     print(part1.run())
+    # assert part1.run() ==
     # print(part2.run())
 
 
