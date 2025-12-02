@@ -14,6 +14,8 @@ def get_lines():
 
 
 def main():
+    print(part2.p1_get_invalid_sums(11, 22))
+    return
     assert use_example or part1.run() == 22062284697
     print(part2.run())
 
