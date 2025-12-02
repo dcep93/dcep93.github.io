@@ -14,10 +14,12 @@ def get_lines():
 
 
 def main():
-    print(list(part2.p2_get_invalid(110, 1, 3)))
-    return
     assert use_example or part1.run() == 22062284697
-    print(part2.run())
+    # x = ",".join(map(str, part2.p1_get_invalid_sums(95, 115)))
+    # assert x == "99,111,0", x
+    x = ",".join(map(str, part2.p1_get_invalid_sums(998, 1012)))
+    assert x == "999,1010,0", x
+    # print(part2.run())
 
 
 class part1:
@@ -33,16 +35,16 @@ class part1:
     @classmethod
     def p1_get_invalid_sums(cls, lower, upper):
         while True:
-            invalid_sum, next_lower = cls.p1_helper(lower, True)
+            invalid_sum, next_lower = cls.p1_helper(lower, upper)
             if next_lower > upper:
-                sub, _ = cls.p1_helper(upper + 1, False)
+                sub, _ = cls.p1_helper(upper + 1, upper)
                 yield invalid_sum - sub
                 break
             yield invalid_sum
             lower = next_lower
 
     @classmethod
-    def p1_helper(cls, lower, is_main):
+    def p1_helper(cls, lower, upper):
         strlen = cls.p1_get_strlen(lower)
         next_lower = 10**strlen
         if strlen % 2 == 1:
@@ -67,9 +69,7 @@ class part1:
 class part2(part1):
 
     @classmethod
-    def p1_helper(cls, lower, is_main):
-        if not is_main:
-            return 0, None
+    def p1_helper(cls, lower, upper):
         strlen = cls.p1_get_strlen(lower)
         if cls.p1_get_strlen(lower + 1) > strlen:
             invalid = lower
@@ -83,6 +83,8 @@ class part2(part1):
                     if s_distance < distance:
                         distance = s_distance
                         invalid = s_invalid
+        if invalid > upper:
+            return 0, invalid + 1
         return invalid, invalid + 1
 
     @classmethod
@@ -94,9 +96,10 @@ class part2(part1):
             if digits > first:
                 first = first + 1
                 break
+        value = first
         for _ in range(1, strlen // s):
-            first = first * (size + 1)
-        return first
+            value = (value * size) + first
+        return value
 
     @classmethod
     def p2_get_digits(cls, value, i, s, strlen, size):
