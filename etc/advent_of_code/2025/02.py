@@ -14,7 +14,7 @@ def get_lines():
 
 
 def main():
-    assert part1.run() == 22062284697
+    assert use_example or part1.run() == 22062284697
     print(part2.run())
 
 
@@ -90,13 +90,13 @@ class part2(part1):
             if digits > first:
                 first = first + 1
                 break
-        for _ in range(strlen // s):
+        for _ in range(1, strlen // s):
             first = first * (size + 1)
         return first
 
     @classmethod
     def p2_get_digits(cls, value, i, s, strlen, size):
-        for _ in range((strlen // s) - i - 1):
+        for _ in range(1, (strlen // s) - i):
             value = value // size
         value = value % (10**s)
         return value

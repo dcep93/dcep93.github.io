@@ -2,7 +2,7 @@
 
 import pathlib
 
-use_example = False
+use_example = True
 
 with open(f"./{pathlib.Path(__file__).stem}.txt") as fh:
     txt = fh.read()
@@ -15,7 +15,7 @@ def get_lines():
 
 def main():
     print(part1.run())
-    # assert part1.run() ==
+    # assert use_example or part1.run() ==
     # print(part2.run())
 
 
