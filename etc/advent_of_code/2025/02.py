@@ -30,8 +30,11 @@ class part1:
 
     @classmethod
     def get_invalid_sums(cls, lower, upper):
+        import math
+
         while True:
-            invalid_sum, next_lower = cls.helper(lower)
+            strlen = math.ceil(math.log10(lower + 1))
+            invalid_sum, next_lower = cls.helper(lower, strlen)
             if next_lower > upper:
                 sub, _ = cls.helper(upper + 1)
                 yield invalid_sum - sub
@@ -40,13 +43,10 @@ class part1:
             lower = next_lower
 
     @classmethod
-    def helper(cls, lower):
-        import math
-
-        strlen = math.ceil(math.log10(lower + 1))
+    def helper(cls, lower, strlen):
         next_lower = 10**strlen
         if strlen % 2 == 1:
-            invalid_sum = cls.get_odd_invalid_sums(lower, strlen)
+            invalid_sum = 0
         else:
             first = lower // (10 ** (strlen / 2))
             second = lower % (10 ** (strlen / 2))
@@ -57,15 +57,24 @@ class part1:
             invalid_sum = int(((count + 1) * (bottom + top)) // 2)
         return invalid_sum, next_lower
 
-    @classmethod
-    def get_odd_invalid_sums(cls, lower, strlen):
-        return 0
-
 
 class part2(part1):
+
     @classmethod
-    def get_odd_invalid_sums(cls, lower, strlen):
-        return 0
+    def helper(cls, lower):
+        strlen = cls.get_strlen(lower)
+        for s in range(1, strlen + 1):
+            if (strlen / s) % 1 == 0:
+                if False:
+                    return True
+        return False
+
+    """
+    121212
+    123123123
+    ...
+
+    """
 
 
 EXAMPLE = """
