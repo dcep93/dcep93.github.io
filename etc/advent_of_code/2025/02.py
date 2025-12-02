@@ -2,7 +2,7 @@
 
 import pathlib
 
-use_example = True
+use_example = False
 
 with open(f"./{pathlib.Path(__file__).stem}.txt") as fh:
     txt = fh.read()
@@ -15,10 +15,8 @@ def get_lines():
 
 def main():
     assert use_example or part1.run() == 22062284697
-    # assert part2.run() > 40709285906
-    # assert part2.run() > 40709285917
-    r = "15-105106"
-    print(r, list(part2.p1_get_invalid_sums(*[int(x) for x in r.split("-")])))
+    assert part2.run() > 40709285906
+    assert part2.run() > 40709285917
     print(part2.run())
 
 
@@ -97,6 +95,8 @@ class part2(part1):
             digits = cls.p2_get_digits(lower, i, s, strlen, size)
             if digits > first:
                 first = first + 1
+                break
+            if digits < first:
                 break
         value = first
         for _ in range(1, strlen // s):
