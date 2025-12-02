@@ -1,9 +1,8 @@
 # cdr && cd dcep93.github.io/etc/advent_of_code/2025 && python3 02.py
 
-use_example = False
-
 import pathlib
 
+use_example = False
 
 with open(f"./{pathlib.Path(__file__).stem}.txt") as fh:
     txt = fh.read()
