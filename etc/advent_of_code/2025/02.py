@@ -14,7 +14,7 @@ def get_lines():
 
 
 def main():
-    print(part2.p1_get_invalid_sums(11, 22))
+    print(list(part2.p1_get_invalid_sums(95, 115)))
     return
     assert use_example or part1.run() == 22062284697
     print(part2.run())
@@ -33,16 +33,16 @@ class part1:
     @classmethod
     def p1_get_invalid_sums(cls, lower, upper):
         while True:
-            invalid_sum, next_lower = cls.p1_helper(lower)
+            invalid_sum, next_lower = cls.p1_helper(lower, True)
             if next_lower > upper:
-                sub, _ = cls.p1_helper(upper + 1)
+                sub, _ = cls.p1_helper(upper + 1, False)
                 yield invalid_sum - sub
                 break
             yield invalid_sum
             lower = next_lower
 
     @classmethod
-    def p1_helper(cls, lower):
+    def p1_helper(cls, lower, is_main):
         strlen = cls.p1_get_strlen(lower)
         next_lower = 10**strlen
         if strlen % 2 == 1:
@@ -67,7 +67,9 @@ class part1:
 class part2(part1):
 
     @classmethod
-    def p1_helper(cls, lower):
+    def p1_helper(cls, lower, is_main):
+        if not is_main:
+            return 0, None
         strlen = cls.p1_get_strlen(lower)
         if cls.p1_get_strlen(lower + 1) > strlen:
             invalid = lower
