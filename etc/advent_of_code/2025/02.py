@@ -15,11 +15,11 @@ def get_lines():
 
 def main():
     assert use_example or part1.run() == 22062284697
-    # x = ",".join(map(str, part2.p1_get_invalid_sums(95, 115)))
-    # assert x == "99,111,0", x
-    x = ",".join(map(str, part2.p1_get_invalid_sums(998, 1012)))
-    assert x == "999,1010,0", x
-    # print(part2.run())
+    # assert part2.run() > 40709285906
+    # assert part2.run() > 40709285917
+    r = "15-105106"
+    print(r, list(part2.p1_get_invalid_sums(*[int(x) for x in r.split("-")])))
+    print(part2.run())
 
 
 class part1:
@@ -71,15 +71,17 @@ class part2(part1):
     @classmethod
     def p1_helper(cls, lower, upper):
         strlen = cls.p1_get_strlen(lower)
+        if strlen == 1:
+            return 0, 10
         if cls.p1_get_strlen(lower + 1) > strlen:
             invalid = lower
         else:
             invalid = float("inf")
             distance = float("inf")
-            for s in range(1, strlen + 1):
+            for s in range(1, strlen):
                 if (strlen / s) % 1 == 0:
                     s_invalid = cls.p2_get_invalid(lower, s, strlen)
-                    s_distance = lower - s_invalid
+                    s_distance = s_invalid - lower
                     if s_distance < distance:
                         distance = s_distance
                         invalid = s_invalid
