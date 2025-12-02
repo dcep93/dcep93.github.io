@@ -1,11 +1,8 @@
 # cdr && cd dcep93.github.io/etc/advent_of_code/2025 && python3 02.py
 
-use_example = False
+use_example = True
 
-import pathlib
-
-
-with open(f"./{pathlib.Path(__file__).stem}.txt") as fh:
+with open("./03.txt") as fh:
     txt = fh.read()
 
 
@@ -16,7 +13,7 @@ def get_lines():
 
 def main():
     print(part1.run())
-    print(part2.run())
+    # print(part2.run())
 
 
 class part1:
