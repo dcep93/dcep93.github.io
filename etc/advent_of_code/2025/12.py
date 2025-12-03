@@ -1,18 +1,18 @@
-# cdr && cd dcep93.github.io/etc/advent_of_code/2025 && python3 12.py
+# cdr && cd dcep93.github.io/etc/advent_of_code/2025 && echo && python3 12.py
 
 import hashlib
 import pathlib
 
 
 def main():
-    log_part_1 = part1.answer_md5 is None
+    log_part_1 = part1.answer_md5 != ""
     part1.main(should_log=log_part_1, use_example=True)
     if not log_part_1:
         part2.main(should_log=True, use_example=True)
 
 
 class part1:
-    answer_md5 = None
+    answer_md5 = ""
     should_log: bool
     txt: str
 
@@ -63,6 +63,7 @@ class part1:
 
 
 class part2(part1):
+    answer_md5 = ""
 
     @classmethod
     def run_line(cls):
