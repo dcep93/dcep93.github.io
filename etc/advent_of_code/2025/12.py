@@ -21,6 +21,13 @@ class part1:
         return 0
 
     @classmethod
+    def run(cls):
+        total = 0
+        for i, line in cls.get_lines():
+            total += cls.run_line(i, line)
+        return total
+
+    @classmethod
     def main(cls, *, should_log, use_example):
         cls.should_log = should_log
 
@@ -32,16 +39,9 @@ class part1:
 
         rval = cls.run()
         rval_md5 = cls.md5(rval)
-        assert use_example or cls.answer_md5 is None or cls.answer_md5 == rval_md5
+        assert use_example or cls.answer_md5 == "" or cls.answer_md5 == rval_md5
         cls.log(rval)
         cls.log(f"hash: {rval_md5}")
-
-    @classmethod
-    def run(cls):
-        total = 0
-        for i, line in cls.get_lines():
-            total += cls.run_line(i, line)
-        return total
 
     @classmethod
     def get_lines(cls):
