@@ -5,7 +5,7 @@ import pathlib
 
 
 def main():
-    log_part_1 = part1.answer_md5 != ""
+    log_part_1 = part1.answer_md5 == ""
     part1.main(should_log=log_part_1, use_example=True)
     if not log_part_1:
         part2.main(should_log=True, use_example=True)
@@ -41,7 +41,8 @@ class part1:
         rval_md5 = cls.md5(rval)
         assert use_example or cls.answer_md5 == "" or cls.answer_md5 == rval_md5
         cls.log(rval)
-        cls.log(f"hash: {rval_md5}")
+        if not use_example:
+            cls.log(f"hash: {rval_md5}")
 
     @classmethod
     def get_lines(cls):
