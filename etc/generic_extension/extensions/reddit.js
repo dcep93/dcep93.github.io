@@ -9,4 +9,17 @@ function loop() {
     .finally(() => setTimeout(loop, 100));
 }
 
-loop();
+function init() {
+  if (location.href.match(/.*\/comments\/.*\//)) {
+    const url = new URL(location.href);
+    url.searchParams.set("sort", "top");
+    location.href = url.toString();
+  }
+}
+
+function main() {
+  init();
+  loop();
+}
+
+main();
