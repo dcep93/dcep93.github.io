@@ -106,7 +106,7 @@ class part2(part1):
     def get_size(cls, ix, iy, jx, jy):
         for hx, hy, parity in cls.holes:
             if parity != cls.parity:
-                if (hx - ix) * (hx - jx) < 0 and (hy - iy) * (hy - jy) <= 0:
+                if (hx - ix) * (hx - jx) <= 0 and (hy - iy) * (hy - jy) <= 0:
                     return -1
         return super().get_size(ix, iy, jx, jy)
 
