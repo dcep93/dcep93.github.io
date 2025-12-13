@@ -94,6 +94,7 @@ class part2(part1):
     ) -> int:
         seen = set()
         queue = [(tuple(joltage), 0)]
+        print(joltage, buttons)
         while queue:
             i, count = queue.pop(0)
             if all(ii == 0 for ii in i):
