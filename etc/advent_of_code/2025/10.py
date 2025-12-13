@@ -92,27 +92,24 @@ class part2(part1):
     def run_line_helper(
         cls, indicator: tuple[int, ...], buttons: list[list[int]], joltage: list[int]
     ) -> int:
-        bs = [
-            [1 if index in b else 0 for index in range(len(joltage))] for b in buttons
-        ]
-        inverse = cls.get_inverse(bs)
-        counts = cls.multiply(joltage, inverse)
-        return sum(counts)
-
-    @classmethod
-    def get_inverse(cls, bs: list[list[int]]) -> list[list[int]]:
-        A = np.array(bs, dtype=float)
-        A_pinv = np.linalg.pinv(A)  # J x B
-        return A_pinv.tolist()
-
-    @classmethod
-    def multiply(cls, joltage: list[int], inverse: list[list[int]]) -> list[int]:
-        # joltage: J
-        # inverse: J x B
-        v = np.array(joltage, dtype=float)  # shape (J,)
-        M = np.array(inverse, dtype=float)  # shape (J,B)
-        out = v @ M  # (J,) @ (J,B) -> (B,)
-        return out.tolist()
+        seen = set()
+        queue = [(tuple(joltage), 0)]
+        while queue:
+            i, count = queue.pop(0)
+            if all(ii == 0 for ii in i):
+                return count
+            biggest = sorted([(ii, index) for index, ii in enumerate(i)], reverse=True)[
+                0
+            ][1]
+            for b in buttons:
+                if biggest not in b:
+                    continue
+                j = tuple([ii - 1 if index in b else ii for index, ii in enumerate(i)])
+                if j in seen:
+                    continue
+                seen.add(j)
+                queue.append((j, count + 1))
+        assert None, (joltage, buttons)
 
 
 import numpy as np
