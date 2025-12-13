@@ -17,15 +17,16 @@ class part1:
     txt: str
 
     @classmethod
-    def run_line(cls, index: int, line: str) -> int:
-        return 0
+    def run(cls):
+        parts = cls.txt.split("\n\n")
+        shapes = [p.split("\n")[1:] for p in parts[:-1]]
+        return len(
+            [None for line in parts[-1].split("\n") if cls.can_fit(line, shapes)]
+        )
 
     @classmethod
-    def run(cls):
-        total = 0
-        for i, line in enumerate(cls.get_lines()):
-            total += cls.run_line(i, line)
-        return total
+    def can_fit(cls, line, shapes):
+        return True
 
     @classmethod
     def main(cls, *, should_log, use_example):
