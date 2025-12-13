@@ -19,13 +19,28 @@ class part1:
     @classmethod
     def run(cls):
         parts = cls.txt.split("\n\n")
-        shapes = [p.split("\n")[1:] for p in parts[:-1]]
+        raw_shapes = [p.split("\n")[1:] for p in parts[:-1]]
+        shapes = [
+            (raw, len([c for line in raw for c in line if c == "#"]))
+            for raw in raw_shapes
+        ]
         return len(
             [None for line in parts[-1].split("\n") if cls.can_fit(line, shapes)]
         )
 
     @classmethod
     def can_fit(cls, line, shapes):
+        parts = line.split(": ")
+        size = [int(i) for i in parts[0].split("x")]
+        counts = [int(i) for i in parts[1].split(" ")]
+        needed = sum([counts[i] * shapes[i][1] for i in range(len(counts))])
+        if size[0] * size[1] < needed:
+            return False
+        start = [[0 for _ in range(size[0])] for _ in range(size[1])]
+        return cls.helper(start, counts, shapes)
+
+    @classmethod
+    def helper(cls, start, counts, shapes):
         return True
 
     @classmethod
