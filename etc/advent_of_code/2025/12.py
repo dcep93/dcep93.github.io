@@ -23,7 +23,7 @@ class part1:
     @classmethod
     def run(cls):
         total = 0
-        for i, line in cls.get_lines():
+        for i, line in enumerate(cls.get_lines()):
             total += cls.run_line(i, line)
         return total
 
@@ -46,8 +46,7 @@ class part1:
 
     @classmethod
     def get_lines(cls):
-        for index, line in enumerate(cls.txt.split("\n")):
-            yield index, line
+        return cls.txt.split("\n")
 
     @classmethod
     def log(cls, str):
@@ -72,7 +71,39 @@ class part2(part1):
 
 
 EXAMPLE = """
+0:
+###
+##.
+##.
 
+1:
+###
+##.
+.##
+
+2:
+.##
+###
+##.
+
+3:
+##.
+###
+##.
+
+4:
+###
+#..
+###
+
+5:
+###
+.#.
+###
+
+4x4: 0 0 0 0 2 0
+12x5: 1 0 1 0 2 2
+12x5: 1 0 1 0 3 2
 """
 
 
