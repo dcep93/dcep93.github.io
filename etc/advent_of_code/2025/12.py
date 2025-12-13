@@ -6,7 +6,7 @@ import pathlib
 
 def main():
     log_part_1 = part1.answer_md5 == ""
-    part1.main(should_log=log_part_1, use_example=True)
+    part1.main(should_log=log_part_1, use_example=False)
     if not log_part_1:
         part2.main(should_log=True, use_example=True)
 
