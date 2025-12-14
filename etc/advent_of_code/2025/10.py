@@ -102,10 +102,13 @@ class part2(part1):
             biggest = sorted([(ii, index) for index, ii in enumerate(i)], reverse=True)[
                 0
             ][1]
+            print(joltage, i, biggest, buttons)
             for b in buttons:
                 if biggest not in b:
                     continue
                 j = tuple([ii - 1 if index in b else ii for index, ii in enumerate(i)])
+                if any(jj < 0 for jj in j):
+                    continue
                 if j in seen:
                     continue
                 seen.add(j)
