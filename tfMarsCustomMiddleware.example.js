@@ -1,3 +1,3 @@
-window.customMiddleware = (ctx) => {
+window.customMiddlewareF = (ctx) => {
   console.log(ctx);
 };
