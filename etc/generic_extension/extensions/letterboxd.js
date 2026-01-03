@@ -1,5 +1,5 @@
 const start = Date.now();
-const duration_ms = 1000;
+const duration_ms = 5000;
 
 function main() {
   hideAds();
@@ -47,13 +47,6 @@ async function syncDiary() {
 
   const zip = await JSZip.loadAsync(zipBytes);
 
-  // normalize a Letterboxd URI to its unique part
-  function normalizeURI(uri) {
-    return (
-      uri?.trim()?.replace(/\/$/, "")?.split("/").pop()?.toLowerCase() || ""
-    );
-  }
-
   async function getCsv(fileName) {
     const fileObj = zip.file(fileName);
     if (!fileObj) return [];
@@ -81,7 +74,38 @@ async function syncDiary() {
 
   const diarySet = new Set(diary.map(getKey));
 
-  const missingRatings = ratings.filter((r) => !diarySet.has(getKey(r)));
+  const missingRatings = ratings
+    .filter((r) => !diarySet.has(getKey(r)))
+    .slice(0, 1);
+
+  console.log({ missingRatings });
+
+  return;
+
+  missingRatings.forEach((r) =>
+    fetch("https://letterboxd.com/s/save-diary-entry", {
+      headers: {
+        accept: "*/*",
+        "accept-language": "en-US,en;q=0.9",
+        "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+        priority: "u=1, i",
+        "sec-ch-ua":
+          '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"macOS"',
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-origin",
+        "x-requested-with": "XMLHttpRequest",
+      },
+      body: `json=true&__csrf=51861fdb1bb354a74cfe&viewingId=&viewingableUid=film%3A474474&specifiedDate=true&viewingDateStr=2026-01-01&review=&tags=&rating=${Number(
+        r["Rating"] * 2
+      )}&viewingableUID=film%3A474474`,
+      method: "POST",
+      mode: "cors",
+      credentials: "include",
+    })
+  );
 }
 
 main();
