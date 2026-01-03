@@ -38,7 +38,7 @@ async function syncDiary() {
   if (!zipResp.ok) throw new Error("Export download failed: " + zipResp.status);
   const zipBytes = await zipResp.arrayBuffer();
 
-  // load JSZip (dynamically)
+  // load JSZip
   const jszipScript = document.createElement("script");
   jszipScript.src =
     "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
@@ -47,16 +47,18 @@ async function syncDiary() {
 
   const zip = await JSZip.loadAsync(zipBytes);
 
-  async function getCsv(fileName) {
-    // get ratings.csv
-    const fileObj = zip.file(fileName);
-    if (!fileObj) {
-      console.error(`${fileName} not found inside export ZIP`);
-      return;
-    }
-    const text = await fileObj.async("text");
+  // normalize a Letterboxd URI to its unique part
+  function normalizeURI(uri) {
+    return (
+      uri?.trim()?.replace(/\/$/, "")?.split("/").pop()?.toLowerCase() || ""
+    );
+  }
 
-    // parse CSV (simple)
+  async function getCsv(fileName) {
+    const fileObj = zip.file(fileName);
+    if (!fileObj) return [];
+
+    const text = await fileObj.async("text");
     const lines = text.trim().split("\n");
     const headers = lines.shift().split(",");
     const parsed = [];
@@ -71,17 +73,15 @@ async function syncDiary() {
   }
 
   const diary = await getCsv("diary.csv");
-  const diarySet = new Set(diary.map((d) => d["Letterboxd URI"]));
   const ratings = await getCsv("ratings.csv");
-  const missingRatings = ratings.filter(
-    (r) => !diarySet.has(r["Letterboxd URI"])
-  );
 
-  console.log({
-    diary,
-    ratings,
-    missingRatings,
-  });
+  function getKey(e) {
+    return `${e.Name}::${e.Year}`;
+  }
+
+  const diarySet = new Set(diary.map(getKey));
+
+  const missingRatings = ratings.filter((r) => !diarySet.has(getKey(r)));
 }
 
 main();
