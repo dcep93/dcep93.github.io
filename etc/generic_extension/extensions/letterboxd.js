@@ -1,7 +1,11 @@
+const start = Date.now();
+const duration_ms = 1000;
+
 function loop() {
+  if (Date.now() - start > duration_ms) return;
   Promise.resolve()
     .then(main)
-    .then(() => setTimeout(loop, 100));
+    .then((done) => done || setTimeout(loop, 100));
 }
 
 function main() {
@@ -10,9 +14,16 @@ function main() {
     .then(() => document.getElementsByTagName("button"))
     .then(Array.from)
     .then((buttons) =>
-      buttons
-        .find((button) => button.innerText === "Continue without supporting us")
-        ?.click()
+      buttons.find(
+        (button) => button.innerText === "Continue without supporting us"
+      )
+    )
+    .then((button) =>
+      button
+        ? Promise.resolve()
+            .then(() => button.click())
+            .then(() => true)
+        : false
     );
 }
 
