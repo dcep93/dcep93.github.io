@@ -30,28 +30,57 @@ function hideAds() {
     .then((done) => done || setTimeout(hideAds, 100));
 }
 
-function syncDiary() {
-  fetch("https://letterboxd.com/data/export/", {
-    headers: {
-      accept:
-        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-      "accept-language": "en-US,en;q=0.9",
-      priority: "u=0, i",
-      "sec-ch-ua":
-        '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
-      "sec-ch-ua-mobile": "?0",
-      "sec-ch-ua-platform": '"macOS"',
-      "sec-fetch-dest": "document",
-      "sec-fetch-mode": "navigate",
-      "sec-fetch-site": "same-origin",
-      "sec-fetch-user": "?1",
-      "upgrade-insecure-requests": "1",
-    },
-    referrer: "https://letterboxd.com/settings/data/",
-    body: null,
-    method: "GET",
-    mode: "cors",
+async function syncDiary() {
+  // fetch and unzip
+  const zipResp = await fetch("https://letterboxd.com/data/export/", {
     credentials: "include",
+  });
+  if (!zipResp.ok) throw new Error("Export download failed: " + zipResp.status);
+  const zipBytes = await zipResp.arrayBuffer();
+
+  // load JSZip (dynamically)
+  const jszipScript = document.createElement("script");
+  jszipScript.src =
+    "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+  document.head.appendChild(jszipScript);
+  await new Promise((r) => (jszipScript.onload = r));
+
+  const zip = await JSZip.loadAsync(zipBytes);
+
+  async function getCsv(fileName) {
+    // get ratings.csv
+    const fileObj = zip.file(fileName);
+    if (!fileObj) {
+      console.error(`${fileName} not found inside export ZIP`);
+      return;
+    }
+    const text = await fileObj.async("text");
+
+    // parse CSV (simple)
+    const lines = text.trim().split("\n");
+    const headers = lines.shift().split(",");
+    const parsed = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const row = lines[i].split(",").map((v) => v.replace(/^"|"$/g, ""));
+      const obj = {};
+      headers.forEach((h, idx) => (obj[h] = row[idx]));
+      parsed.push(obj);
+    }
+    return parsed;
+  }
+
+  const diary = await getCsv("diary.csv");
+  const diarySet = new Set(diary.map((d) => d["Letterboxd URI"]));
+  const ratings = await getCsv("ratings.csv");
+  const missingRatings = ratings.filter(
+    (r) => !diarySet.has(r["Letterboxd URI"])
+  );
+
+  console.log({
+    diary,
+    ratings,
+    missingRatings,
   });
 }
 
