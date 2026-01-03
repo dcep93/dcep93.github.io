@@ -3,7 +3,7 @@ const duration_ms = 5000;
 
 function main() {
   hideAds();
-  // syncDiary();
+  syncDiary();
 }
 
 function hideAds() {
@@ -82,6 +82,10 @@ async function syncDiary() {
     .filter((r) => !diarySet.has(getKey(r)));
 
   const timestamp = Math.floor(Date.now() / 1000);
+
+  console.log({ missingRatings });
+
+  return;
 
   missingRatings.map((r, i) =>
     Promise.resolve()
