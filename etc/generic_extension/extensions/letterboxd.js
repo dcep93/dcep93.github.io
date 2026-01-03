@@ -3,7 +3,7 @@ const duration_ms = 5000;
 
 function main() {
   hideAds();
-  syncDiary();
+  // syncDiary();
 }
 
 function hideAds() {
@@ -47,24 +47,44 @@ async function syncDiary() {
 
   const zip = await JSZip.loadAsync(zipBytes);
 
+  function parseCsvLine(line) {
+    const pattern = /(?:,|\r\n|\n|^)(?:"([^"]*(?:""[^"]*)*)"|([^",\r\n]*))/g;
+    const fields = [];
+    let match;
+    while ((match = pattern.exec(line))) {
+      const quoted = match[1];
+      const plain = match[2];
+      // if quoted field, unescape inner quotes
+      fields.push(quoted !== undefined ? quoted.replace(/""/g, '"') : plain);
+    }
+    return fields;
+  }
+
   async function getCsv(fileName) {
     const fileObj = zip.file(fileName);
     if (!fileObj) return [];
 
     const text = await fileObj.async("text");
-    const lines = text.trim().split("\n");
-    const headers = lines
-      .shift()
-      .split(",")
-      .map((h) => h.trim());
+
+    const rawLines = text.trim().split(/\r?\n/);
+    const headers = parseCsvLine(rawLines.shift()).map((h) => h.trim());
+
     const parsed = [];
 
-    for (let i = 0; i < lines.length; i++) {
-      const row = lines[i].split(",").map((v) => v.replace(/^"|"$/g, ""));
-      const obj = {};
-      headers.forEach((h, idx) => (obj[h] = row[idx]));
+    for (let i = 0; i < rawLines.length; i++) {
+      const line = rawLines[i];
+      if (!line) continue;
+
+      const row = parseCsvLine(line);
+      const obj = { raw: line };
+
+      headers.forEach((h, idx) => {
+        obj[h] = row[idx] ?? "";
+      });
+
       parsed.push(obj);
     }
+
     return parsed;
   }
 
@@ -85,15 +105,12 @@ async function syncDiary() {
 
   console.log({ missingRatings });
 
-  return;
-
   missingRatings.map((r, i) =>
     Promise.resolve()
       .then(() => new Promise((resolve) => setTimeout(resolve, i * 100)))
-      .then(() => console.log(r))
       .then(() =>
         fetch(
-          `https://letterboxd.com/s/autocompletefilm?q=${r["Name"]}&limit=1&timestamp=${timestamp}`,
+          `https://letterboxd.com/s/autocompletefilm?q=${r["Name"]}&limit=100&timestamp=${timestamp}`,
           {
             headers: {
               accept: "*/*",
@@ -118,7 +135,17 @@ async function syncDiary() {
         )
       )
       .then((resp) => resp.json())
-      .then((resp) => ({ csrf: resp.csrf, filmId: resp.data[0].id }))
+      .then((resp) => ({ resp, lid: r["Letterboxd URI"].split("/").pop() }))
+      .then(({ resp, lid }) => ({
+        resp,
+        r,
+        csrf: resp.csrf,
+        filmId: resp.data.find((d) => d.lid === lid)?.id,
+      }))
+      .then((obj) => {
+        console.log(obj);
+        return obj;
+      })
       .then(({ csrf, filmId }) =>
         fetch("https://letterboxd.com/s/save-diary-entry", {
           headers: {
