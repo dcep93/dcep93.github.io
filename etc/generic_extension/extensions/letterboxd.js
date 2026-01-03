@@ -3,7 +3,7 @@ const duration_ms = 5000;
 
 function main() {
   hideAds();
-  syncDiary();
+  // syncDiary();
 }
 
 function hideAds() {
@@ -78,43 +78,41 @@ async function syncDiary() {
   const diarySet = new Set(diary.map(getKey));
 
   const missingRatings = ratings
-    .filter((r) => !diarySet.has(getKey(r)))
-    .slice(0, 1);
-
-  setTimeout(
-    () =>
-      console.log({
-        missingRatings,
-      }),
-    2000
-  );
+    .sort((a, b) => a["Name"].localeCompare(b["Name"]))
+    .filter((r) => !diarySet.has(getKey(r)));
 
   const timestamp = Math.floor(Date.now() / 1000);
 
-  missingRatings.map((r) =>
-    fetch(
-      `https://letterboxd.com/s/autocompletefilm?q=the%20menu&limit=1&timestamp=${timestamp}`,
-      {
-        headers: {
-          accept: "*/*",
-          "accept-language": "en-US,en;q=0.9",
-          "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-          priority: "u=1, i",
-          "sec-ch-ua":
-            '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
-          "sec-ch-ua-mobile": "?0",
-          "sec-ch-ua-platform": '"macOS"',
-          "sec-fetch-dest": "empty",
-          "sec-fetch-mode": "cors",
-          "sec-fetch-site": "same-origin",
-          "x-requested-with": "XMLHttpRequest",
-        },
-        body: null,
-        method: "GET",
-        mode: "cors",
-        credentials: "include",
-      }
-    )
+  missingRatings.map((r, i) =>
+    Promise.resolve()
+      .then(() => new Promise((resolve) => setTimeout(resolve, i * 100)))
+      .then(() => console.log(r))
+      .then(() =>
+        fetch(
+          `https://letterboxd.com/s/autocompletefilm?q=${r["Name"]}&limit=1&timestamp=${timestamp}`,
+          {
+            headers: {
+              accept: "*/*",
+              "accept-language": "en-US,en;q=0.9",
+              "content-type":
+                "application/x-www-form-urlencoded; charset=UTF-8",
+              priority: "u=1, i",
+              "sec-ch-ua":
+                '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
+              "sec-ch-ua-mobile": "?0",
+              "sec-ch-ua-platform": '"macOS"',
+              "sec-fetch-dest": "empty",
+              "sec-fetch-mode": "cors",
+              "sec-fetch-site": "same-origin",
+              "x-requested-with": "XMLHttpRequest",
+            },
+            body: null,
+            method: "GET",
+            mode: "cors",
+            credentials: "include",
+          }
+        )
+      )
       .then((resp) => resp.json())
       .then((resp) => ({ csrf: resp.csrf, filmId: resp.data[0].id }))
       .then(({ csrf, filmId }) =>
@@ -133,7 +131,9 @@ async function syncDiary() {
             "sec-fetch-site": "same-origin",
             "x-requested-with": "XMLHttpRequest",
           },
-          body: `json=true&__csrf=${csrf}&viewingId=&viewingableUid=film%3A${filmId}&specifiedDate=true&viewingDateStr=2026-01-01&review=&tags=&rating=${Number(
+          body: `json=true&__csrf=${csrf}&viewingId=&viewingableUid=film%3A${filmId}&specifiedDate=true&viewingDateStr=${
+            r["Date"]
+          }&review=&tags=&rating=${Number(
             r["Rating"] * 2
           )}&viewingableUID=film%3A${filmId}`,
           method: "POST",
