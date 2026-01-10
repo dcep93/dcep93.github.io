@@ -18,26 +18,30 @@ function init_scroll_button() {
     } catch {}
   }
 
-  // Kill any previous run (prevents multiple timers/listeners)
   try {
     window.__shortsAutoNextSafe2?.stop?.();
   } catch {}
 
+  // Fix for speed changes:
+  // - don't rely on timeupdate frequency (it can get weird under rate changes / throttling)
+  // - instead, poll *video time* at a steady interval and trigger when remaining <= dynamicThreshold
   const CFG = {
-    nearEndSeconds: 0.25,
-    cooldownMs: 1200,
-    videoPollMs: 300,
-    uiPollMs: 1500,
+    pollMs: 120, // steady poll cadence
+    uiPollMs: 1500, // slow UI poll for toggle insertion
+    cooldownMs: 1200, // anti double-trigger
+    minThresholdSec: 0.2, // absolute floor
+    thresholdFrac: 0.02, // 2% of duration (helps for very short clips)
+    maxThresholdSec: 0.8, // absolute ceiling
   };
 
   const STATE = {
     enabled: true,
     lastAdvanceAt: 0,
-    attachedVideo: null,
-    attachedSig: "",
-    videoPollId: null,
+    pollId: null,
     uiPollId: null,
     inAdvance: false,
+    lastSig: "",
+    lastRemaining: null,
     toggleBtn: null,
   };
 
@@ -63,7 +67,6 @@ function init_scroll_button() {
         : "Auto-next: OFF (click to turn on)";
       btn.textContent = enabled ? "AUTO" : "OFF";
 
-      // lightweight styling (avoid triggering expensive layouts repeatedly)
       btn.style.display = "inline-flex";
       btn.style.alignItems = "center";
       btn.style.justifyContent = "center";
@@ -89,9 +92,7 @@ function init_scroll_button() {
       const bar = get_button_bar();
       if (!bar) return false;
 
-      // If it exists but got moved/removed, re-find it in this bar.
       let btn = bar.querySelector("button[data-shorts-auto-next-toggle='1']");
-
       if (!btn) {
         btn = document.createElement("button");
         btn.type = "button";
@@ -107,7 +108,6 @@ function init_scroll_button() {
           log("toggle", STATE.enabled ? "ENABLED" : "DISABLED");
         });
 
-        // insert at start
         bar.insertBefore(btn, bar.firstChild);
         log("toggle inserted");
       }
@@ -126,7 +126,6 @@ function init_scroll_button() {
       const vids = Array.from(document.querySelectorAll("video"));
       if (!vids.length) return null;
 
-      // Prefer the playing one; fallback to ready one.
       return (
         vids.find((v) => v && !v.paused && v.readyState >= 2) ||
         vids.find((v) => v && v.readyState >= 2) ||
@@ -145,6 +144,16 @@ function init_scroll_button() {
     } catch {
       return "";
     }
+  }
+
+  function dynamic_threshold_sec(duration) {
+    // threshold scales a bit with duration so we don't miss short vids,
+    // but bounded so we don't trigger too early on long ones.
+    const t = Math.max(
+      CFG.minThresholdSec,
+      Math.min(CFG.maxThresholdSec, duration * CFG.thresholdFrac)
+    );
+    return t;
   }
 
   function send_arrow_down() {
@@ -188,14 +197,12 @@ function init_scroll_button() {
     STATE.lastAdvanceAt = now();
     log("advancing…", reason);
 
-    // Best effort: key + scroll fallback
     const ok = send_arrow_down();
     setTimeout(
       () => {
         try {
           if (STATE.enabled) scroll_fallback();
         } finally {
-          // release the lock even if something throws
           STATE.inAdvance = false;
         }
       },
@@ -203,80 +210,49 @@ function init_scroll_button() {
     );
   }
 
-  function detach_video_listener() {
+  function poll_tick() {
     try {
-      const v = STATE.attachedVideo;
-      if (v && v.__shortsAutoNextHandler) {
-        v.removeEventListener("timeupdate", v.__shortsAutoNextHandler);
-        delete v.__shortsAutoNextHandler;
-      }
-    } catch (e) {
-      warn("detach_video_listener failed", e);
-    } finally {
-      STATE.attachedVideo = null;
-      STATE.attachedSig = "";
-    }
-  }
+      if (!STATE.enabled) return;
 
-  function attach_video_listener(v) {
-    try {
-      if (!v) return;
-      const sig = video_sig(v);
-      if (!sig) return;
-
-      // Already attached to this exact video/source
-      if (STATE.attachedVideo === v && STATE.attachedSig === sig) return;
-
-      // Detach old
-      detach_video_listener();
-
-      // Attach new
-      const handler = () => {
-        try {
-          if (!STATE.enabled) return;
-          const dur = Number(v.duration);
-          const t = Number(v.currentTime);
-          if (!isFinite(dur) || dur <= 0) return;
-          if (!isFinite(t) || t <= 0) return;
-          const remaining = dur - t;
-          if (remaining <= CFG.nearEndSeconds) {
-            advance_next("near-end(timeupdate)");
-          }
-        } catch (e) {
-          warn("timeupdate handler crashed", e);
-        }
-      };
-
-      // stash handler so we can remove it later
-      v.__shortsAutoNextHandler = handler;
-      v.addEventListener("timeupdate", handler, { passive: true });
-
-      STATE.attachedVideo = v;
-      STATE.attachedSig = sig;
-
-      log("attached to video", sig);
-    } catch (e) {
-      warn("attach_video_listener failed", e);
-    }
-  }
-
-  function poll_video() {
-    try {
       const v = get_active_video();
       if (!v) return;
 
+      const dur = Number(v.duration);
+      const t = Number(v.currentTime);
+      if (!isFinite(dur) || dur <= 0) return;
+      if (!isFinite(t) || t <= 0) return;
+
       const sig = video_sig(v);
-      // If source changes on same element or element changes, attach handles it.
-      if (v !== STATE.attachedVideo || sig !== STATE.attachedSig) {
-        attach_video_listener(v);
+      if (sig && sig !== STATE.lastSig) {
+        STATE.lastSig = sig;
+        STATE.lastRemaining = null;
+        log("video changed", sig, "playbackRate=", v.playbackRate);
+      }
+
+      const remaining = dur - t;
+      const threshold = dynamic_threshold_sec(dur);
+
+      // Key part for playbackRate changes:
+      // Require that remaining is (a) below threshold AND (b) trending downward or stable,
+      // so we don't false-trigger on seeks/buffer jumps.
+      const prev = STATE.lastRemaining;
+      STATE.lastRemaining = remaining;
+
+      const trendingDown = prev == null ? true : remaining <= prev + 0.05;
+
+      if (remaining <= threshold && trendingDown) {
+        advance_next(
+          `near-end(poll) rem=${remaining.toFixed(3)} thr=${threshold.toFixed(
+            3
+          )} rate=${v.playbackRate}`
+        );
       }
     } catch (e) {
-      warn("poll_video crashed", e);
+      warn("poll_tick crashed", e);
     }
   }
 
   function poll_ui() {
-    // IMPORTANT: no MutationObserver on subtree. This is what often melts Shorts.
     try {
       ensure_toggle_once();
     } catch (e) {
@@ -286,27 +262,24 @@ function init_scroll_button() {
 
   function stop_all() {
     try {
-      if (STATE.videoPollId) clearInterval(STATE.videoPollId);
+      if (STATE.pollId) clearInterval(STATE.pollId);
     } catch {}
     try {
       if (STATE.uiPollId) clearInterval(STATE.uiPollId);
     } catch {}
-    STATE.videoPollId = null;
+    STATE.pollId = null;
     STATE.uiPollId = null;
-
-    detach_video_listener();
     log("stopped");
   }
 
   // Start
   try {
     poll_ui();
-    poll_video();
 
     STATE.uiPollId = setInterval(poll_ui, CFG.uiPollMs);
-    STATE.videoPollId = setInterval(poll_video, CFG.videoPollMs);
+    STATE.pollId = setInterval(poll_tick, CFG.pollMs);
 
-    log("started uiPoll", CFG.uiPollMs, "ms; videoPoll", CFG.videoPollMs, "ms");
+    log("started uiPoll", CFG.uiPollMs, "ms; poll", CFG.pollMs, "ms");
   } catch (e) {
     warn("startup failed", e);
     stop_all();
