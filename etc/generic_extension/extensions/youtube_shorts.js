@@ -32,6 +32,7 @@ function init_scroll_button() {
     minThresholdSec: 0.2, // absolute floor
     thresholdFrac: 0.02, // 2% of duration (helps for very short clips)
     maxThresholdSec: 0.8, // absolute ceiling
+    minProgressFrac: 0.985, // avoid early advances when duration metadata shifts
   };
 
   const STATE = {
@@ -43,6 +44,7 @@ function init_scroll_button() {
     lastSig: "",
     lastRemaining: null,
     toggleBtn: null,
+    lastVideo: null,
   };
 
   function now() {
@@ -146,6 +148,25 @@ function init_scroll_button() {
     }
   }
 
+  function on_video_ended() {
+    advance_next("ended");
+  }
+
+  function ensure_video_listener(v) {
+    if (!v || v === STATE.lastVideo) return;
+    try {
+      if (STATE.lastVideo) {
+        STATE.lastVideo.removeEventListener("ended", on_video_ended);
+      }
+    } catch {}
+    try {
+      v.addEventListener("ended", on_video_ended);
+      STATE.lastVideo = v;
+    } catch (e) {
+      warn("ensure_video_listener failed", e);
+    }
+  }
+
   function dynamic_threshold_sec(duration) {
     // threshold scales a bit with duration so we don't miss short vids,
     // but bounded so we don't trigger too early on long ones.
@@ -216,6 +237,7 @@ function init_scroll_button() {
 
       const v = get_active_video();
       if (!v) return;
+      ensure_video_listener(v);
 
       const dur = Number(v.duration);
       const t = Number(v.currentTime);
@@ -231,6 +253,7 @@ function init_scroll_button() {
 
       const remaining = dur - t;
       const threshold = dynamic_threshold_sec(dur);
+      const progress = t / dur;
 
       // Key part for playbackRate changes:
       // Require that remaining is (a) below threshold AND (b) trending downward or stable,
@@ -240,7 +263,10 @@ function init_scroll_button() {
 
       const trendingDown = prev == null ? true : remaining <= prev + 0.05;
 
-      if (remaining <= threshold && trendingDown) {
+      if (
+        (v.ended || (remaining <= threshold && trendingDown)) &&
+        progress >= CFG.minProgressFrac
+      ) {
         advance_next(
           `near-end(poll) rem=${remaining.toFixed(3)} thr=${threshold.toFixed(
             3
