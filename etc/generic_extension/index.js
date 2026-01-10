@@ -22,6 +22,10 @@ function execute() {
       p: /https:\/\/www\.reddit\.com.*/,
       jss: ["reddit.js"],
     },
+    {
+      p: /https:\/\/www\.youtube\.com\/shorts\/.*/,
+      jss: ["youtube_shorts.js"],
+    },
   ];
 
   const jss = paths
