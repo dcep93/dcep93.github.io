@@ -29,10 +29,10 @@ function init_scroll_button() {
     pollMs: 120, // steady poll cadence
     uiPollMs: 1500, // slow UI poll for toggle insertion
     cooldownMs: 1200, // anti double-trigger
-    minThresholdSec: 0.2, // absolute floor
+    minThresholdSec: 0.15, // absolute floor
     thresholdFrac: 0.02, // 2% of duration (helps for very short clips)
-    maxThresholdSec: 0.8, // absolute ceiling
-    minProgressFrac: 0.985, // avoid early advances when duration metadata shifts
+    maxThresholdSec: 0.4, // absolute ceiling
+    minProgressFrac: 0.995, // avoid early advances when duration metadata shifts
   };
 
   const STATE = {
@@ -53,7 +53,18 @@ function init_scroll_button() {
 
   function get_button_bar() {
     try {
-      return document.querySelector("#button-bar");
+      const selectors = [
+        "#button-bar",
+        "ytd-reel-player-overlay-renderer #actions",
+        "#actions.ytd-reel-player-overlay-renderer",
+        "ytd-reel-player-overlay-renderer #actions #top-level-buttons-computed",
+        "#actions",
+      ];
+      for (const selector of selectors) {
+        const el = document.querySelector(selector);
+        if (el) return el;
+      }
+      return null;
     } catch {
       return null;
     }
