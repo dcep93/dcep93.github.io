@@ -222,8 +222,20 @@ function init_scroll_button() {
     return now() - STATE.lastAdvanceAt >= CFG.cooldownMs;
   }
 
+  function is_shorts_url() {
+    try {
+      return window.location.pathname.startsWith("/shorts/");
+    } catch {
+      return false;
+    }
+  }
+
   function advance_next(reason) {
     if (!can_advance()) return;
+    if (!is_shorts_url()) {
+      log("skip advance; not on shorts url");
+      return;
+    }
 
     STATE.inAdvance = true;
     STATE.lastAdvanceAt = now();
