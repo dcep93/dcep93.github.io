@@ -23,8 +23,8 @@ function execute() {
       jss: ["reddit.js"],
     },
     {
-      p: /https:\/\/www\.youtube\.com\/shorts\/.*/,
-      jss: ["youtube_shorts.js"],
+      p: /https:\/\/www\.youtube\.com\/.*/,
+      jss: ["youtube.js"],
     },
   ];
 
