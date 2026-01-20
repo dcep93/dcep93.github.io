@@ -6,7 +6,7 @@ function execute() {
     },
     {
       p: new RegExp(
-        "https://www.buildinglink.com/V2/Tenant/Postings/PostingAreas.aspx"
+        "https://www.buildinglink.com/V2/Tenant/Postings/PostingAreas.aspx",
       ),
       jss: ["buildinglink_postings.js"],
     },
@@ -25,6 +25,10 @@ function execute() {
     {
       p: /https:\/\/www\.youtube\.com\/.*/,
       jss: ["youtube.js"],
+    },
+    {
+      p: /https:\/\/colonist\.io\/.*/,
+      jss: ["colonist.js"],
     },
   ];
 
