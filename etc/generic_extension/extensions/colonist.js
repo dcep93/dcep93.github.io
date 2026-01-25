@@ -51,7 +51,8 @@
             pushLog({
               trigger: "socket.receive",
               data: decoded,
-              socketAddress,
+              time: Date.now(),
+              // socketAddress,
             });
           })();
         }
@@ -75,7 +76,7 @@
           metaBySocket.get(ws)?.socketAddress || ws.url || "unknown";
         (async () => {
           const decoded = await decodeWsData(data);
-          pushLog({ trigger: "socket.send", data: decoded, socketAddress });
+          pushLog({ trigger: "socket.send", data: decoded, time: Date.now() });
         })();
         return origSend.call(this, data);
       };
@@ -120,7 +121,11 @@
         value: function (data) {
           (async () => {
             const decoded = await decodeWsData(data);
-            pushLog({ trigger: "socket.send", data: decoded, socketAddress });
+            pushLog({
+              trigger: "socket.send",
+              data: decoded,
+              time: Date.now(),
+            });
           })();
           return boundOrigSend(data);
         },
