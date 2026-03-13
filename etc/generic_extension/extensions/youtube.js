@@ -1,5 +1,6 @@
 function main() {
   setTimeout(init_scroll_button, 5000);
+  enableShortsBulkOpen();
 }
 
 function init_scroll_button() {
@@ -183,7 +184,7 @@ function init_scroll_button() {
     // but bounded so we don't trigger too early on long ones.
     const t = Math.max(
       CFG.minThresholdSec,
-      Math.min(CFG.maxThresholdSec, duration * CFG.thresholdFrac)
+      Math.min(CFG.maxThresholdSec, duration * CFG.thresholdFrac),
     );
     return t;
   }
@@ -250,7 +251,7 @@ function init_scroll_button() {
           STATE.inAdvance = false;
         }
       },
-      ok ? 150 : 0
+      ok ? 150 : 0,
     );
   }
 
@@ -292,8 +293,8 @@ function init_scroll_button() {
       ) {
         advance_next(
           `near-end(poll) rem=${remaining.toFixed(3)} thr=${threshold.toFixed(
-            3
-          )} rate=${v.playbackRate}`
+            3,
+          )} rate=${v.playbackRate}`,
         );
       }
     } catch (e) {
@@ -336,6 +337,31 @@ function init_scroll_button() {
 
   window.__shortsAutoNextSafe2 = { stop: stop_all, state: STATE };
   log("running; stop with __shortsAutoNextSafe2.stop()");
+}
+
+function enableShortsBulkOpen() {
+  document.addEventListener("click", (e) => {
+    const el = e.target.closest("span");
+    if (!el) return;
+
+    if (el.textContent.trim() !== "Shorts") return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const seen = new Set();
+
+    document.querySelectorAll('a[href^="/shorts/"]').forEach((a) => {
+      const rect = a.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return; // only visible
+
+      const url = new URL(a.getAttribute("href"), location.origin).href;
+      if (seen.has(url)) return;
+      seen.add(url);
+
+      window.open(url, "_blank");
+    });
+  });
 }
 
 main();
