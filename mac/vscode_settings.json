@@ -1,32 +1,45 @@
 {
-  "task.notifyWindowOnTaskCompletion": 0,
   "editor.formatOnSave": true,
-  "editor.defaultFormatter": "esbenp.prettier-vscode",
-  "[javascript]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode",
-  },
-  "python.analysis.diagnosticMode": "workspace",
   "editor.codeActionsOnSave": {
-    "source.organizeImports": "explicit",
+    "source.fixAll.eslint": "explicit",
+    "source.organizeImports": "explicit"
   },
-  "editor.acceptSuggestionOnCommitCharacter": false,
-  "editor.tabCompletion": "on",
-  "editor.inlineSuggest.enabled": true,
+  "eslint.useFlatConfig": true,
+  "eslint.validate": [
+    "json",
+    "jsonc",
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact"
+  ],
+  "eslint.workingDirectories": [
+    {
+      "directory": "/Users/danielcepeda/repos/watchwall420/app",
+      "changeProcessCWD": true
+    }
+  ],
+  "[javascript]": {
+    "editor.defaultFormatter": "vscode.typescript-language-features"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "vscode.typescript-language-features"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "vscode.typescript-language-features"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  "search.useIgnoreFiles": true,
+  "search.useGlobalIgnoreFiles": true,
+  "search.useParentIgnoreFiles": true,
+  "search.useExcludeSettingsAndIgnoreFiles": true,
   "search.exclude": {
-    "**/build": true,
-    "**/node_modules": true,
     "**/dist": true,
-    "**/.git": true,
-    "**/coverage": true,
-  },
-  "editor.minimap.enabled": false,
-  "github.copilot.enable": {
-    "*": false,
-    "plaintext": false,
-    "markdown": false,
-    "scminput": false,
-    "typescriptreact": false,
-    "shellscript": true,
-  },
-  "workbench.secondarySideBar.defaultVisibility": "hidden",
+    "**/dist/**": true
+  }
 }
