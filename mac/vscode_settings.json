@@ -36,6 +36,10 @@
   "[jsonc]": {
     "editor.defaultFormatter": "vscode.json-language-features"
   },
+  "[html]": {
+    "editor.defaultFormatter": "vscode.html-language-features",
+    "editor.formatOnSave": true
+  },
   "search.useIgnoreFiles": true,
   "search.useGlobalIgnoreFiles": true,
   "search.useParentIgnoreFiles": true,
