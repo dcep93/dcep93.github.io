@@ -1,27 +1,15 @@
 {
+  "task.notifyWindowOnTaskCompletion": 0,
   "editor.formatOnSave": true,
   "editor.defaultFormatter": "esbenp.prettier-vscode",
   "[javascript]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  },
-  "[python]": {
-    "editor.defaultFormatter": "ms-python.black-formatter"
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
   },
   "python.analysis.diagnosticMode": "workspace",
-  "typescript.tsserver.experimental.enableProjectDiagnostics": true,
   "editor.codeActionsOnSave": {
-    "source.organizeImports": "explicit"
+    "source.organizeImports": "explicit",
   },
   "editor.acceptSuggestionOnCommitCharacter": false,
-  "emeraldwalk.runonsave": {
-    "commands": [
-      {
-        "match": "",
-        "cmd": "echo saved ${file} && cd \"`dirname ${file}`\" && yarn runonsave \"${file}\" || true"
-      }
-    ]
-  },
-  "typescript.tsserver.log": "verbose",
   "editor.tabCompletion": "on",
   "editor.inlineSuggest.enabled": true,
   "search.exclude": {
@@ -29,7 +17,7 @@
     "**/node_modules": true,
     "**/dist": true,
     "**/.git": true,
-    "**/coverage": true
+    "**/coverage": true,
   },
   "editor.minimap.enabled": false,
   "github.copilot.enable": {
@@ -38,6 +26,7 @@
     "markdown": false,
     "scminput": false,
     "typescriptreact": false,
-    "shellscript": true
-  }
+    "shellscript": true,
+  },
+  "workbench.secondarySideBar.defaultVisibility": "hidden",
 }
