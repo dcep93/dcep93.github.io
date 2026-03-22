@@ -45,7 +45,7 @@
   "search.useParentIgnoreFiles": true,
   "search.useExcludeSettingsAndIgnoreFiles": true,
   "search.exclude": {
-    "**/dist": true,
+    "**/build/**": true,
     "**/dist/**": true
   }
 }
