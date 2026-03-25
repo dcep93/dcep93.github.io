@@ -8,9 +8,9 @@ const PEOPLE_STORE_NAME = "people";
 const FILMS_STORE_NAME = "films";
 const CINENERDLE_ICON_URL = "https://www.cinenerdle2.app/icon.png";
 const TMDB_ICON_URL =
-  "https://www.themoviedb.org/assets/2/favicon-32x32-543a21832c8931d3494a68881f6afcafc58e96c5d324345377f3197a37b367b5.png";
+    "https://www.themoviedb.org/assets/2/favicon-32x32-543a21832c8931d3494a68881f6afcafc58e96c5d324345377f3197a37b367b5.png";
 const GENERIC_EXTENSION_BOOKMARKS_STORAGE_KEY =
-  "cinenerdle2.genericExtensionBookmarks";
+    "cinenerdle2.genericExtensionBookmarks";
 const GENERIC_EXTENSION_PAGE_PADDING_PX = 24;
 
 const practiceModeClickBound = new WeakSet();
@@ -20,3595 +20,3596 @@ let practiceModeClearInFlight = false;
 let genericExtensionPopstateBound = false;
 let genericExtensionRootRow = null;
 const genericExtensionSearchState = {
-  query: "",
-  suggestions: [],
-  targetSelection: null,
-  status: "",
-  resultPath: null,
-  searching: false,
-  shouldFocusInput: false,
-  selectionStart: null,
-  selectionEnd: null,
+    query: "",
+    suggestions: [],
+    targetSelection: null,
+    status: "",
+    resultPath: null,
+    searching: false,
+    shouldFocusInput: false,
+    selectionStart: null,
+    selectionEnd: null,
 };
 
 function isVisible(element) {
-  if (!(element instanceof HTMLElement)) {
-    return false;
-  }
+    if (!(element instanceof HTMLElement)) {
+        return false;
+    }
 
-  const style = window.getComputedStyle(element);
-  if (
-    style.display === "none" ||
-    style.visibility === "hidden" ||
-    style.opacity === "0"
-  ) {
-    return false;
-  }
+    const style = window.getComputedStyle(element);
+    if (
+        style.display === "none" ||
+        style.visibility === "hidden" ||
+        style.opacity === "0"
+    ) {
+        return false;
+    }
 
-  const rect = element.getBoundingClientRect();
-  return rect.width > 0 && rect.height > 0;
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
 }
 
 function getText(element) {
-  return element?.textContent?.replace(/\s+/g, " ").trim() ?? "";
+    return element?.textContent?.replace(/\s+/g, " ").trim() ?? "";
 }
 
 function normalizeName(name) {
-  return name.trim().toLocaleLowerCase();
+    return name.trim().toLocaleLowerCase();
 }
 
 function normalizeTitle(title) {
-  return title.trim().toLocaleLowerCase();
+    return title.trim().toLocaleLowerCase();
 }
 
 function getFilmKey(title, year) {
-  return `${normalizeTitle(title)}::${year ?? ""}`;
+    return `${normalizeTitle(title)}::${year ?? ""}`;
 }
 
 function escapeHtml(text) {
-  return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
+    return text
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
 }
 
 function looksLikePersonName(text) {
-  return (
-    PERSON_NAME_PATTERN.test(text) &&
-    !/^(cast|crew|director|directors|writer|writers|cinematographer|composer|featuring)$/i.test(
-      text,
-    )
-  );
+    return (
+        PERSON_NAME_PATTERN.test(text) &&
+        !/^(cast|crew|director|directors|writer|writers|cinematographer|composer|featuring)$/i.test(
+            text,
+        )
+    );
 }
 
 function findPracticeModeEl() {
-  return Array.from(document.querySelectorAll("div")).find(
-    (element) => isVisible(element) && getText(element) === "PRACTICE MODE",
-  );
+    return Array.from(document.querySelectorAll("div")).find(
+        (element) => isVisible(element) && getText(element) === "PRACTICE MODE",
+    );
 }
 
 function bindPracticeModeClick(practiceModeEl) {
-  if (!practiceModeEl || practiceModeClickBound.has(practiceModeEl)) {
-    return;
-  }
-
-  practiceModeEl.addEventListener(
-    "click",
-    async (event) => {
-      if (practiceModeClearInFlight) {
+    if (!practiceModeEl || practiceModeClickBound.has(practiceModeEl)) {
         return;
-      }
+    }
 
-      const shouldClearDb = window.confirm(
-        "Clear the DB?",
-      );
-      if (!shouldClearDb) {
-        event.preventDefault();
-        event.stopPropagation();
-        event.stopImmediatePropagation();
-        return;
-      }
+    practiceModeEl.addEventListener(
+        "click",
+        async (event) => {
+            if (practiceModeClearInFlight) {
+                return;
+            }
 
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
+            const shouldClearDb = window.confirm(
+                "Clear the DB?",
+            );
+            if (!shouldClearDb) {
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+                return;
+            }
 
-      practiceModeClearInFlight = true;
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
 
-      try {
-        await clearIndexedDb();
-        practiceModeEl.click();
-      } catch (error) {
-        console.error("cinenerdle2.clearIndexedDb", error);
-        alert(`Failed to clear cinenerdle2 cache: ${error.message}`);
-      } finally {
-        practiceModeClearInFlight = false;
-      }
-    },
-    true,
-  );
+            practiceModeClearInFlight = true;
 
-  practiceModeClickBound.add(practiceModeEl);
+            try {
+                await clearIndexedDb();
+                practiceModeEl.click();
+            } catch (error) {
+                console.error("cinenerdle2.clearIndexedDb", error);
+                alert(`Failed to clear cinenerdle2 cache: ${error.message}`);
+            } finally {
+                practiceModeClearInFlight = false;
+            }
+        },
+        true,
+    );
+
+    practiceModeClickBound.add(practiceModeEl);
 }
 
 function hasCastMarker(element) {
-  if (!(element instanceof HTMLElement)) {
-    return false;
-  }
+    if (!(element instanceof HTMLElement)) {
+        return false;
+    }
 
-  if (getText(element) === "Cast") {
-    return true;
-  }
+    if (getText(element) === "Cast") {
+        return true;
+    }
 
-  return Array.from(element.querySelectorAll("div, span")).some(
-    (child) => isVisible(child) && getText(child) === "Cast",
-  );
+    return Array.from(element.querySelectorAll("div, span")).some(
+        (child) => isVisible(child) && getText(child) === "Cast",
+    );
 }
 
 function elementHasCastContext(element) {
-  let current = element;
+    let current = element;
 
-  for (let depth = 0; current && depth < 5; depth += 1) {
-    if (hasCastMarker(current)) {
-      return true;
+    for (let depth = 0; current && depth < 5; depth += 1) {
+        if (hasCastMarker(current)) {
+            return true;
+        }
+
+        const parent = current.parentElement;
+        if (!parent) {
+            return false;
+        }
+
+        const siblings = Array.from(parent.children).filter(
+            (child) => child !== current && isVisible(child),
+        );
+        if (siblings.some((child) => hasCastMarker(child))) {
+            return true;
+        }
+
+        current = parent;
     }
 
-    const parent = current.parentElement;
-    if (!parent) {
-      return false;
-    }
-
-    const siblings = Array.from(parent.children).filter(
-      (child) => child !== current && isVisible(child),
-    );
-    if (siblings.some((child) => hasCastMarker(child))) {
-      return true;
-    }
-
-    current = parent;
-  }
-
-  return false;
+    return false;
 }
 
 function getTmdbApiKey() {
-  const existingApiKey = localStorage.getItem(TMDB_API_KEY_STORAGE_KEY)?.trim();
-  if (existingApiKey) {
-    return existingApiKey;
-  }
+    const existingApiKey = localStorage.getItem(TMDB_API_KEY_STORAGE_KEY)?.trim();
+    if (existingApiKey) {
+        return existingApiKey;
+    }
 
-  const promptedApiKey = prompt("Enter your TMDb API key");
-  const apiKey = promptedApiKey?.trim();
+    const promptedApiKey = prompt("Enter your TMDb API key");
+    const apiKey = promptedApiKey?.trim();
 
-  if (!apiKey) {
-    return null;
-  }
+    if (!apiKey) {
+        return null;
+    }
 
-  localStorage.setItem(TMDB_API_KEY_STORAGE_KEY, apiKey);
-  return apiKey;
+    localStorage.setItem(TMDB_API_KEY_STORAGE_KEY, apiKey);
+    return apiKey;
 }
 
 function indexedDbRequestToPromise(request) {
-  return new Promise((resolve, reject) => {
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () =>
-      reject(request.error ?? new Error("IndexedDB request failed"));
-  });
+    return new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () =>
+            reject(request.error ?? new Error("IndexedDB request failed"));
+    });
 }
 
 function transactionDonePromise(transaction) {
-  return new Promise((resolve, reject) => {
-    transaction.oncomplete = resolve;
-    transaction.onerror = () =>
-      reject(transaction.error ?? new Error("IndexedDB transaction failed"));
-    transaction.onabort = () =>
-      reject(transaction.error ?? new Error("IndexedDB transaction aborted"));
-  });
+    return new Promise((resolve, reject) => {
+        transaction.oncomplete = resolve;
+        transaction.onerror = () =>
+            reject(transaction.error ?? new Error("IndexedDB transaction failed"));
+        transaction.onabort = () =>
+            reject(transaction.error ?? new Error("IndexedDB transaction aborted"));
+    });
 }
 
 function openIndexedDb() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(INDEXED_DB_NAME, INDEXED_DB_VERSION);
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(INDEXED_DB_NAME, INDEXED_DB_VERSION);
 
-    request.onupgradeneeded = (event) => {
-      const database = request.result;
-      const oldVersion = event.oldVersion ?? 0;
+        request.onupgradeneeded = (event) => {
+            const database = request.result;
+            const oldVersion = event.oldVersion ?? 0;
 
-      if (oldVersion > 0 && oldVersion < INDEXED_DB_VERSION) {
-        Array.from(database.objectStoreNames).forEach((storeName) => {
-          database.deleteObjectStore(storeName);
-        });
-      }
+            if (oldVersion > 0 && oldVersion < INDEXED_DB_VERSION) {
+                Array.from(database.objectStoreNames).forEach((storeName) => {
+                    database.deleteObjectStore(storeName);
+                });
+            }
 
-      if (!database.objectStoreNames.contains(PEOPLE_STORE_NAME)) {
-        const peopleStore = database.createObjectStore(PEOPLE_STORE_NAME, {
-          keyPath: "id",
-        });
-        peopleStore.createIndex("nameLower", "nameLower", { unique: false });
-        peopleStore.createIndex("movieConnectionKeys", "movieConnectionKeys", {
-          unique: false,
-          multiEntry: true,
-        });
-      } else {
-        const peopleStore = request.transaction.objectStore(PEOPLE_STORE_NAME);
-        if (!peopleStore.indexNames.contains("nameLower")) {
-          peopleStore.createIndex("nameLower", "nameLower", { unique: false });
-        }
-        if (!peopleStore.indexNames.contains("movieConnectionKeys")) {
-          peopleStore.createIndex("movieConnectionKeys", "movieConnectionKeys", {
-            unique: false,
-            multiEntry: true,
-          });
-        }
-      }
+            if (!database.objectStoreNames.contains(PEOPLE_STORE_NAME)) {
+                const peopleStore = database.createObjectStore(PEOPLE_STORE_NAME, {
+                    keyPath: "id",
+                });
+                peopleStore.createIndex("nameLower", "nameLower", { unique: false });
+                peopleStore.createIndex("movieConnectionKeys", "movieConnectionKeys", {
+                    unique: false,
+                    multiEntry: true,
+                });
+            } else {
+                const peopleStore = request.transaction.objectStore(PEOPLE_STORE_NAME);
+                if (!peopleStore.indexNames.contains("nameLower")) {
+                    peopleStore.createIndex("nameLower", "nameLower", { unique: false });
+                }
+                if (!peopleStore.indexNames.contains("movieConnectionKeys")) {
+                    peopleStore.createIndex("movieConnectionKeys", "movieConnectionKeys", {
+                        unique: false,
+                        multiEntry: true,
+                    });
+                }
+            }
 
-      if (!database.objectStoreNames.contains(FILMS_STORE_NAME)) {
-        const filmsStore = database.createObjectStore(FILMS_STORE_NAME, {
-          keyPath: "id",
-        });
-        filmsStore.createIndex("titleYear", "titleYear", { unique: false });
-        filmsStore.createIndex("titleLower", "titleLower", { unique: false });
-      } else {
-        const filmsStore = request.transaction.objectStore(FILMS_STORE_NAME);
-        if (!filmsStore.indexNames.contains("titleYear")) {
-          filmsStore.createIndex("titleYear", "titleYear", { unique: false });
-        }
-        if (!filmsStore.indexNames.contains("titleLower")) {
-          filmsStore.createIndex("titleLower", "titleLower", { unique: false });
-        }
-      }
-    };
+            if (!database.objectStoreNames.contains(FILMS_STORE_NAME)) {
+                const filmsStore = database.createObjectStore(FILMS_STORE_NAME, {
+                    keyPath: "id",
+                });
+                filmsStore.createIndex("titleYear", "titleYear", { unique: false });
+                filmsStore.createIndex("titleLower", "titleLower", { unique: false });
+            } else {
+                const filmsStore = request.transaction.objectStore(FILMS_STORE_NAME);
+                if (!filmsStore.indexNames.contains("titleYear")) {
+                    filmsStore.createIndex("titleYear", "titleYear", { unique: false });
+                }
+                if (!filmsStore.indexNames.contains("titleLower")) {
+                    filmsStore.createIndex("titleLower", "titleLower", { unique: false });
+                }
+            }
+        };
 
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () =>
-      reject(request.error ?? new Error("Unable to open IndexedDB"));
-  });
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () =>
+            reject(request.error ?? new Error("Unable to open IndexedDB"));
+    });
 }
 
 async function clearIndexedDb() {
-  const database = await openIndexedDb();
+    const database = await openIndexedDb();
 
-  try {
-    const transaction = database.transaction(
-      [PEOPLE_STORE_NAME, FILMS_STORE_NAME],
-      "readwrite",
-    );
-    await Promise.all([
-      indexedDbRequestToPromise(transaction.objectStore(PEOPLE_STORE_NAME).clear()),
-      indexedDbRequestToPromise(transaction.objectStore(FILMS_STORE_NAME).clear()),
-    ]);
-    await transactionDonePromise(transaction);
-  } finally {
-    database.close();
-  }
+    try {
+        const transaction = database.transaction(
+            [PEOPLE_STORE_NAME, FILMS_STORE_NAME],
+            "readwrite",
+        );
+        await Promise.all([
+            indexedDbRequestToPromise(transaction.objectStore(PEOPLE_STORE_NAME).clear()),
+            indexedDbRequestToPromise(transaction.objectStore(FILMS_STORE_NAME).clear()),
+        ]);
+        await transactionDonePromise(transaction);
+    } finally {
+        database.close();
+    }
 }
 
 function formatByteCount(bytes) {
-  if (!Number.isFinite(bytes) || bytes <= 0) {
-    return "0 B";
-  }
+    if (!Number.isFinite(bytes) || bytes <= 0) {
+        return "0 B";
+    }
 
-  const units = ["B", "KB", "MB", "GB"];
-  let unitIndex = 0;
-  let value = bytes;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
+    const units = ["B", "KB", "MB", "GB"];
+    let unitIndex = 0;
+    let value = bytes;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+        value /= 1024;
+        unitIndex += 1;
+    }
 
-  const decimals = unitIndex === 0 ? 0 : value >= 10 ? 1 : 2;
-  return `${value.toFixed(decimals)} ${units[unitIndex]}`;
+    const decimals = unitIndex === 0 ? 0 : value >= 10 ? 1 : 2;
+    return `${value.toFixed(decimals)} ${units[unitIndex]}`;
 }
 
 async function estimateIndexedDbUsageBytes() {
-  const [peopleRecords, filmRecords] = await Promise.all([
-    getAllPersonRecords(),
-    getAllFilmRecords(),
-  ]);
-  return new Blob([JSON.stringify({ peopleRecords, filmRecords })]).size;
+    const [peopleRecords, filmRecords] = await Promise.all([
+        getAllPersonRecords(),
+        getAllFilmRecords(),
+    ]);
+    return new Blob([JSON.stringify({ peopleRecords, filmRecords })]).size;
 }
 
 function getGenericExtensionTrackWidth() {
-  return `calc(100vw - ${GENERIC_EXTENSION_PAGE_PADDING_PX * 2}px)`;
+    return `calc(100vw - ${GENERIC_EXTENSION_PAGE_PADDING_PX * 2}px)`;
 }
 
 function getFilmTitleAndYear(cardElement) {
-  const titleElement = Array.from(cardElement.querySelectorAll("div")).find(
-    (element) => / \(\d{4}\)$/.test(getText(element)),
-  );
+    const titleElement = Array.from(cardElement.querySelectorAll("div")).find(
+        (element) => / \(\d{4}\)$/.test(getText(element)),
+    );
 
-  if (!titleElement) {
-    return null;
-  }
+    if (!titleElement) {
+        return null;
+    }
 
-  const match = getText(titleElement).match(/^(.*) \((\d{4})\)$/);
-  if (!match) {
-    return null;
-  }
+    const match = getText(titleElement).match(/^(.*) \((\d{4})\)$/);
+    if (!match) {
+        return null;
+    }
 
-  return {
-    title: match[1].trim(),
-    year: match[2],
-  };
+    return {
+        title: match[1].trim(),
+        year: match[2],
+    };
 }
 
 function getNearestFilmCard(element) {
-  let current = element;
+    let current = element;
 
-  while (current) {
-    if (
-      current instanceof HTMLElement &&
-      hasCastMarker(current) &&
-      getFilmTitleAndYear(current)
-    ) {
-      return current;
+    while (current) {
+        if (
+            current instanceof HTMLElement &&
+            hasCastMarker(current) &&
+            getFilmTitleAndYear(current)
+        ) {
+            return current;
+        }
+
+        current = current.parentElement;
     }
 
-    current = current.parentElement;
-  }
-
-  return null;
+    return null;
 }
 
 function splitPeopleText(text) {
-  return text
-    .split(",")
-    .map((person) => person.trim())
-    .filter(Boolean)
-    .filter(looksLikePersonName);
+    return text
+        .split(",")
+        .map((person) => person.trim())
+        .filter(Boolean)
+        .filter(looksLikePersonName);
 }
 
 function getMovieTitleFromCredit(credit) {
-  return credit?.title ?? credit?.original_title ?? "";
+    return credit?.title ?? credit?.original_title ?? "";
 }
 
 function getMovieYearFromCredit(credit) {
-  return credit?.release_date?.slice(0, 4) ?? "";
+    return credit?.release_date?.slice(0, 4) ?? "";
 }
 
 function getMovieKeyFromCredit(credit) {
-  return getFilmKey(getMovieTitleFromCredit(credit), getMovieYearFromCredit(credit));
+    return getFilmKey(getMovieTitleFromCredit(credit), getMovieYearFromCredit(credit));
 }
 
 function getTmdbMovieCredits(personRecord) {
-  const credits = personRecord?.rawTmdbMovieCreditsResponse ?? {};
-  return [
-    ...(credits.cast ?? []).map((credit) => ({ ...credit, creditType: "cast" })),
-    ...(credits.crew ?? []).map((credit) => ({ ...credit, creditType: "crew" })),
-  ];
+    const credits = personRecord?.rawTmdbMovieCreditsResponse ?? {};
+    return [
+        ...(credits.cast ?? []).map((credit) => ({ ...credit, creditType: "cast" })),
+        ...(credits.crew ?? []).map((credit) => ({ ...credit, creditType: "crew" })),
+    ];
 }
 
 function getUniqueSortedTmdbMovieCredits(personRecord) {
-  const seenIds = new Set();
+    const seenIds = new Set();
 
-  return getTmdbMovieCredits(personRecord)
-    .filter((credit) => {
-      if (!credit?.id || seenIds.has(credit.id)) {
-        return false;
-      }
-      seenIds.add(credit.id);
-      return true;
-    })
-    .sort((left, right) => (right.popularity ?? 0) - (left.popularity ?? 0));
+    return getTmdbMovieCredits(personRecord)
+        .filter((credit) => {
+            if (!credit?.id || seenIds.has(credit.id)) {
+                return false;
+            }
+            seenIds.add(credit.id);
+            return true;
+        })
+        .sort((left, right) => (right.popularity ?? 0) - (left.popularity ?? 0));
 }
 
 function getTmdbCreditForMovie(personRecord, movieKey) {
-  return getTmdbMovieCredits(personRecord)
-    .filter((credit) => getMovieKeyFromCredit(credit) === movieKey)
-    .sort((left, right) => {
-      if (left.creditType === right.creditType) {
-        return (right.popularity ?? 0) - (left.popularity ?? 0);
-      }
-      return left.creditType === "cast" ? -1 : 1;
-    })[0] ?? null;
+    return getTmdbMovieCredits(personRecord)
+        .filter((credit) => getMovieKeyFromCredit(credit) === movieKey)
+        .sort((left, right) => {
+            if (left.creditType === right.creditType) {
+                return (right.popularity ?? 0) - (left.popularity ?? 0);
+            }
+            return left.creditType === "cast" ? -1 : 1;
+        })[0] ?? null;
 }
 
 function getDomConnectionForMovie(personRecord, movieKey) {
-  return (
-    (personRecord?.domConnections ?? []).find(
-      (connection) => getFilmKey(connection.title, connection.year) === movieKey,
-    ) ?? null
-  );
+    return (
+        (personRecord?.domConnections ?? []).find(
+            (connection) => getFilmKey(connection.title, connection.year) === movieKey,
+        ) ?? null
+    );
 }
 
 function getCinenerdleRoleFromSnapshot(domSnapshot, personName) {
-  if (!domSnapshot || !personName) {
-    return null;
-  }
+    if (!domSnapshot || !personName) {
+        return null;
+    }
 
-  return (
-    Object.entries(domSnapshot.peopleByRole ?? {}).find(([, people]) =>
-      people.some(
-        (candidateName) => normalizeName(candidateName) === normalizeName(personName),
-      ),
-    )?.[0] ?? null
-  );
+    return (
+        Object.entries(domSnapshot.peopleByRole ?? {}).find(([, people]) =>
+            people.some(
+                (candidateName) => normalizeName(candidateName) === normalizeName(personName),
+            ),
+        )?.[0] ?? null
+    );
 }
 
 function getTmdbCreditCategoryText(credit) {
-  if (!credit) {
-    return "";
-  }
+    if (!credit) {
+        return "";
+    }
 
-  if (credit.creditType === "cast") {
-    return credit.character ? `Cast as ${credit.character}` : "Cast";
-  }
+    if (credit.creditType === "cast") {
+        return credit.character ? `Cast as ${credit.character}` : "Cast";
+    }
 
-  if (credit.job) {
-    return credit.job;
-  }
+    if (credit.job) {
+        return credit.job;
+    }
 
-  if (credit.department) {
-    return credit.department;
-  }
+    if (credit.department) {
+        return credit.department;
+    }
 
-  return "Crew";
+    return "Crew";
 }
 
 function parseDomFilmSnapshotFromElement(element) {
-  const cardElement = getNearestFilmCard(element);
-  if (!cardElement) {
-    return null;
-  }
-
-  const filmTitleAndYear = getFilmTitleAndYear(cardElement);
-  if (!filmTitleAndYear) {
-    return null;
-  }
-
-  const peopleByRole = {};
-
-  Array.from(cardElement.querySelectorAll("div.flex")).forEach((row) => {
-    const children = Array.from(row.children).filter(
-      (child) => child instanceof HTMLElement,
-    );
-
-    if (children.length < 2) {
-      return;
+    const cardElement = getNearestFilmCard(element);
+    if (!cardElement) {
+        return null;
     }
 
-    const role = getText(children[0]);
-    const people = splitPeopleText(getText(children[1]));
-
-    if (!role || people.length === 0) {
-      return;
+    const filmTitleAndYear = getFilmTitleAndYear(cardElement);
+    if (!filmTitleAndYear) {
+        return null;
     }
 
-    peopleByRole[role] = people;
-  });
+    const peopleByRole = {};
 
-  return {
-    title: filmTitleAndYear.title,
-    titleLower: normalizeTitle(filmTitleAndYear.title),
-    year: filmTitleAndYear.year,
-    titleYear: getFilmKey(filmTitleAndYear.title, filmTitleAndYear.year),
-    peopleByRole,
-    domSavedAt: new Date().toISOString(),
-  };
+    Array.from(cardElement.querySelectorAll("div.flex")).forEach((row) => {
+        const children = Array.from(row.children).filter(
+            (child) => child instanceof HTMLElement,
+        );
+
+        if (children.length < 2) {
+            return;
+        }
+
+        const role = getText(children[0]);
+        const people = splitPeopleText(getText(children[1]));
+
+        if (!role || people.length === 0) {
+            return;
+        }
+
+        peopleByRole[role] = people;
+    });
+
+    return {
+        title: filmTitleAndYear.title,
+        titleLower: normalizeTitle(filmTitleAndYear.title),
+        year: filmTitleAndYear.year,
+        titleYear: getFilmKey(filmTitleAndYear.title, filmTitleAndYear.year),
+        peopleByRole,
+        domSavedAt: new Date().toISOString(),
+    };
 }
 
 async function getPersonRecordByName(personName) {
-  const database = await openIndexedDb();
+    const database = await openIndexedDb();
 
-  try {
-    const transaction = database.transaction(PEOPLE_STORE_NAME, "readonly");
-    const store = transaction.objectStore(PEOPLE_STORE_NAME);
-    const index = store.index("nameLower");
-    const personRecord = await indexedDbRequestToPromise(
-      index.get(normalizeName(personName)),
-    );
-    await transactionDonePromise(transaction);
-    return personRecord ?? null;
-  } finally {
-    database.close();
-  }
+    try {
+        const transaction = database.transaction(PEOPLE_STORE_NAME, "readonly");
+        const store = transaction.objectStore(PEOPLE_STORE_NAME);
+        const index = store.index("nameLower");
+        const personRecord = await indexedDbRequestToPromise(
+            index.get(normalizeName(personName)),
+        );
+        await transactionDonePromise(transaction);
+        return personRecord ?? null;
+    } finally {
+        database.close();
+    }
 }
 
 async function getPersonRecordsByMovieKey(movieKey) {
-  const database = await openIndexedDb();
+    const database = await openIndexedDb();
 
-  try {
-    const transaction = database.transaction(PEOPLE_STORE_NAME, "readonly");
-    const store = transaction.objectStore(PEOPLE_STORE_NAME);
-    const index = store.index("movieConnectionKeys");
-    const personRecords = await indexedDbRequestToPromise(index.getAll(movieKey));
-    await transactionDonePromise(transaction);
-    return personRecords ?? [];
-  } finally {
-    database.close();
-  }
+    try {
+        const transaction = database.transaction(PEOPLE_STORE_NAME, "readonly");
+        const store = transaction.objectStore(PEOPLE_STORE_NAME);
+        const index = store.index("movieConnectionKeys");
+        const personRecords = await indexedDbRequestToPromise(index.getAll(movieKey));
+        await transactionDonePromise(transaction);
+        return personRecords ?? [];
+    } finally {
+        database.close();
+    }
 }
 
 async function getFilmRecordsByTitle(title) {
-  const database = await openIndexedDb();
+    const database = await openIndexedDb();
 
-  try {
-    const transaction = database.transaction(FILMS_STORE_NAME, "readonly");
-    const store = transaction.objectStore(FILMS_STORE_NAME);
-    const index = store.index("titleLower");
-    const filmRecords = await indexedDbRequestToPromise(
-      index.getAll(normalizeTitle(title)),
-    );
-    await transactionDonePromise(transaction);
-    return filmRecords ?? [];
-  } finally {
-    database.close();
-  }
+    try {
+        const transaction = database.transaction(FILMS_STORE_NAME, "readonly");
+        const store = transaction.objectStore(FILMS_STORE_NAME);
+        const index = store.index("titleLower");
+        const filmRecords = await indexedDbRequestToPromise(
+            index.getAll(normalizeTitle(title)),
+        );
+        await transactionDonePromise(transaction);
+        return filmRecords ?? [];
+    } finally {
+        database.close();
+    }
 }
 
 async function getFilmRecordsByIds(ids) {
-  const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
-  if (uniqueIds.length === 0) {
-    return new Map();
-  }
+    const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+    if (uniqueIds.length === 0) {
+        return new Map();
+    }
 
-  const database = await openIndexedDb();
+    const database = await openIndexedDb();
 
-  try {
-    const transaction = database.transaction(FILMS_STORE_NAME, "readonly");
-    const store = transaction.objectStore(FILMS_STORE_NAME);
-    const records = await Promise.all(
-      uniqueIds.map((id) => indexedDbRequestToPromise(store.get(id))),
-    );
-    await transactionDonePromise(transaction);
-    return new Map(records.filter(Boolean).map((record) => [record.id, record]));
-  } finally {
-    database.close();
-  }
+    try {
+        const transaction = database.transaction(FILMS_STORE_NAME, "readonly");
+        const store = transaction.objectStore(FILMS_STORE_NAME);
+        const records = await Promise.all(
+            uniqueIds.map((id) => indexedDbRequestToPromise(store.get(id))),
+        );
+        await transactionDonePromise(transaction);
+        return new Map(records.filter(Boolean).map((record) => [record.id, record]));
+    } finally {
+        database.close();
+    }
 }
 
 async function getAllPersonRecords() {
-  const database = await openIndexedDb();
+    const database = await openIndexedDb();
 
-  try {
-    const transaction = database.transaction(PEOPLE_STORE_NAME, "readonly");
-    const store = transaction.objectStore(PEOPLE_STORE_NAME);
-    const records = await indexedDbRequestToPromise(store.getAll());
-    await transactionDonePromise(transaction);
-    return records ?? [];
-  } finally {
-    database.close();
-  }
+    try {
+        const transaction = database.transaction(PEOPLE_STORE_NAME, "readonly");
+        const store = transaction.objectStore(PEOPLE_STORE_NAME);
+        const records = await indexedDbRequestToPromise(store.getAll());
+        await transactionDonePromise(transaction);
+        return records ?? [];
+    } finally {
+        database.close();
+    }
 }
 
 async function getAllFilmRecords() {
-  const database = await openIndexedDb();
+    const database = await openIndexedDb();
 
-  try {
-    const transaction = database.transaction(FILMS_STORE_NAME, "readonly");
-    const store = transaction.objectStore(FILMS_STORE_NAME);
-    const records = await indexedDbRequestToPromise(store.getAll());
-    await transactionDonePromise(transaction);
-    return records ?? [];
-  } finally {
-    database.close();
-  }
+    try {
+        const transaction = database.transaction(FILMS_STORE_NAME, "readonly");
+        const store = transaction.objectStore(FILMS_STORE_NAME);
+        const records = await indexedDbRequestToPromise(store.getAll());
+        await transactionDonePromise(transaction);
+        return records ?? [];
+    } finally {
+        database.close();
+    }
 }
 
 async function getPersonRecordById(id) {
-  if (!id) {
-    return null;
-  }
+    if (!id) {
+        return null;
+    }
 
-  const database = await openIndexedDb();
+    const database = await openIndexedDb();
 
-  try {
-    const transaction = database.transaction(PEOPLE_STORE_NAME, "readonly");
-    const store = transaction.objectStore(PEOPLE_STORE_NAME);
-    const record = await indexedDbRequestToPromise(store.get(id));
-    await transactionDonePromise(transaction);
-    return record ?? null;
-  } finally {
-    database.close();
-  }
+    try {
+        const transaction = database.transaction(PEOPLE_STORE_NAME, "readonly");
+        const store = transaction.objectStore(PEOPLE_STORE_NAME);
+        const record = await indexedDbRequestToPromise(store.get(id));
+        await transactionDonePromise(transaction);
+        return record ?? null;
+    } finally {
+        database.close();
+    }
 }
 
 async function getFilmRecordById(id) {
-  if (!id) {
-    return null;
-  }
+    if (!id) {
+        return null;
+    }
 
-  const database = await openIndexedDb();
+    const database = await openIndexedDb();
 
-  try {
-    const transaction = database.transaction(FILMS_STORE_NAME, "readonly");
-    const store = transaction.objectStore(FILMS_STORE_NAME);
-    const record = await indexedDbRequestToPromise(store.get(id));
-    await transactionDonePromise(transaction);
-    return record ?? null;
-  } finally {
-    database.close();
-  }
+    try {
+        const transaction = database.transaction(FILMS_STORE_NAME, "readonly");
+        const store = transaction.objectStore(FILMS_STORE_NAME);
+        const record = await indexedDbRequestToPromise(store.get(id));
+        await transactionDonePromise(transaction);
+        return record ?? null;
+    } finally {
+        database.close();
+    }
 }
 
 async function savePersonRecord(personRecord) {
-  const database = await openIndexedDb();
+    const database = await openIndexedDb();
 
-  try {
-    const transaction = database.transaction(PEOPLE_STORE_NAME, "readwrite");
-    const store = transaction.objectStore(PEOPLE_STORE_NAME);
-    await indexedDbRequestToPromise(store.put(withDerivedPersonFields(personRecord)));
-    await transactionDonePromise(transaction);
-  } finally {
-    database.close();
-  }
+    try {
+        const transaction = database.transaction(PEOPLE_STORE_NAME, "readwrite");
+        const store = transaction.objectStore(PEOPLE_STORE_NAME);
+        await indexedDbRequestToPromise(store.put(withDerivedPersonFields(personRecord)));
+        await transactionDonePromise(transaction);
+    } finally {
+        database.close();
+    }
 }
 
 function withDerivedPersonFields(personRecord) {
-  const tmdbMovieKeys = getTmdbMovieCredits(personRecord).map((credit) =>
-    getMovieKeyFromCredit(credit),
-  );
-  const domMovieKeys = (personRecord?.domConnections ?? []).map((connection) =>
-    getFilmKey(connection.title, connection.year),
-  );
+    const tmdbMovieKeys = getTmdbMovieCredits(personRecord).map((credit) =>
+        getMovieKeyFromCredit(credit),
+    );
+    const domMovieKeys = (personRecord?.domConnections ?? []).map((connection) =>
+        getFilmKey(connection.title, connection.year),
+    );
 
-  return {
-    ...personRecord,
-    movieConnectionKeys: Array.from(new Set([...tmdbMovieKeys, ...domMovieKeys])),
-  };
+    return {
+        ...personRecord,
+        movieConnectionKeys: Array.from(new Set([...tmdbMovieKeys, ...domMovieKeys])),
+    };
 }
 
 function buildFilmRecord(existingFilmRecord, tmdbFilm, domFilmSnapshot) {
-  const tmdbYear = tmdbFilm.release_date?.slice(0, 4) ?? "";
-  const title =
-    domFilmSnapshot?.title ?? tmdbFilm.title ?? existingFilmRecord?.title ?? "";
-  const year =
-    domFilmSnapshot?.year ?? tmdbYear ?? existingFilmRecord?.year ?? "";
+    const tmdbYear = tmdbFilm.release_date?.slice(0, 4) ?? "";
+    const title =
+        domFilmSnapshot?.title ?? tmdbFilm.title ?? existingFilmRecord?.title ?? "";
+    const year =
+        domFilmSnapshot?.year ?? tmdbYear ?? existingFilmRecord?.year ?? "";
 
-  return {
-    ...existingFilmRecord,
-    id: tmdbFilm.id,
-    title,
-    titleLower: normalizeTitle(title),
-    year,
-    titleYear: getFilmKey(title, year),
-    popularity: tmdbFilm.popularity ?? existingFilmRecord?.popularity ?? 0,
-    rawTmdbMovie: tmdbFilm,
-    tmdbSavedAt: new Date().toISOString(),
-    domSnapshot: domFilmSnapshot
-      ? {
-          ...existingFilmRecord?.domSnapshot,
-          ...domFilmSnapshot,
-        }
-      : existingFilmRecord?.domSnapshot,
-  };
+    return {
+        ...existingFilmRecord,
+        id: tmdbFilm.id,
+        title,
+        titleLower: normalizeTitle(title),
+        year,
+        titleYear: getFilmKey(title, year),
+        popularity: tmdbFilm.popularity ?? existingFilmRecord?.popularity ?? 0,
+        rawTmdbMovie: tmdbFilm,
+        tmdbSavedAt: new Date().toISOString(),
+        domSnapshot: domFilmSnapshot
+            ? {
+                ...existingFilmRecord?.domSnapshot,
+                ...domFilmSnapshot,
+            }
+            : existingFilmRecord?.domSnapshot,
+    };
 }
 
 function mergeDomConnection(existingConnections, connection) {
-  const connections = existingConnections ?? [];
-  const alreadyExists = connections.some(
-    (existingConnection) =>
-      existingConnection.title === connection.title &&
-      existingConnection.year === connection.year &&
-      existingConnection.role === connection.role,
-  );
+    const connections = existingConnections ?? [];
+    const alreadyExists = connections.some(
+        (existingConnection) =>
+            existingConnection.title === connection.title &&
+            existingConnection.year === connection.year &&
+            existingConnection.role === connection.role,
+    );
 
-  return alreadyExists ? connections : [...connections, connection];
+    return alreadyExists ? connections : [...connections, connection];
 }
 
 async function saveFilmRecordsFromCredits(creditsPayload, domFilmSnapshot) {
-  const database = await openIndexedDb();
+    const database = await openIndexedDb();
 
-  try {
-    const transaction = database.transaction(FILMS_STORE_NAME, "readwrite");
-    const store = transaction.objectStore(FILMS_STORE_NAME);
+    try {
+        const transaction = database.transaction(FILMS_STORE_NAME, "readwrite");
+        const store = transaction.objectStore(FILMS_STORE_NAME);
 
-    for (const tmdbFilm of creditsPayload.cast ?? []) {
-      const tmdbYear = tmdbFilm.release_date?.slice(0, 4) ?? "";
-      const matchesDomFilm =
-        domFilmSnapshot &&
-        getFilmKey(tmdbFilm.title ?? "", tmdbYear) === domFilmSnapshot.titleYear;
-      const existingFilmRecord = await indexedDbRequestToPromise(
-        store.get(tmdbFilm.id),
-      );
+        for (const tmdbFilm of creditsPayload.cast ?? []) {
+            const tmdbYear = tmdbFilm.release_date?.slice(0, 4) ?? "";
+            const matchesDomFilm =
+                domFilmSnapshot &&
+                getFilmKey(tmdbFilm.title ?? "", tmdbYear) === domFilmSnapshot.titleYear;
+            const existingFilmRecord = await indexedDbRequestToPromise(
+                store.get(tmdbFilm.id),
+            );
 
-      await indexedDbRequestToPromise(
-        store.put(
-          buildFilmRecord(
-            existingFilmRecord ?? null,
-            tmdbFilm,
-            matchesDomFilm ? domFilmSnapshot : null,
-          ),
-        ),
-      );
+            await indexedDbRequestToPromise(
+                store.put(
+                    buildFilmRecord(
+                        existingFilmRecord ?? null,
+                        tmdbFilm,
+                        matchesDomFilm ? domFilmSnapshot : null,
+                    ),
+                ),
+            );
+        }
+
+        await transactionDonePromise(transaction);
+    } finally {
+        database.close();
     }
-
-    await transactionDonePromise(transaction);
-  } finally {
-    database.close();
-  }
 }
 
 async function syncDomSnapshotToCachedRecords(domFilmSnapshot) {
-  if (!domFilmSnapshot) {
-    return;
-  }
-
-  const matchingFilmRecords = (await getFilmRecordsByTitle(domFilmSnapshot.title)).filter(
-    (record) => record.year === domFilmSnapshot.year,
-  );
-
-  const database = await openIndexedDb();
-
-  try {
-    const transaction = database.transaction(
-      [FILMS_STORE_NAME, PEOPLE_STORE_NAME],
-      "readwrite",
-    );
-    const filmsStore = transaction.objectStore(FILMS_STORE_NAME);
-    const peopleStore = transaction.objectStore(PEOPLE_STORE_NAME);
-    const peopleIndex = peopleStore.index("nameLower");
-
-    for (const filmRecord of matchingFilmRecords) {
-      await indexedDbRequestToPromise(
-        filmsStore.put({
-          ...filmRecord,
-          title: domFilmSnapshot.title,
-          titleLower: domFilmSnapshot.titleLower,
-          year: domFilmSnapshot.year,
-          titleYear: domFilmSnapshot.titleYear,
-          domSnapshot: {
-            ...filmRecord.domSnapshot,
-            ...domFilmSnapshot,
-          },
-        }),
-      );
+    if (!domFilmSnapshot) {
+        return;
     }
 
-    for (const [role, people] of Object.entries(domFilmSnapshot.peopleByRole)) {
-      for (const personName of people) {
-        const personRecord = await indexedDbRequestToPromise(
-          peopleIndex.get(normalizeName(personName)),
-        );
+    const matchingFilmRecords = (await getFilmRecordsByTitle(domFilmSnapshot.title)).filter(
+        (record) => record.year === domFilmSnapshot.year,
+    );
 
-        if (!personRecord) {
-          continue;
+    const database = await openIndexedDb();
+
+    try {
+        const transaction = database.transaction(
+            [FILMS_STORE_NAME, PEOPLE_STORE_NAME],
+            "readwrite",
+        );
+        const filmsStore = transaction.objectStore(FILMS_STORE_NAME);
+        const peopleStore = transaction.objectStore(PEOPLE_STORE_NAME);
+        const peopleIndex = peopleStore.index("nameLower");
+
+        for (const filmRecord of matchingFilmRecords) {
+            await indexedDbRequestToPromise(
+                filmsStore.put({
+                    ...filmRecord,
+                    title: domFilmSnapshot.title,
+                    titleLower: domFilmSnapshot.titleLower,
+                    year: domFilmSnapshot.year,
+                    titleYear: domFilmSnapshot.titleYear,
+                    domSnapshot: {
+                        ...filmRecord.domSnapshot,
+                        ...domFilmSnapshot,
+                    },
+                }),
+            );
         }
 
-        await indexedDbRequestToPromise(
-          peopleStore.put(
-            withDerivedPersonFields({
-              ...personRecord,
-              domConnections: mergeDomConnection(personRecord.domConnections, {
-                title: domFilmSnapshot.title,
-                year: domFilmSnapshot.year,
-                role,
-              }),
-            }),
-          ),
-        );
-      }
-    }
+        for (const [role, people] of Object.entries(domFilmSnapshot.peopleByRole)) {
+            for (const personName of people) {
+                const personRecord = await indexedDbRequestToPromise(
+                    peopleIndex.get(normalizeName(personName)),
+                );
 
-    await transactionDonePromise(transaction);
-  } finally {
-    database.close();
-  }
+                if (!personRecord) {
+                    continue;
+                }
+
+                await indexedDbRequestToPromise(
+                    peopleStore.put(
+                        withDerivedPersonFields({
+                            ...personRecord,
+                            domConnections: mergeDomConnection(personRecord.domConnections, {
+                                title: domFilmSnapshot.title,
+                                year: domFilmSnapshot.year,
+                                role,
+                            }),
+                        }),
+                    ),
+                );
+            }
+        }
+
+        await transactionDonePromise(transaction);
+    } finally {
+        database.close();
+    }
 }
 
 async function fetchAndCachePerson(personName, domFilmSnapshot) {
-  const apiKey = getTmdbApiKey();
-  if (!apiKey) {
-    return null;
-  }
+    const apiKey = getTmdbApiKey();
+    if (!apiKey) {
+        return null;
+    }
 
-  const searchUrl = new URL("https://api.themoviedb.org/3/search/person");
-  searchUrl.searchParams.set("api_key", apiKey);
-  searchUrl.searchParams.set("query", personName);
+    const searchUrl = new URL("https://api.themoviedb.org/3/search/person");
+    searchUrl.searchParams.set("api_key", apiKey);
+    searchUrl.searchParams.set("query", personName);
 
-  const searchResponse = await fetch(searchUrl.toString());
-  if (!searchResponse.ok) {
-    throw new Error(`TMDb person search failed: ${searchResponse.status}`);
-  }
+    const searchResponse = await fetch(searchUrl.toString());
+    if (!searchResponse.ok) {
+        throw new Error(`TMDb person search failed: ${searchResponse.status}`);
+    }
 
-  const searchPayload = await searchResponse.json();
-  latestQueryResponseText = JSON.stringify(searchPayload, null, 2);
-  const person =
-    searchPayload.results?.find(
-      (result) => normalizeName(result.name ?? "") === normalizeName(personName),
-    ) ?? searchPayload.results?.[0];
+    const searchPayload = await searchResponse.json();
+    latestQueryResponseText = JSON.stringify(searchPayload, null, 2);
+    const person =
+        searchPayload.results?.find(
+            (result) => normalizeName(result.name ?? "") === normalizeName(personName),
+        ) ?? searchPayload.results?.[0];
 
-  if (!person) {
-    alert(`No TMDb person found for ${personName}`);
-    return null;
-  }
+    if (!person) {
+        alert(`No TMDb person found for ${personName}`);
+        return null;
+    }
 
-  const creditsUrl = new URL(
-    `https://api.themoviedb.org/3/person/${person.id}/movie_credits`,
-  );
-  creditsUrl.searchParams.set("api_key", apiKey);
+    const creditsUrl = new URL(
+        `https://api.themoviedb.org/3/person/${person.id}/movie_credits`,
+    );
+    creditsUrl.searchParams.set("api_key", apiKey);
 
-  const creditsResponse = await fetch(creditsUrl.toString());
-  if (!creditsResponse.ok) {
-    throw new Error(`TMDb credits lookup failed: ${creditsResponse.status}`);
-  }
+    const creditsResponse = await fetch(creditsUrl.toString());
+    if (!creditsResponse.ok) {
+        throw new Error(`TMDb credits lookup failed: ${creditsResponse.status}`);
+    }
 
-  const creditsPayload = await creditsResponse.json();
-  latestQueryResponseText = JSON.stringify(creditsPayload, null, 2);
-  const personRecord = {
-    id: person.id,
-    name: person.name,
-    nameLower: normalizeName(person.name),
-    rawTmdbPerson: person,
-    rawTmdbPersonSearchResponse: searchPayload,
-    rawTmdbMovieCreditsResponse: creditsPayload,
-    savedAt: new Date().toISOString(),
-    domConnections: domFilmSnapshot
-      ? [
-          {
-            title: domFilmSnapshot.title,
-            year: domFilmSnapshot.year,
-            role: Object.entries(domFilmSnapshot.peopleByRole).find(([, people]) =>
-              people.includes(personName),
-            )?.[0],
-          },
-        ].filter((connection) => connection.role)
-      : [],
-  };
+    const creditsPayload = await creditsResponse.json();
+    latestQueryResponseText = JSON.stringify(creditsPayload, null, 2);
+    const personRecord = {
+        id: person.id,
+        name: person.name,
+        nameLower: normalizeName(person.name),
+        rawTmdbPerson: person,
+        rawTmdbPersonSearchResponse: searchPayload,
+        rawTmdbMovieCreditsResponse: creditsPayload,
+        savedAt: new Date().toISOString(),
+        domConnections: domFilmSnapshot
+            ? [
+                {
+                    title: domFilmSnapshot.title,
+                    year: domFilmSnapshot.year,
+                    role: Object.entries(domFilmSnapshot.peopleByRole).find(([, people]) =>
+                        people.includes(personName),
+                    )?.[0],
+                },
+            ].filter((connection) => connection.role)
+            : [],
+    };
 
-  try {
-    await savePersonRecord(personRecord);
-  } catch (error) {
-    alert(`Failed to save TMDb person response: ${error.message}`);
-    throw error;
-  }
+    try {
+        await savePersonRecord(personRecord);
+    } catch (error) {
+        alert(`Failed to save TMDb person response: ${error.message}`);
+        throw error;
+    }
 
-  try {
-    await saveFilmRecordsFromCredits(creditsPayload, domFilmSnapshot);
-  } catch (error) {
-    alert(`Failed to save TMDb film response: ${error.message}`);
-    throw error;
-  }
+    try {
+        await saveFilmRecordsFromCredits(creditsPayload, domFilmSnapshot);
+    } catch (error) {
+        alert(`Failed to save TMDb film response: ${error.message}`);
+        throw error;
+    }
 
-  return personRecord;
+    return personRecord;
 }
 
 function chooseBestMovieSearchResult(results, movieName, preferredYear = "") {
-  const normalizedMovieName = normalizeTitle(movieName);
-  const exactTitleMatches = (results ?? []).filter(
-    (result) => normalizeTitle(result.title ?? "") === normalizedMovieName,
-  );
+    const normalizedMovieName = normalizeTitle(movieName);
+    const exactTitleMatches = (results ?? []).filter(
+        (result) => normalizeTitle(result.title ?? "") === normalizedMovieName,
+    );
 
-  if (preferredYear) {
-    const exactYearMatch =
-      exactTitleMatches.find(
-        (result) => (result.release_date?.slice(0, 4) ?? "") === preferredYear,
-      ) ??
-      (results ?? []).find(
-        (result) =>
-          normalizeTitle(result.title ?? "") === normalizedMovieName &&
-          (result.release_date?.slice(0, 4) ?? "") === preferredYear,
-      );
-    if (exactYearMatch) {
-      return exactYearMatch;
+    if (preferredYear) {
+        const exactYearMatch =
+            exactTitleMatches.find(
+                (result) => (result.release_date?.slice(0, 4) ?? "") === preferredYear,
+            ) ??
+            (results ?? []).find(
+                (result) =>
+                    normalizeTitle(result.title ?? "") === normalizedMovieName &&
+                    (result.release_date?.slice(0, 4) ?? "") === preferredYear,
+            );
+        if (exactYearMatch) {
+            return exactYearMatch;
+        }
     }
-  }
 
-  return exactTitleMatches[0] ?? results?.[0] ?? null;
+    return exactTitleMatches[0] ?? results?.[0] ?? null;
 }
 
 async function fetchAndCacheMovie(movieName, domFilmSnapshot = null, preferredYear = "") {
-  const apiKey = getTmdbApiKey();
-  if (!apiKey) {
-    return null;
-  }
+    const apiKey = getTmdbApiKey();
+    if (!apiKey) {
+        return null;
+    }
 
-  const searchUrl = new URL("https://api.themoviedb.org/3/search/movie");
-  searchUrl.searchParams.set("api_key", apiKey);
-  searchUrl.searchParams.set("query", movieName);
+    const searchUrl = new URL("https://api.themoviedb.org/3/search/movie");
+    searchUrl.searchParams.set("api_key", apiKey);
+    searchUrl.searchParams.set("query", movieName);
 
-  const searchResponse = await fetch(searchUrl.toString());
-  if (!searchResponse.ok) {
-    throw new Error(`TMDb movie search failed: ${searchResponse.status}`);
-  }
+    const searchResponse = await fetch(searchUrl.toString());
+    if (!searchResponse.ok) {
+        throw new Error(`TMDb movie search failed: ${searchResponse.status}`);
+    }
 
-  const searchPayload = await searchResponse.json();
-  latestQueryResponseText = JSON.stringify(searchPayload, null, 2);
-  const movie = chooseBestMovieSearchResult(
-    searchPayload.results,
-    movieName,
-    preferredYear,
-  );
-
-  if (!movie) {
-    alert(`No TMDb movie found for ${movieName}`);
-    return null;
-  }
-
-  const database = await openIndexedDb();
-
-  try {
-    const transaction = database.transaction(FILMS_STORE_NAME, "readwrite");
-    const store = transaction.objectStore(FILMS_STORE_NAME);
-    const existingFilmRecord = await indexedDbRequestToPromise(store.get(movie.id));
-
-    await indexedDbRequestToPromise(
-      store.put({
-        ...buildFilmRecord(existingFilmRecord ?? null, movie, domFilmSnapshot),
-        rawTmdbMovieSearchResponse: searchPayload,
-      }),
+    const searchPayload = await searchResponse.json();
+    latestQueryResponseText = JSON.stringify(searchPayload, null, 2);
+    const movie = chooseBestMovieSearchResult(
+        searchPayload.results,
+        movieName,
+        preferredYear,
     );
-    await transactionDonePromise(transaction);
-  } catch (error) {
-    alert(`Failed to save TMDb movie response: ${error.message}`);
-    throw error;
-  } finally {
-    database.close();
-  }
 
-  return movie;
+    if (!movie) {
+        alert(`No TMDb movie found for ${movieName}`);
+        return null;
+    }
+
+    const database = await openIndexedDb();
+
+    try {
+        const transaction = database.transaction(FILMS_STORE_NAME, "readwrite");
+        const store = transaction.objectStore(FILMS_STORE_NAME);
+        const existingFilmRecord = await indexedDbRequestToPromise(store.get(movie.id));
+
+        await indexedDbRequestToPromise(
+            store.put({
+                ...buildFilmRecord(existingFilmRecord ?? null, movie, domFilmSnapshot),
+                rawTmdbMovieSearchResponse: searchPayload,
+            }),
+        );
+        await transactionDonePromise(transaction);
+    } catch (error) {
+        alert(`Failed to save TMDb movie response: ${error.message}`);
+        throw error;
+    } finally {
+        database.close();
+    }
+
+    return movie;
 }
 
 async function fetchAndCacheMovieCredits(movieRecord) {
-  if (!movieRecord?.id) {
-    return movieRecord ?? null;
-  }
+    if (!movieRecord?.id) {
+        return movieRecord ?? null;
+    }
 
-  const apiKey = getTmdbApiKey();
-  if (!apiKey) {
-    return movieRecord;
-  }
+    const apiKey = getTmdbApiKey();
+    if (!apiKey) {
+        return movieRecord;
+    }
 
-  const creditsUrl = new URL(
-    `https://api.themoviedb.org/3/movie/${movieRecord.id}/credits`,
-  );
-  creditsUrl.searchParams.set("api_key", apiKey);
+    const creditsUrl = new URL(
+        `https://api.themoviedb.org/3/movie/${movieRecord.id}/credits`,
+    );
+    creditsUrl.searchParams.set("api_key", apiKey);
 
-  const creditsResponse = await fetch(creditsUrl.toString());
-  if (!creditsResponse.ok) {
-    throw new Error(`TMDb movie credits lookup failed: ${creditsResponse.status}`);
-  }
+    const creditsResponse = await fetch(creditsUrl.toString());
+    if (!creditsResponse.ok) {
+        throw new Error(`TMDb movie credits lookup failed: ${creditsResponse.status}`);
+    }
 
-  const creditsPayload = await creditsResponse.json();
-  latestQueryResponseText = JSON.stringify(creditsPayload, null, 2);
+    const creditsPayload = await creditsResponse.json();
+    latestQueryResponseText = JSON.stringify(creditsPayload, null, 2);
 
-  const database = await openIndexedDb();
+    const database = await openIndexedDb();
 
-  try {
-    const transaction = database.transaction(FILMS_STORE_NAME, "readwrite");
-    const store = transaction.objectStore(FILMS_STORE_NAME);
-    const existingFilmRecord = await indexedDbRequestToPromise(store.get(movieRecord.id));
-    const updatedFilmRecord = {
-      ...(existingFilmRecord ?? movieRecord),
-      rawTmdbMovieCreditsResponse: creditsPayload,
-      tmdbCreditsSavedAt: new Date().toISOString(),
-    };
-    await indexedDbRequestToPromise(store.put(updatedFilmRecord));
-    await transactionDonePromise(transaction);
-    return updatedFilmRecord;
-  } finally {
-    database.close();
-  }
+    try {
+        const transaction = database.transaction(FILMS_STORE_NAME, "readwrite");
+        const store = transaction.objectStore(FILMS_STORE_NAME);
+        const existingFilmRecord = await indexedDbRequestToPromise(store.get(movieRecord.id));
+        const updatedFilmRecord = {
+            ...(existingFilmRecord ?? movieRecord),
+            rawTmdbMovieCreditsResponse: creditsPayload,
+            tmdbCreditsSavedAt: new Date().toISOString(),
+        };
+        await indexedDbRequestToPromise(store.put(updatedFilmRecord));
+        await transactionDonePromise(transaction);
+        return updatedFilmRecord;
+    } finally {
+        database.close();
+    }
 }
 
 function getPosterUrl(path, size = "w185") {
-  if (!path) {
-    return null;
-  }
+    if (!path) {
+        return null;
+    }
 
-  return `https://image.tmdb.org/t/p/${size}${path}`;
+    return `https://image.tmdb.org/t/p/${size}${path}`;
 }
 
 function createCardTitle(text) {
-  const wrapper = document.createElement("div");
+    const wrapper = document.createElement("div");
 
-  const title = document.createElement("div");
-  title.dataset.cinenerdle2CardTitle = "true";
-  title.textContent = text;
-  title.style.fontSize = "15px";
-  title.style.fontWeight = "700";
-  title.style.lineHeight = "1.25";
-  title.style.color = "#f8fafc";
-  title.style.height = "auto";
-  title.style.overflowX = "auto";
-  title.style.overflowY = "hidden";
-  title.style.whiteSpace = "nowrap";
+    const title = document.createElement("div");
+    title.dataset.cinenerdle2CardTitle = "true";
+    title.textContent = text;
+    title.style.fontSize = "15px";
+    title.style.fontWeight = "700";
+    title.style.lineHeight = "1.25";
+    title.style.color = "#f8fafc";
+    title.style.height = "auto";
+    title.style.overflowX = "auto";
+    title.style.overflowY = "hidden";
+    title.style.whiteSpace = "nowrap";
 
-  wrapper.appendChild(title);
+    wrapper.appendChild(title);
 
-  return wrapper;
+    return wrapper;
 }
 
 function createPosterCard({ imageUrl, title, subtitle, footer = null }) {
-  const card = document.createElement("div");
-  card.style.flex = "0 0 216px";
-  card.style.width = "216px";
-  card.style.minWidth = "216px";
-  card.style.maxWidth = "216px";
-  card.style.display = "flex";
-  card.style.flexDirection = "column";
-  card.style.padding = "14px";
-  card.style.border = "1px solid #243041";
-  card.style.borderRadius = "14px";
-  card.style.backgroundColor = "#111827";
-  card.style.boxShadow = "0 8px 24px rgba(0, 0, 0, 0.35)";
-  card.style.height = "100%";
-  card.style.boxSizing = "border-box";
+    const card = document.createElement("div");
+    card.style.flex = "0 0 216px";
+    card.style.width = "216px";
+    card.style.minWidth = "216px";
+    card.style.maxWidth = "216px";
+    card.style.display = "flex";
+    card.style.flexDirection = "column";
+    card.style.padding = "14px";
+    card.style.border = "1px solid #243041";
+    card.style.borderRadius = "14px";
+    card.style.backgroundColor = "#111827";
+    card.style.boxShadow = "0 8px 24px rgba(0, 0, 0, 0.35)";
+    card.style.height = "100%";
+    card.style.boxSizing = "border-box";
 
-  const imageFrame = document.createElement("div");
-  imageFrame.style.height = "270px";
-  imageFrame.style.borderRadius = "10px";
-  imageFrame.style.overflow = "hidden";
-  imageFrame.style.background =
-    "linear-gradient(135deg, rgb(31, 41, 55), rgb(17, 24, 39))";
-  imageFrame.style.display = "flex";
-  imageFrame.style.alignItems = "center";
-  imageFrame.style.justifyContent = "center";
-  imageFrame.style.flex = "0 0 auto";
+    const imageFrame = document.createElement("div");
+    imageFrame.style.height = "270px";
+    imageFrame.style.borderRadius = "10px";
+    imageFrame.style.overflow = "hidden";
+    imageFrame.style.background =
+        "linear-gradient(135deg, rgb(31, 41, 55), rgb(17, 24, 39))";
+    imageFrame.style.display = "flex";
+    imageFrame.style.alignItems = "center";
+    imageFrame.style.justifyContent = "center";
+    imageFrame.style.flex = "0 0 auto";
 
-  if (imageUrl) {
-    const image = document.createElement("img");
-    image.src = imageUrl;
-    image.alt = title;
-    image.style.width = "100%";
-    image.style.height = "100%";
-    image.style.objectFit = "cover";
-    imageFrame.appendChild(image);
-  } else {
-    const fallback = document.createElement("div");
-    fallback.textContent = title;
-    fallback.style.padding = "12px";
-    fallback.style.textAlign = "center";
-    fallback.style.fontSize = "13px";
-    fallback.style.color = "#cbd5e1";
-    imageFrame.appendChild(fallback);
-  }
+    if (imageUrl) {
+        const image = document.createElement("img");
+        image.src = imageUrl;
+        image.alt = title;
+        image.style.width = "100%";
+        image.style.height = "100%";
+        image.style.objectFit = "cover";
+        imageFrame.appendChild(image);
+    } else {
+        const fallback = document.createElement("div");
+        fallback.textContent = title;
+        fallback.style.padding = "12px";
+        fallback.style.textAlign = "center";
+        fallback.style.fontSize = "13px";
+        fallback.style.color = "#cbd5e1";
+        imageFrame.appendChild(fallback);
+    }
 
-  card.appendChild(imageFrame);
+    card.appendChild(imageFrame);
 
-  const content = document.createElement("div");
-  content.style.display = "flex";
-  content.style.flexDirection = "column";
-  content.style.flex = "1";
-  content.style.gap = "8px";
-  content.style.paddingTop = "8px";
+    const content = document.createElement("div");
+    content.style.display = "flex";
+    content.style.flexDirection = "column";
+    content.style.flex = "1";
+    content.style.gap = "8px";
+    content.style.paddingTop = "8px";
 
-  content.appendChild(createCardTitle(title));
+    content.appendChild(createCardTitle(title));
 
-  const spacer = document.createElement("div");
-  spacer.style.flex = "1";
-  content.appendChild(spacer);
+    const spacer = document.createElement("div");
+    spacer.style.flex = "1";
+    content.appendChild(spacer);
 
-  if (subtitle) {
-    const secondary = document.createElement("div");
-    secondary.textContent = subtitle;
-    secondary.style.fontSize = "12px";
-    secondary.style.color = "#94a3b8";
-    secondary.style.lineHeight = "1.35";
-    secondary.style.height = "2.7em";
-    secondary.style.overflowX = "auto";
-    secondary.style.overflowY = "hidden";
-    content.appendChild(secondary);
-  }
+    if (subtitle) {
+        const secondary = document.createElement("div");
+        secondary.textContent = subtitle;
+        secondary.style.fontSize = "12px";
+        secondary.style.color = "#94a3b8";
+        secondary.style.lineHeight = "1.35";
+        secondary.style.height = "2.7em";
+        secondary.style.overflowX = "auto";
+        secondary.style.overflowY = "hidden";
+        content.appendChild(secondary);
+    }
 
-  if (footer) {
-    content.appendChild(footer);
-  }
+    if (footer) {
+        content.appendChild(footer);
+    }
 
-  card.appendChild(content);
-  return card;
+    card.appendChild(content);
+    return card;
 }
 
 function createChip(text) {
-  const chip = document.createElement("div");
-  chip.textContent = text;
-  chip.style.padding = "8px 12px";
-  chip.style.borderRadius = "999px";
-  chip.style.backgroundColor = "#1f2937";
-  chip.style.fontSize = "12px";
-  chip.style.color = "#dbeafe";
-  chip.style.whiteSpace = "nowrap";
-  return chip;
+    const chip = document.createElement("div");
+    chip.textContent = text;
+    chip.style.padding = "8px 12px";
+    chip.style.borderRadius = "999px";
+    chip.style.backgroundColor = "#1f2937";
+    chip.style.fontSize = "12px";
+    chip.style.color = "#dbeafe";
+    chip.style.whiteSpace = "nowrap";
+    return chip;
 }
 
 function createRowSection() {
-  const section = document.createElement("section");
-  section.style.display = "flex";
-  section.style.flexDirection = "column";
+    const section = document.createElement("section");
+    section.style.display = "flex";
+    section.style.flexDirection = "column";
 
-  const body = document.createElement("div");
-  section.appendChild(body);
+    const body = document.createElement("div");
+    section.appendChild(body);
 
-  return { section, body };
+    return { section, body };
 }
 
 function createSourceBadge(sources) {
-  const badge = document.createElement("div");
-  badge.style.display = "inline-flex";
-  badge.style.alignItems = "center";
-  badge.style.gap = "4px";
+    const badge = document.createElement("div");
+    badge.style.display = "inline-flex";
+    badge.style.alignItems = "center";
+    badge.style.gap = "4px";
 
-  sources.forEach(({ iconUrl, label, opacity = "1", filter = "none" }) => {
-    const icon = document.createElement("img");
-    icon.src = iconUrl;
-    icon.alt = label;
-    icon.title = label;
-    icon.style.width = "14px";
-    icon.style.height = "14px";
-    icon.style.borderRadius = "3px";
-    icon.style.opacity = opacity;
-    icon.style.filter = filter;
-    badge.appendChild(icon);
-  });
-  return badge;
+    sources.forEach(({ iconUrl, label, opacity = "1", filter = "none" }) => {
+        const icon = document.createElement("img");
+        icon.src = iconUrl;
+        icon.alt = label;
+        icon.title = label;
+        icon.style.width = "14px";
+        icon.style.height = "14px";
+        icon.style.borderRadius = "3px";
+        icon.style.opacity = opacity;
+        icon.style.filter = filter;
+        badge.appendChild(icon);
+    });
+    return badge;
 }
 
 function createStatusChip(text, tone = "info") {
-  const chip = document.createElement("div");
-  chip.textContent = text;
-  chip.style.padding = "6px 8px";
-  chip.style.borderRadius = "999px";
-  chip.style.fontSize = "11px";
-  chip.style.fontWeight = "600";
-  chip.style.whiteSpace = "nowrap";
+    const chip = document.createElement("div");
+    chip.textContent = text;
+    chip.style.padding = "6px 8px";
+    chip.style.borderRadius = "999px";
+    chip.style.fontSize = "11px";
+    chip.style.fontWeight = "600";
+    chip.style.whiteSpace = "nowrap";
 
-  if (tone === "danger") {
-    chip.style.backgroundColor = "#3f1d1d";
-    chip.style.color = "#fecaca";
+    if (tone === "danger") {
+        chip.style.backgroundColor = "#3f1d1d";
+        chip.style.color = "#fecaca";
+        return chip;
+    }
+
+    if (tone === "success") {
+        chip.style.backgroundColor = "#163223";
+        chip.style.color = "#bbf7d0";
+        return chip;
+    }
+
+    chip.style.backgroundColor = "#172033";
+    chip.style.color = "#bfdbfe";
     return chip;
-  }
-
-  if (tone === "success") {
-    chip.style.backgroundColor = "#163223";
-    chip.style.color = "#bbf7d0";
-    return chip;
-  }
-
-  chip.style.backgroundColor = "#172033";
-  chip.style.color = "#bfdbfe";
-  return chip;
 }
 
 function clampNumber(value, min, max) {
-  return Math.min(max, Math.max(min, value));
+    return Math.min(max, Math.max(min, value));
 }
 
 function createHeatMetricChip(label, value, maxValue) {
-  const normalizedValue =
-    typeof value === "number" && Number.isFinite(value)
-      ? clampNumber(value / maxValue, 0, 1)
-      : 0;
-  const hue = 210 - normalizedValue * 210;
-  const bgLightness = 20 + normalizedValue * 12;
-  const borderLightness = 34 + normalizedValue * 18;
+    const normalizedValue =
+        typeof value === "number" && Number.isFinite(value)
+            ? clampNumber(value / maxValue, 0, 1)
+            : 0;
+    const hue = 210 - normalizedValue * 210;
+    const bgLightness = 20 + normalizedValue * 12;
+    const borderLightness = 34 + normalizedValue * 18;
 
-  const chip = document.createElement("div");
-  chip.textContent = `${label} ${value}`;
-  chip.style.padding = "6px 8px";
-  chip.style.borderRadius = "999px";
-  chip.style.fontSize = "11px";
-  chip.style.fontWeight = "600";
-  chip.style.whiteSpace = "nowrap";
-  chip.style.backgroundColor = `hsl(${hue} 55% ${bgLightness}%)`;
-  chip.style.border = `1px solid hsl(${hue} 70% ${borderLightness}%)`;
-  chip.style.color = "#eff6ff";
-  return chip;
+    const chip = document.createElement("div");
+    chip.textContent = `${label} ${value}`;
+    chip.style.padding = "6px 8px";
+    chip.style.borderRadius = "999px";
+    chip.style.fontSize = "11px";
+    chip.style.fontWeight = "600";
+    chip.style.whiteSpace = "nowrap";
+    chip.style.backgroundColor = `hsl(${hue} 55% ${bgLightness}%)`;
+    chip.style.border = `1px solid hsl(${hue} 70% ${borderLightness}%)`;
+    chip.style.color = "#eff6ff";
+    return chip;
 }
 
 function createMetricRow(metrics) {
-  const row = document.createElement("div");
-  row.style.display = "flex";
-  row.style.flexWrap = "wrap";
-  row.style.gap = "8px";
+    const row = document.createElement("div");
+    row.style.display = "flex";
+    row.style.flexWrap = "wrap";
+    row.style.gap = "8px";
 
-  metrics.filter(Boolean).forEach((metric) => {
-    const chip = document.createElement("div");
-    chip.textContent = metric;
-    chip.style.padding = "6px 8px";
-    chip.style.borderRadius = "999px";
-    chip.style.backgroundColor = "#172033";
-    chip.style.color = "#bfdbfe";
-    chip.style.fontSize = "11px";
-    row.appendChild(chip);
-  });
+    metrics.filter(Boolean).forEach((metric) => {
+        const chip = document.createElement("div");
+        chip.textContent = metric;
+        chip.style.padding = "6px 8px";
+        chip.style.borderRadius = "999px";
+        chip.style.backgroundColor = "#172033";
+        chip.style.color = "#bfdbfe";
+        chip.style.fontSize = "11px";
+        row.appendChild(chip);
+    });
 
-  return row;
+    return row;
 }
 
 function createMovieMetaBlock({
-  popularity,
-  voteAverage,
-  voteCount,
-  sources = [],
-  status = null,
+    popularity,
+    voteAverage,
+    voteCount,
+    sources = [],
+    status = null,
 }) {
-  const block = document.createElement("div");
-  block.style.display = "flex";
-  block.style.flexDirection = "column";
-  block.style.gap = "4px";
+    const block = document.createElement("div");
+    block.style.display = "flex";
+    block.style.flexDirection = "column";
+    block.style.gap = "4px";
 
-  const sharedTextColor = "#94a3b8";
-  const sharedFontSize = "11px";
+    const sharedTextColor = "#94a3b8";
+    const sharedFontSize = "11px";
 
-  const topRow = document.createElement("div");
-  topRow.style.display = "flex";
-  topRow.style.alignItems = "center";
-  topRow.style.justifyContent = "space-between";
-  topRow.style.gap = "8px";
+    const topRow = document.createElement("div");
+    topRow.style.display = "flex";
+    topRow.style.alignItems = "center";
+    topRow.style.justifyContent = "space-between";
+    topRow.style.gap = "8px";
 
-  if (sources.length > 0) {
-    topRow.appendChild(createSourceBadge(sources));
-  }
+    if (sources.length > 0) {
+        topRow.appendChild(createSourceBadge(sources));
+    }
 
-  if (typeof popularity === "number") {
-    const popularityChip = createHeatMetricChip("Popularity", popularity, 100);
-    popularityChip.style.marginLeft = "auto";
-    topRow.appendChild(popularityChip);
-  }
+    if (typeof popularity === "number") {
+        const popularityChip = createHeatMetricChip("Popularity", popularity, 100);
+        popularityChip.style.marginLeft = "auto";
+        topRow.appendChild(popularityChip);
+    }
 
-  if (topRow.childNodes.length > 0) {
-    block.appendChild(topRow);
-  }
+    if (topRow.childNodes.length > 0) {
+        block.appendChild(topRow);
+    }
 
-  const bottomRow = document.createElement("div");
-  bottomRow.style.display = "flex";
-  bottomRow.style.alignItems = "center";
-  bottomRow.style.flexWrap = "nowrap";
-  bottomRow.style.gap = "8px";
-  bottomRow.style.fontSize = sharedFontSize;
-  bottomRow.style.color = sharedTextColor;
-  bottomRow.style.overflowX = "auto";
-  bottomRow.style.overflowY = "hidden";
-  bottomRow.style.whiteSpace = "nowrap";
+    const bottomRow = document.createElement("div");
+    bottomRow.style.display = "flex";
+    bottomRow.style.alignItems = "center";
+    bottomRow.style.flexWrap = "nowrap";
+    bottomRow.style.gap = "8px";
+    bottomRow.style.fontSize = sharedFontSize;
+    bottomRow.style.color = sharedTextColor;
+    bottomRow.style.overflowX = "auto";
+    bottomRow.style.overflowY = "hidden";
+    bottomRow.style.whiteSpace = "nowrap";
 
-  if (typeof voteCount === "number") {
-    bottomRow.appendChild(createHeatMetricChip("Votes", voteCount, 20000));
-  }
+    if (typeof voteCount === "number") {
+        bottomRow.appendChild(createHeatMetricChip("Votes", voteCount, 20000));
+    }
 
-  if (typeof voteAverage === "number") {
-    const ratingChip = createHeatMetricChip("Rating", voteAverage, 10);
-    ratingChip.style.marginLeft = bottomRow.childNodes.length > 0 ? "auto" : "";
-    bottomRow.appendChild(ratingChip);
-  }
+    if (typeof voteAverage === "number") {
+        const ratingChip = createHeatMetricChip("Rating", voteAverage, 10);
+        ratingChip.style.marginLeft = bottomRow.childNodes.length > 0 ? "auto" : "";
+        bottomRow.appendChild(ratingChip);
+    }
 
-  if (status?.text) {
-    bottomRow.appendChild(createStatusChip(status.text, status.tone));
-  }
+    if (status?.text) {
+        bottomRow.appendChild(createStatusChip(status.text, status.tone));
+    }
 
-  if (bottomRow.childNodes.length > 0) {
-    block.appendChild(bottomRow);
-  }
+    if (bottomRow.childNodes.length > 0) {
+        block.appendChild(bottomRow);
+    }
 
-  return block;
+    return block;
 }
 
 function createPersonImage(personRecord) {
-  const rawPerson =
-    personRecord?.rawTmdbPerson ??
-    personRecord?.rawTmdbPersonSearchResponse?.results?.find(
-      (candidate) => normalizeName(candidate.name ?? "") === personRecord?.nameLower,
-    );
-  const imageUrl = getPosterUrl(rawPerson?.profile_path, "w300_and_h450_face");
+    const rawPerson =
+        personRecord?.rawTmdbPerson ??
+        personRecord?.rawTmdbPersonSearchResponse?.results?.find(
+            (candidate) => normalizeName(candidate.name ?? "") === personRecord?.nameLower,
+        );
+    const imageUrl = getPosterUrl(rawPerson?.profile_path, "w300_and_h450_face");
 
-  if (!imageUrl) {
-    return null;
-  }
+    if (!imageUrl) {
+        return null;
+    }
 
-  const image = document.createElement("img");
-  image.src = imageUrl;
-  image.alt = personRecord?.name ?? "Person";
-  image.style.width = "180px";
-  image.style.maxWidth = "100%";
-  image.style.borderRadius = "18px";
-  image.style.border = "1px solid #243041";
-  image.style.boxShadow = "0 18px 40px rgba(0, 0, 0, 0.35)";
-  return image;
+    const image = document.createElement("img");
+    image.src = imageUrl;
+    image.alt = personRecord?.name ?? "Person";
+    image.style.width = "180px";
+    image.style.maxWidth = "100%";
+    image.style.borderRadius = "18px";
+    image.style.border = "1px solid #243041";
+    image.style.boxShadow = "0 18px 40px rgba(0, 0, 0, 0.35)";
+    return image;
 }
 
 function getPersonProfileImageUrl(personRecord) {
-  const rawPerson =
-    personRecord?.rawTmdbPerson ??
-    personRecord?.rawTmdbPersonSearchResponse?.results?.find(
-      (candidate) => normalizeName(candidate.name ?? "") === personRecord?.nameLower,
-  );
-  return getPosterUrl(rawPerson?.profile_path, "w300_and_h450_face");
+    const rawPerson =
+        personRecord?.rawTmdbPerson ??
+        personRecord?.rawTmdbPersonSearchResponse?.results?.find(
+            (candidate) => normalizeName(candidate.name ?? "") === personRecord?.nameLower,
+        );
+    return getPosterUrl(rawPerson?.profile_path, "w300_and_h450_face");
 }
 
 function buildAssociationPresentation(personRecord, movieKey, filmRecord = null) {
-  const tmdbCredit = getTmdbCreditForMovie(personRecord, movieKey);
-  const cinenerdleRole =
-    getDomConnectionForMovie(personRecord, movieKey)?.role ??
-    getCinenerdleRoleFromSnapshot(filmRecord?.domSnapshot, personRecord?.name);
-  const cinenerdleLoaded = !!filmRecord?.domSnapshot;
-  const missingFromCinenerdle = cinenerdleLoaded && !!tmdbCredit && !cinenerdleRole;
-  const sources = [];
+    const tmdbCredit = getTmdbCreditForMovie(personRecord, movieKey);
+    const cinenerdleRole =
+        getDomConnectionForMovie(personRecord, movieKey)?.role ??
+        getCinenerdleRoleFromSnapshot(filmRecord?.domSnapshot, personRecord?.name);
+    const cinenerdleLoaded = !!filmRecord?.domSnapshot;
+    const missingFromCinenerdle = cinenerdleLoaded && !!tmdbCredit && !cinenerdleRole;
+    const sources = [];
 
-  if (tmdbCredit) {
-    sources.push({ iconUrl: TMDB_ICON_URL, label: "TMDb" });
-  }
+    if (tmdbCredit) {
+        sources.push({ iconUrl: TMDB_ICON_URL, label: "TMDb" });
+    }
 
-  if (cinenerdleRole) {
-    sources.push({
-      iconUrl: CINENERDLE_ICON_URL,
-      label: cinenerdleRole,
-    });
-  } else if (cinenerdleLoaded) {
-    sources.push({
-      iconUrl: CINENERDLE_ICON_URL,
-      label: "Cinenerdle loaded for parent, not associated here",
-      filter: "grayscale(1)",
-      opacity: "0.9",
-    });
-  }
+    if (cinenerdleRole) {
+        sources.push({
+            iconUrl: CINENERDLE_ICON_URL,
+            label: cinenerdleRole,
+        });
+    } else if (cinenerdleLoaded) {
+        sources.push({
+            iconUrl: CINENERDLE_ICON_URL,
+            label: "Cinenerdle loaded for parent, not associated here",
+            filter: "grayscale(1)",
+            opacity: "0.9",
+        });
+    }
 
-  return {
-    tmdbCredit,
-    cinenerdleRole,
-    cinenerdleLoaded,
-    missingFromCinenerdle,
-    sources,
-    status: null,
-  };
+    return {
+        tmdbCredit,
+        cinenerdleRole,
+        cinenerdleLoaded,
+        missingFromCinenerdle,
+        sources,
+        status: null,
+    };
 }
 
 function createPersonCreditsCards(personRecord, filmRecordsById) {
-  return getUniqueSortedTmdbMovieCredits(personRecord).map((credit) => {
-      const filmRecord = filmRecordsById.get(credit.id);
-      const association = buildAssociationPresentation(
-        personRecord,
-        getMovieKeyFromCredit(credit),
-        filmRecord,
-      );
+    return getUniqueSortedTmdbMovieCredits(personRecord).map((credit) => {
+        const filmRecord = filmRecordsById.get(credit.id);
+        const association = buildAssociationPresentation(
+            personRecord,
+            getMovieKeyFromCredit(credit),
+            filmRecord,
+        );
 
-      const card = createPosterCard({
-        imageUrl: getPosterUrl(credit.poster_path),
-        title: credit.title ?? "Untitled",
-        subtitle: `${credit.creditType.toUpperCase()}${credit.release_date ? ` • ${credit.release_date.slice(0, 4)}` : ""}`,
-        footer: createMovieMetaBlock({
-          popularity: credit.popularity,
-          voteAverage: credit.vote_average,
-          voteCount: credit.vote_count,
-          sources: association.sources,
-          status: association.status,
-        }),
-      });
-      return card;
+        const card = createPosterCard({
+            imageUrl: getPosterUrl(credit.poster_path),
+            title: credit.title ?? "Untitled",
+            subtitle: `${credit.creditType.toUpperCase()}${credit.release_date ? ` • ${credit.release_date.slice(0, 4)}` : ""}`,
+            footer: createMovieMetaBlock({
+                popularity: credit.popularity,
+                voteAverage: credit.vote_average,
+                voteCount: credit.vote_count,
+                sources: association.sources,
+                status: association.status,
+            }),
+        });
+        return card;
     });
 }
 
 function createAssociatedPeopleCards(
-  personRecords,
-  { movieKey, filmRecord = null, selectedPersonId = null, selectedPersonName = "" },
+    personRecords,
+    { movieKey, filmRecord = null, selectedPersonId = null, selectedPersonName = "" },
 ) {
-  const cards = [];
-  const seenNames = new Set();
+    const cards = [];
+    const seenNames = new Set();
 
-  personRecords
-    .filter((personRecord) => personRecord?.id !== selectedPersonId)
-    .forEach((personRecord) => {
-      const association = buildAssociationPresentation(personRecord, movieKey, filmRecord);
-      const personName = personRecord.name ?? "Unknown";
-      const normalizedPersonName = normalizeName(personName);
-      if (normalizedPersonName === normalizeName(selectedPersonName)) {
-        return;
-      }
+    personRecords
+        .filter((personRecord) => personRecord?.id !== selectedPersonId)
+        .forEach((personRecord) => {
+            const association = buildAssociationPresentation(personRecord, movieKey, filmRecord);
+            const personName = personRecord.name ?? "Unknown";
+            const normalizedPersonName = normalizeName(personName);
+            if (normalizedPersonName === normalizeName(selectedPersonName)) {
+                return;
+            }
 
-      const subtitleParts = [
-        association.tmdbCredit ? getTmdbCreditCategoryText(association.tmdbCredit) : "",
-      ].filter(Boolean);
+            const subtitleParts = [
+                association.tmdbCredit ? getTmdbCreditCategoryText(association.tmdbCredit) : "",
+            ].filter(Boolean);
 
-      cards.push(
-        createPosterCard({
-          imageUrl: getPersonProfileImageUrl(personRecord),
-          title: personName,
-          subtitle: subtitleParts.join(" • "),
-          footer: createMovieMetaBlock({
-            popularity: association.tmdbCredit?.popularity,
-            voteAverage: association.tmdbCredit?.vote_average,
-            voteCount: association.tmdbCredit?.vote_count,
-            sources: association.sources,
-            status: association.status,
-          }),
-        }),
-      );
-      seenNames.add(normalizedPersonName);
+            cards.push(
+                createPosterCard({
+                    imageUrl: getPersonProfileImageUrl(personRecord),
+                    title: personName,
+                    subtitle: subtitleParts.join(" • "),
+                    footer: createMovieMetaBlock({
+                        popularity: association.tmdbCredit?.popularity,
+                        voteAverage: association.tmdbCredit?.vote_average,
+                        voteCount: association.tmdbCredit?.vote_count,
+                        sources: association.sources,
+                        status: association.status,
+                    }),
+                }),
+            );
+            seenNames.add(normalizedPersonName);
+        });
+
+    Object.entries(filmRecord?.domSnapshot?.peopleByRole ?? {}).forEach(([role, people]) => {
+        people.forEach((personName) => {
+            const normalizedPersonName = normalizeName(personName);
+            if (
+                normalizedPersonName === normalizeName(selectedPersonName) ||
+                seenNames.has(normalizedPersonName)
+            ) {
+                return;
+            }
+
+            cards.push(
+                createPosterCard({
+                    imageUrl: null,
+                    title: personName,
+                    subtitle: role,
+                    footer: createMovieMetaBlock({
+                        sources: [
+                            {
+                                iconUrl: CINENERDLE_ICON_URL,
+                                label: `Cinenerdle: ${role}`,
+                            },
+                        ],
+                        status: { text: "Cinenerdle only", tone: "success" },
+                    }),
+                }),
+            );
+            seenNames.add(normalizedPersonName);
+        });
     });
 
-  Object.entries(filmRecord?.domSnapshot?.peopleByRole ?? {}).forEach(([role, people]) => {
-    people.forEach((personName) => {
-      const normalizedPersonName = normalizeName(personName);
-      if (
-        normalizedPersonName === normalizeName(selectedPersonName) ||
-        seenNames.has(normalizedPersonName)
-      ) {
-        return;
-      }
-
-      cards.push(
-        createPosterCard({
-          imageUrl: null,
-          title: personName,
-          subtitle: role,
-          footer: createMovieMetaBlock({
-            sources: [
-              {
-                iconUrl: CINENERDLE_ICON_URL,
-                label: `Cinenerdle: ${role}`,
-              },
-            ],
-            status: { text: "Cinenerdle only", tone: "success" },
-          }),
-        }),
-      );
-      seenNames.add(normalizedPersonName);
-    });
-  });
-
-  return cards;
+    return cards;
 }
 
 function getAssociatedPeopleFromMovieCredits(filmRecord) {
-  const credits = filmRecord?.rawTmdbMovieCreditsResponse ?? {};
-  const seenNames = new Set();
+    const credits = filmRecord?.rawTmdbMovieCreditsResponse ?? {};
+    const seenNames = new Set();
 
-  return [
-    ...(credits.cast ?? []).map((credit) => ({ ...credit, creditType: "cast" })),
-    ...(credits.crew ?? []).map((credit) => ({ ...credit, creditType: "crew" })),
-  ].filter((credit) => {
-    const personName = credit?.name?.trim();
-    if (!personName) {
-      return false;
-    }
+    return [
+        ...(credits.cast ?? []).map((credit) => ({ ...credit, creditType: "cast" })),
+        ...(credits.crew ?? []).map((credit) => ({ ...credit, creditType: "crew" })),
+    ].filter((credit) => {
+        const personName = credit?.name?.trim();
+        if (!personName) {
+            return false;
+        }
 
-    const normalizedPersonName = normalizeName(personName);
-    if (seenNames.has(normalizedPersonName)) {
-      return false;
-    }
+        const normalizedPersonName = normalizeName(personName);
+        if (seenNames.has(normalizedPersonName)) {
+            return false;
+        }
 
-    seenNames.add(normalizedPersonName);
-    return true;
-  });
+        seenNames.add(normalizedPersonName);
+        return true;
+    });
 }
 
 function createAssociatedPeopleCardsFromMovieCredits(
-  credits,
-  { filmRecord = null, selectedPersonName = "" },
+    credits,
+    { filmRecord = null, selectedPersonName = "" },
 ) {
-  const cards = [];
-  const seenNames = new Set();
+    const cards = [];
+    const seenNames = new Set();
 
-  credits.forEach((credit) => {
-    const personName = credit?.name?.trim();
-    if (!personName) {
-      return;
-    }
+    credits.forEach((credit) => {
+        const personName = credit?.name?.trim();
+        if (!personName) {
+            return;
+        }
 
-    const normalizedPersonName = normalizeName(personName);
-    if (
-      normalizedPersonName === normalizeName(selectedPersonName) ||
-      seenNames.has(normalizedPersonName)
-    ) {
-      return;
-    }
+        const normalizedPersonName = normalizeName(personName);
+        if (
+            normalizedPersonName === normalizeName(selectedPersonName) ||
+            seenNames.has(normalizedPersonName)
+        ) {
+            return;
+        }
 
-    const cinenerdleRole = getCinenerdleRoleFromSnapshot(
-      filmRecord?.domSnapshot,
-      personName,
-    );
-    const missingFromCinenerdle = !!filmRecord?.domSnapshot && !cinenerdleRole;
-    const subtitleParts = [
-      getTmdbCreditCategoryText(credit),
-      cinenerdleRole ? `Cinenerdle: ${cinenerdleRole}` : "",
-    ].filter(Boolean);
+        const cinenerdleRole = getCinenerdleRoleFromSnapshot(
+            filmRecord?.domSnapshot,
+            personName,
+        );
+        const missingFromCinenerdle = !!filmRecord?.domSnapshot && !cinenerdleRole;
+        const subtitleParts = [
+            getTmdbCreditCategoryText(credit),
+            cinenerdleRole ? `Cinenerdle: ${cinenerdleRole}` : "",
+        ].filter(Boolean);
 
-    cards.push(
-      createPosterCard({
-        imageUrl: getPosterUrl(credit.profile_path, "w300_and_h450_face"),
-        title: personName,
-        subtitle: subtitleParts.join(" • "),
-        footer: createMovieMetaBlock({
-          popularity: credit.popularity,
-          sources: [
-            { iconUrl: TMDB_ICON_URL, label: "TMDb" },
-            ...(cinenerdleRole
-              ? [
-                  {
-                    iconUrl: CINENERDLE_ICON_URL,
-                    label: `Cinenerdle: ${cinenerdleRole}`,
-                  },
-                ]
-              : []),
-          ],
-          status: missingFromCinenerdle
-            ? { text: "Missing on Cinenerdle", tone: "danger" }
-            : null,
-        }),
-      }),
-    );
-    seenNames.add(normalizedPersonName);
-  });
-
-  Object.entries(filmRecord?.domSnapshot?.peopleByRole ?? {}).forEach(([role, people]) => {
-    people.forEach((personName) => {
-      const normalizedPersonName = normalizeName(personName);
-      if (
-        normalizedPersonName === normalizeName(selectedPersonName) ||
-        seenNames.has(normalizedPersonName)
-      ) {
-        return;
-      }
-
-      cards.push(
-        createPosterCard({
-          imageUrl: null,
-          title: personName,
-          subtitle: role,
-          footer: createMovieMetaBlock({
-            sources: [
-              {
-                iconUrl: CINENERDLE_ICON_URL,
-                label: `Cinenerdle: ${role}`,
-              },
-            ],
-            status: { text: "Cinenerdle only", tone: "success" },
-          }),
-        }),
-      );
-      seenNames.add(normalizedPersonName);
+        cards.push(
+            createPosterCard({
+                imageUrl: getPosterUrl(credit.profile_path, "w300_and_h450_face"),
+                title: personName,
+                subtitle: subtitleParts.join(" • "),
+                footer: createMovieMetaBlock({
+                    popularity: credit.popularity,
+                    sources: [
+                        { iconUrl: TMDB_ICON_URL, label: "TMDb" },
+                        ...(cinenerdleRole
+                            ? [
+                                {
+                                    iconUrl: CINENERDLE_ICON_URL,
+                                    label: `Cinenerdle: ${cinenerdleRole}`,
+                                },
+                            ]
+                            : []),
+                    ],
+                    status: missingFromCinenerdle
+                        ? { text: "Missing on Cinenerdle", tone: "danger" }
+                        : null,
+                }),
+            }),
+        );
+        seenNames.add(normalizedPersonName);
     });
-  });
 
-  return cards;
+    Object.entries(filmRecord?.domSnapshot?.peopleByRole ?? {}).forEach(([role, people]) => {
+        people.forEach((personName) => {
+            const normalizedPersonName = normalizeName(personName);
+            if (
+                normalizedPersonName === normalizeName(selectedPersonName) ||
+                seenNames.has(normalizedPersonName)
+            ) {
+                return;
+            }
+
+            cards.push(
+                createPosterCard({
+                    imageUrl: null,
+                    title: personName,
+                    subtitle: role,
+                    footer: createMovieMetaBlock({
+                        sources: [
+                            {
+                                iconUrl: CINENERDLE_ICON_URL,
+                                label: `Cinenerdle: ${role}`,
+                            },
+                        ],
+                        status: { text: "Cinenerdle only", tone: "success" },
+                    }),
+                }),
+            );
+            seenNames.add(normalizedPersonName);
+        });
+    });
+
+    return cards;
 }
 
 function createMoviePeopleCards(movieRecord) {
-  const peopleByRole = movieRecord?.domSnapshot?.peopleByRole ?? {};
-  return Object.entries(peopleByRole).flatMap(([role, people]) =>
-    people.map((personName) =>
-      createPosterCard({
-        imageUrl: null,
-        title: personName,
-        subtitle: role,
-      }),
-    ),
-  );
+    const peopleByRole = movieRecord?.domSnapshot?.peopleByRole ?? {};
+    return Object.entries(peopleByRole).flatMap(([role, people]) =>
+        people.map((personName) =>
+            createPosterCard({
+                imageUrl: null,
+                title: personName,
+                subtitle: role,
+            }),
+        ),
+    );
 }
 
 function createPathNode(kind, name, year = "") {
-  return {
-    kind,
-    name: name?.trim() ?? "",
-    year: year?.trim() ?? "",
-  };
+    return {
+        kind,
+        name: name?.trim() ?? "",
+        year: year?.trim() ?? "",
+    };
 }
 
 function getSearchEntityLabel(entity) {
-  return entity.kind === "movie"
-    ? formatMoviePathLabel(entity.name, entity.year)
-    : entity.name;
+    return entity.kind === "movie"
+        ? formatMoviePathLabel(entity.name, entity.year)
+        : entity.name;
 }
 
 function createPersonSearchEntity(personRecord) {
-  return {
-    kind: "person",
-    id: personRecord?.id ?? "",
-    name: personRecord?.name ?? "",
-    key: getPersonCardKey(personRecord?.name ?? "", personRecord?.id),
-    label: personRecord?.name ?? "",
-  };
+    return {
+        kind: "person",
+        id: personRecord?.id ?? "",
+        name: personRecord?.name ?? "",
+        key: getPersonCardKey(personRecord?.name ?? "", personRecord?.id),
+        label: personRecord?.name ?? "",
+    };
 }
 
 function createMovieSearchEntity(movieRecord) {
-  const year = movieRecord?.year ?? getMovieRecordYear(movieRecord);
-  const title = movieRecord?.title ?? "";
-  return {
-    kind: "movie",
-    id: movieRecord?.id ?? "",
-    name: title,
-    year,
-    key: getMovieCardKey(title, year, movieRecord?.id),
-    label: formatMoviePathLabel(title, year),
-  };
+    const year = movieRecord?.year ?? getMovieRecordYear(movieRecord);
+    const title = movieRecord?.title ?? "";
+    return {
+        kind: "movie",
+        id: movieRecord?.id ?? "",
+        name: title,
+        year,
+        key: getMovieCardKey(title, year, movieRecord?.id),
+        label: formatMoviePathLabel(title, year),
+    };
 }
 
 function createPersonSearchEntityFromCredit(credit) {
-  const personName = credit?.name?.trim() ?? "";
-  return {
-    kind: "person",
-    id: credit?.id ?? "",
-    name: personName,
-    key: getPersonCardKey(personName, credit?.id),
-    label: personName,
-  };
+    const personName = credit?.name?.trim() ?? "";
+    return {
+        kind: "person",
+        id: credit?.id ?? "",
+        name: personName,
+        key: getPersonCardKey(personName, credit?.id),
+        label: personName,
+    };
 }
 
 function createMovieSearchEntityFromCredit(credit) {
-  const title = getMovieTitleFromCredit(credit);
-  const year = getMovieYearFromCredit(credit);
-  return {
-    kind: "movie",
-    id: credit?.id ?? "",
-    name: title,
-    year,
-    key: getMovieCardKey(title, year, credit?.id),
-    label: formatMoviePathLabel(title, year),
-  };
+    const title = getMovieTitleFromCredit(credit);
+    const year = getMovieYearFromCredit(credit);
+    return {
+        kind: "movie",
+        id: credit?.id ?? "",
+        name: title,
+        year,
+        key: getMovieCardKey(title, year, credit?.id),
+        label: formatMoviePathLabel(title, year),
+    };
 }
 
 function getSearchEntityPathNode(entity) {
-  return createPathNode(entity.kind, entity.name, entity.kind === "movie" ? entity.year : "");
+    return createPathNode(entity.kind, entity.name, entity.kind === "movie" ? entity.year : "");
 }
 
 function parseMoviePathLabel(label) {
-  const match = label.match(/^(.*) \((\d{4})\)$/);
-  if (!match) {
-    return createPathNode("movie", label, "");
-  }
+    const match = label.match(/^(.*) \((\d{4})\)$/);
+    if (!match) {
+        return createPathNode("movie", label, "");
+    }
 
-  return createPathNode("movie", match[1].trim(), match[2]);
+    return createPathNode("movie", match[1].trim(), match[2]);
 }
 
 function parseGenericExtensionSegments(value) {
-  return value
-    .split("|")
-    .map((segment) => segment.trim())
-    .filter(Boolean)
-    .map((segment) => decodeURIComponent(segment.replaceAll("+", "%20")))
-    .filter(Boolean);
+    return value
+        .split("|")
+        .map((segment) => segment.trim())
+        .filter(Boolean)
+        .map((segment) => decodeURIComponent(segment.replaceAll("+", "%20")))
+        .filter(Boolean);
 }
 
 function buildGenericExtensionPathNodes(rootKind, segments) {
-  if (!rootKind || segments.length === 0) {
-    return [];
-  }
+    if (!rootKind || segments.length === 0) {
+        return [];
+    }
 
-  const pathNodes = [
-    rootKind === "movie"
-      ? parseMoviePathLabel(segments[0])
-      : createPathNode("person", segments[0]),
-  ];
+    const pathNodes = [
+        rootKind === "movie"
+            ? parseMoviePathLabel(segments[0])
+            : createPathNode("person", segments[0]),
+    ];
 
-  let nextKind = rootKind === "person" ? "movie" : "person";
-  segments.slice(1).forEach((segment) => {
-    pathNodes.push(
-      nextKind === "movie"
-        ? parseMoviePathLabel(segment)
-        : createPathNode("person", segment),
-    );
-    nextKind = nextKind === "person" ? "movie" : "person";
-  });
+    let nextKind = rootKind === "person" ? "movie" : "person";
+    segments.slice(1).forEach((segment) => {
+        pathNodes.push(
+            nextKind === "movie"
+                ? parseMoviePathLabel(segment)
+                : createPathNode("person", segment),
+        );
+        nextKind = nextKind === "person" ? "movie" : "person";
+    });
 
-  return pathNodes;
+    return pathNodes;
 }
 
 function formatMoviePathLabel(name, year = "") {
-  return year ? `${name} (${year})` : name;
+    return year ? `${name} (${year})` : name;
 }
 
 function getPathNodeLabel(pathNode) {
-  if (pathNode.kind === "movie") {
-    return formatMoviePathLabel(pathNode.name, pathNode.year);
-  }
+    if (pathNode.kind === "movie") {
+        return formatMoviePathLabel(pathNode.name, pathNode.year);
+    }
 
-  return pathNode.name;
+    return pathNode.name;
 }
 
 function serializePathNode(pathNode) {
-  return getPathNodeLabel(pathNode).trim().replace(/\s+/g, "+");
+    return getPathNodeLabel(pathNode).trim().replace(/\s+/g, "+");
 }
 
 function serializeGenericExtensionPath(pathNodes) {
-  return pathNodes.map(serializePathNode).join("|");
+    return pathNodes.map(serializePathNode).join("|");
 }
 
 function buildGenericExtensionUrlFromPath(pathNodes) {
-  const entryOrigin = window.location.origin || "https://dcep93.github.io";
-  return `${entryOrigin}/etc/generic_extension/extensions/cinenerdle2.html?generic_extension=${serializeGenericExtensionPath(pathNodes)}`;
+    const entryOrigin = window.location.origin || "https://dcep93.github.io";
+    return `${entryOrigin}/etc/generic_extension/extensions/cinenerdle2.html?generic_extension=${serializeGenericExtensionPath(pathNodes)}`;
 }
 
 function getGenericExtensionUrl(kind, name, year = "") {
-  return buildGenericExtensionUrlFromPath([createPathNode(kind, name, year)]);
+    return buildGenericExtensionUrlFromPath([createPathNode(kind, name, year)]);
 }
 
 function openGenericExtensionPage(kind, name, year = "") {
-  return window.open(getGenericExtensionUrl(kind, name, year), "_blank");
+    return window.open(getGenericExtensionUrl(kind, name, year), "_blank");
 }
 
 function getMovieRecordYear(movieRecord) {
-  return (
-    movieRecord?.year ??
-    movieRecord?.rawTmdbMovie?.release_date?.slice(0, 4) ??
-    movieRecord?.rawTmdbMovieSearchResponse?.results?.find(
-      (candidate) => normalizeTitle(candidate.title ?? "") === normalizeTitle(movieRecord?.title ?? ""),
-    )?.release_date?.slice(0, 4) ??
-    ""
-  );
+    return (
+        movieRecord?.year ??
+        movieRecord?.rawTmdbMovie?.release_date?.slice(0, 4) ??
+        movieRecord?.rawTmdbMovieSearchResponse?.results?.find(
+            (candidate) => normalizeTitle(candidate.title ?? "") === normalizeTitle(movieRecord?.title ?? ""),
+        )?.release_date?.slice(0, 4) ??
+        ""
+    );
 }
 
 function getMoviePosterUrl(movieRecord) {
-  return getPosterUrl(
-    movieRecord?.rawTmdbMovie?.poster_path ??
-      movieRecord?.rawTmdbMovieSearchResponse?.results?.find(
-        (candidate) => normalizeTitle(candidate.title ?? "") === normalizeTitle(movieRecord?.title ?? ""),
-      )?.poster_path,
-  );
+    return getPosterUrl(
+        movieRecord?.rawTmdbMovie?.poster_path ??
+        movieRecord?.rawTmdbMovieSearchResponse?.results?.find(
+            (candidate) => normalizeTitle(candidate.title ?? "") === normalizeTitle(movieRecord?.title ?? ""),
+        )?.poster_path,
+    );
 }
 
 function getMovieCardKey(name, year = "", id = "") {
-  return `movie:${id || getFilmKey(name, year)}`;
+    return `movie:${id || getFilmKey(name, year)}`;
 }
 
 function getPersonCardKey(name, id = "") {
-  return `person:${id || normalizeName(name)}`;
+    return `person:${id || normalizeName(name)}`;
 }
 
 function getPathNodeFromCard(card) {
-  return createPathNode(card.kind, card.name, card.kind === "movie" ? card.year : "");
+    return createPathNode(card.kind, card.name, card.kind === "movie" ? card.year : "");
 }
 
 function matchesPathNode(card, pathNode) {
-  if (!card || !pathNode || card.kind !== pathNode.kind) {
-    return false;
-  }
+    if (!card || !pathNode || card.kind !== pathNode.kind) {
+        return false;
+    }
 
-  if (pathNode.kind === "movie") {
-    return (
-      normalizeTitle(card.name) === normalizeTitle(pathNode.name) &&
-      (!pathNode.year || card.year === pathNode.year)
-    );
-  }
+    if (pathNode.kind === "movie") {
+        return (
+            normalizeTitle(card.name) === normalizeTitle(pathNode.name) &&
+            (!pathNode.year || card.year === pathNode.year)
+        );
+    }
 
-  return normalizeName(card.name) === normalizeName(pathNode.name);
+    return normalizeName(card.name) === normalizeName(pathNode.name);
 }
 
 function getSelectedCard(row) {
-  return row?.cards?.find((card) => card.key === row.selectedCardKey) ?? null;
+    return row?.cards?.find((card) => card.key === row.selectedCardKey) ?? null;
 }
 
 function getVisibleGenericExtensionRows(rootRow) {
-  const rows = [];
-  let currentRow = rootRow;
+    const rows = [];
+    let currentRow = rootRow;
 
-  while (currentRow) {
-    rows.push(currentRow);
-    const selectedCard = getSelectedCard(currentRow);
-    currentRow = selectedCard?.childRow ?? null;
-  }
+    while (currentRow) {
+        rows.push(currentRow);
+        const selectedCard = getSelectedCard(currentRow);
+        currentRow = selectedCard?.childRow ?? null;
+    }
 
-  return rows;
+    return rows;
 }
 
 function collectSelectedPathNodes(rootRow) {
-  const pathNodes = [];
-  let currentRow = rootRow;
+    const pathNodes = [];
+    let currentRow = rootRow;
 
-  while (currentRow) {
-    const selectedCard = getSelectedCard(currentRow);
-    if (!selectedCard) {
-      break;
+    while (currentRow) {
+        const selectedCard = getSelectedCard(currentRow);
+        if (!selectedCard) {
+            break;
+        }
+
+        pathNodes.push(getPathNodeFromCard(selectedCard));
+        currentRow = selectedCard.childRow ?? null;
     }
 
-    pathNodes.push(getPathNodeFromCard(selectedCard));
-    currentRow = selectedCard.childRow ?? null;
-  }
-
-  return pathNodes;
+    return pathNodes;
 }
 
 function getGenericExtensionEntryUrl() {
-  const match = location.href.match(/[?&]generic_extension=([^&#]*)/);
-  return match?.[1]?.trim() ?? "";
+    const match = location.href.match(/[?&]generic_extension=([^&#]*)/);
+    return match?.[1]?.trim() ?? "";
 }
 
 function isGenericExtensionEntryPage() {
-  return (
-    window.location.pathname.endsWith("/cinenerdle2.html") ||
-    window.location.pathname.endsWith("/icon.png")
-  );
+    return (
+        window.location.pathname.endsWith("/cinenerdle2.html") ||
+        window.location.pathname.endsWith("/icon.png")
+    );
 }
 
 function updateGenericExtensionHistory(rootRow, mode = "push") {
-  const serializedPath = serializeGenericExtensionPath(collectSelectedPathNodes(rootRow));
-  const nextUrl = `${window.location.origin}${window.location.pathname}?generic_extension=${serializedPath}`;
+    const serializedPath = serializeGenericExtensionPath(collectSelectedPathNodes(rootRow));
+    const nextUrl = `${window.location.origin}${window.location.pathname}?generic_extension=${serializedPath}`;
 
-  if (mode === "replace") {
-    window.history.replaceState({}, "", nextUrl);
-    return;
-  }
+    if (mode === "replace") {
+        window.history.replaceState({}, "", nextUrl);
+        return;
+    }
 
-  window.history.pushState({}, "", nextUrl);
+    window.history.pushState({}, "", nextUrl);
 }
 
 function getGenericExtensionBookmarks() {
-  try {
-    const rawBookmarks = localStorage.getItem(
-      GENERIC_EXTENSION_BOOKMARKS_STORAGE_KEY,
-    );
-    if (!rawBookmarks) {
-      return [];
-    }
+    try {
+        const rawBookmarks = localStorage.getItem(
+            GENERIC_EXTENSION_BOOKMARKS_STORAGE_KEY,
+        );
+        if (!rawBookmarks) {
+            return [];
+        }
 
-    const parsedBookmarks = JSON.parse(rawBookmarks);
-    if (!Array.isArray(parsedBookmarks)) {
-      return [];
-    }
+        const parsedBookmarks = JSON.parse(rawBookmarks);
+        if (!Array.isArray(parsedBookmarks)) {
+            return [];
+        }
 
-    return parsedBookmarks.filter(
-      (bookmark) =>
-        bookmark &&
-        typeof bookmark.name === "string" &&
-        typeof bookmark.path === "string" &&
-        bookmark.name.trim() &&
-        bookmark.path.trim(),
-    );
-  } catch (error) {
-    console.error("cinenerdle2.getGenericExtensionBookmarks", error);
-    return [];
-  }
+        return parsedBookmarks.filter(
+            (bookmark) =>
+                bookmark &&
+                typeof bookmark.name === "string" &&
+                typeof bookmark.path === "string" &&
+                bookmark.name.trim() &&
+                bookmark.path.trim(),
+        );
+    } catch (error) {
+        console.error("cinenerdle2.getGenericExtensionBookmarks", error);
+        return [];
+    }
 }
 
 function saveGenericExtensionBookmarks(bookmarks) {
-  localStorage.setItem(
-    GENERIC_EXTENSION_BOOKMARKS_STORAGE_KEY,
-    JSON.stringify(bookmarks),
-  );
+    localStorage.setItem(
+        GENERIC_EXTENSION_BOOKMARKS_STORAGE_KEY,
+        JSON.stringify(bookmarks),
+    );
 }
 
 function getCurrentGenericExtensionBookmarkName(rootRow) {
-  return collectSelectedPathNodes(rootRow)
-    .map((pathNode) => getPathNodeLabel(pathNode))
-    .join(" -> ");
+    return collectSelectedPathNodes(rootRow)
+        .map((pathNode) => getPathNodeLabel(pathNode))
+        .join(" -> ");
 }
 
 function saveCurrentViewAsBookmark(rootRow) {
-  const defaultBookmarkName = getCurrentGenericExtensionBookmarkName(rootRow);
-  const promptedName = window.prompt("Bookmark name", defaultBookmarkName);
-  const bookmarkName = promptedName?.trim();
-  if (!bookmarkName) {
-    return;
-  }
+    const defaultBookmarkName = getCurrentGenericExtensionBookmarkName(rootRow);
+    const promptedName = window.prompt("Bookmark name", defaultBookmarkName);
+    const bookmarkName = promptedName?.trim();
+    if (!bookmarkName) {
+        return;
+    }
 
-  const bookmarkPath = serializeGenericExtensionPath(collectSelectedPathNodes(rootRow));
-  const existingBookmarks = getGenericExtensionBookmarks().filter(
-    (bookmark) => bookmark.name !== bookmarkName,
-  );
-  existingBookmarks.unshift({
-    name: bookmarkName,
-    path: bookmarkPath,
-    savedAt: new Date().toISOString(),
-  });
-  saveGenericExtensionBookmarks(existingBookmarks);
+    const bookmarkPath = serializeGenericExtensionPath(collectSelectedPathNodes(rootRow));
+    const existingBookmarks = getGenericExtensionBookmarks().filter(
+        (bookmark) => bookmark.name !== bookmarkName,
+    );
+    existingBookmarks.unshift({
+        name: bookmarkName,
+        path: bookmarkPath,
+        savedAt: new Date().toISOString(),
+    });
+    saveGenericExtensionBookmarks(existingBookmarks);
 }
 
 async function searchLocalEntities(query, limit = 8) {
-  const normalizedQuery = normalizeTitle(query);
-  if (!normalizedQuery) {
-    return [];
-  }
-
-  const [peopleRecords, filmRecords] = await Promise.all([
-    getAllPersonRecords(),
-    getAllFilmRecords(),
-  ]);
-  const suggestions = [];
-  const seenKeys = new Set();
-
-  peopleRecords.forEach((personRecord) => {
-    const personName = personRecord?.name ?? "";
-    const normalizedName = normalizeName(personName);
-    if (!normalizedName.includes(normalizedQuery)) {
-      return;
+    const normalizedQuery = normalizeTitle(query);
+    if (!normalizedQuery) {
+        return [];
     }
 
-    const entity = createPersonSearchEntity(personRecord);
-    if (seenKeys.has(entity.key)) {
-      return;
-    }
+    const [peopleRecords, filmRecords] = await Promise.all([
+        getAllPersonRecords(),
+        getAllFilmRecords(),
+    ]);
+    const suggestions = [];
+    const seenKeys = new Set();
 
-    suggestions.push({
-      ...entity,
-      score: normalizedName.startsWith(normalizedQuery) ? 0 : 1,
+    peopleRecords.forEach((personRecord) => {
+        const personName = personRecord?.name ?? "";
+        const normalizedName = normalizeName(personName);
+        if (!normalizedName.includes(normalizedQuery)) {
+            return;
+        }
+
+        const entity = createPersonSearchEntity(personRecord);
+        if (seenKeys.has(entity.key)) {
+            return;
+        }
+
+        suggestions.push({
+            ...entity,
+            score: normalizedName.startsWith(normalizedQuery) ? 0 : 1,
+        });
+        seenKeys.add(entity.key);
     });
-    seenKeys.add(entity.key);
-  });
 
-  filmRecords.forEach((filmRecord) => {
-    const movieTitle = filmRecord?.title ?? "";
-    const normalizedMovieTitle = normalizeTitle(movieTitle);
-    if (!normalizedMovieTitle.includes(normalizedQuery)) {
-      return;
-    }
+    filmRecords.forEach((filmRecord) => {
+        const movieTitle = filmRecord?.title ?? "";
+        const normalizedMovieTitle = normalizeTitle(movieTitle);
+        if (!normalizedMovieTitle.includes(normalizedQuery)) {
+            return;
+        }
 
-    const entity = createMovieSearchEntity(filmRecord);
-    if (seenKeys.has(entity.key)) {
-      return;
-    }
+        const entity = createMovieSearchEntity(filmRecord);
+        if (seenKeys.has(entity.key)) {
+            return;
+        }
 
-    suggestions.push({
-      ...entity,
-      score: normalizedMovieTitle.startsWith(normalizedQuery) ? 0 : 1,
+        suggestions.push({
+            ...entity,
+            score: normalizedMovieTitle.startsWith(normalizedQuery) ? 0 : 1,
+        });
+        seenKeys.add(entity.key);
     });
-    seenKeys.add(entity.key);
-  });
 
-  return suggestions
-    .sort((left, right) => {
-      if (left.score !== right.score) {
-        return left.score - right.score;
-      }
+    return suggestions
+        .sort((left, right) => {
+            if (left.score !== right.score) {
+                return left.score - right.score;
+            }
 
-      return left.label.localeCompare(right.label);
-    })
-    .slice(0, limit);
+            return left.label.localeCompare(right.label);
+        })
+        .slice(0, limit);
 }
 
 function createNeighborEntityMap(entities) {
-  const neighborsByKey = new Map();
-  entities.forEach((entity) => {
-    if (!neighborsByKey.has(entity.key)) {
-      neighborsByKey.set(entity.key, entity);
-    }
-  });
-  return Array.from(neighborsByKey.values());
+    const neighborsByKey = new Map();
+    entities.forEach((entity) => {
+        if (!neighborsByKey.has(entity.key)) {
+            neighborsByKey.set(entity.key, entity);
+        }
+    });
+    return Array.from(neighborsByKey.values());
 }
 
 async function getLocalNeighborsForEntity(entity, cache) {
-  if (cache.has(entity.key)) {
-    return cache.get(entity.key);
-  }
-
-  let neighbors = [];
-
-  if (entity.kind === "person") {
-    const personRecord =
-      (entity.id ? await getPersonRecordById(entity.id) : null) ??
-      (entity.name ? await getPersonRecordByName(entity.name) : null);
-
-    if (personRecord) {
-      neighbors = createNeighborEntityMap([
-        ...getUniqueSortedTmdbMovieCredits(personRecord)
-          .map((credit) => createMovieSearchEntityFromCredit(credit)),
-        ...(personRecord.domConnections ?? []).map((connection) => ({
-          kind: "movie",
-          id: "",
-          name: connection.title,
-          year: connection.year,
-          key: getMovieCardKey(connection.title, connection.year),
-          label: formatMoviePathLabel(connection.title, connection.year),
-        })),
-      ]);
+    if (cache.has(entity.key)) {
+        return cache.get(entity.key);
     }
-  } else if (entity.kind === "movie") {
-    const movieRecord =
-      (entity.id ? await getFilmRecordById(entity.id) : null) ??
-      (entity.name ? await getFilmRecordByTitleAndYear(entity.name, entity.year) : null);
 
-    if (movieRecord) {
-      const credits = movieRecord.rawTmdbMovieCreditsResponse ?? {};
-      const creditPeople = [...(credits.cast ?? []), ...(credits.crew ?? [])];
-      const tmdbPeople = creditPeople
-        .map((credit) => createPersonSearchEntityFromCredit(credit));
-      const cinenerdlePeople = Object.values(movieRecord?.domSnapshot?.peopleByRole ?? {})
-        .flat()
-        .map((personName) => ({
-          kind: "person",
-          id: "",
-          name: personName,
-          key: getPersonCardKey(personName),
-          label: personName,
-        }));
+    let neighbors = [];
 
-      neighbors = createNeighborEntityMap([...tmdbPeople, ...cinenerdlePeople]);
+    if (entity.kind === "person") {
+        const personRecord =
+            (entity.id ? await getPersonRecordById(entity.id) : null) ??
+            (entity.name ? await getPersonRecordByName(entity.name) : null);
+
+        if (personRecord) {
+            neighbors = createNeighborEntityMap([
+                ...getUniqueSortedTmdbMovieCredits(personRecord)
+                    .map((credit) => createMovieSearchEntityFromCredit(credit)),
+                ...(personRecord.domConnections ?? []).map((connection) => ({
+                    kind: "movie",
+                    id: "",
+                    name: connection.title,
+                    year: connection.year,
+                    key: getMovieCardKey(connection.title, connection.year),
+                    label: formatMoviePathLabel(connection.title, connection.year),
+                })),
+            ]);
+        }
+    } else if (entity.kind === "movie") {
+        const movieRecord =
+            (entity.id ? await getFilmRecordById(entity.id) : null) ??
+            (entity.name ? await getFilmRecordByTitleAndYear(entity.name, entity.year) : null);
+
+        if (movieRecord) {
+            const credits = movieRecord.rawTmdbMovieCreditsResponse ?? {};
+            const creditPeople = [...(credits.cast ?? []), ...(credits.crew ?? [])];
+            const tmdbPeople = creditPeople
+                .map((credit) => createPersonSearchEntityFromCredit(credit));
+            const cinenerdlePeople = Object.values(movieRecord?.domSnapshot?.peopleByRole ?? {})
+                .flat()
+                .map((personName) => ({
+                    kind: "person",
+                    id: "",
+                    name: personName,
+                    key: getPersonCardKey(personName),
+                    label: personName,
+                }));
+
+            neighbors = createNeighborEntityMap([...tmdbPeople, ...cinenerdlePeople]);
+        }
     }
-  }
 
-  cache.set(entity.key, neighbors);
-  return neighbors;
+    cache.set(entity.key, neighbors);
+    return neighbors;
 }
 
 function reconstructBidirectionalPath(meetingKey, startParents, endParents, entityByKey) {
-  const startKeys = [];
-  let currentKey = meetingKey;
-  while (currentKey) {
-    startKeys.push(currentKey);
-    currentKey = startParents.get(currentKey) ?? null;
-  }
-  startKeys.reverse();
+    const startKeys = [];
+    let currentKey = meetingKey;
+    while (currentKey) {
+        startKeys.push(currentKey);
+        currentKey = startParents.get(currentKey) ?? null;
+    }
+    startKeys.reverse();
 
-  const endKeys = [];
-  currentKey = endParents.get(meetingKey) ?? null;
-  while (currentKey) {
-    endKeys.push(currentKey);
-    currentKey = endParents.get(currentKey) ?? null;
-  }
+    const endKeys = [];
+    currentKey = endParents.get(meetingKey) ?? null;
+    while (currentKey) {
+        endKeys.push(currentKey);
+        currentKey = endParents.get(currentKey) ?? null;
+    }
 
-  return [...startKeys, ...endKeys].map((key) => entityByKey.get(key));
+    return [...startKeys, ...endKeys].map((key) => entityByKey.get(key));
 }
 
 async function findLocalConnectionPath(startEntity, endEntity, timeoutMs = 5000) {
-  if (!startEntity || !endEntity) {
-    return { path: null, timedOut: false, nodesRead: 0 };
-  }
-
-  if (startEntity.key === endEntity.key) {
-    return { path: [startEntity], timedOut: false, nodesRead: 1 };
-  }
-
-  const deadline = Date.now() + timeoutMs;
-  const neighborCache = new Map();
-  const entityByKey = new Map([
-    [startEntity.key, startEntity],
-    [endEntity.key, endEntity],
-  ]);
-  const startParents = new Map([[startEntity.key, null]]);
-  const endParents = new Map([[endEntity.key, null]]);
-  let startFrontier = [startEntity];
-  let endFrontier = [endEntity];
-  let nodesRead = 0;
-
-  while (startFrontier.length > 0 && endFrontier.length > 0) {
-    if (Date.now() > deadline) {
-      return { path: null, timedOut: true, nodesRead };
+    if (!startEntity || !endEntity) {
+        return { path: null, timedOut: false, nodesRead: 0 };
     }
 
-    const expandStartSide = startFrontier.length <= endFrontier.length;
-    const frontier = expandStartSide ? startFrontier : endFrontier;
-    const ownParents = expandStartSide ? startParents : endParents;
-    const otherParents = expandStartSide ? endParents : startParents;
-    const nextFrontier = [];
+    if (startEntity.key === endEntity.key) {
+        return { path: [startEntity], timedOut: false, nodesRead: 1 };
+    }
 
-    for (const entity of frontier) {
-      if (Date.now() > deadline) {
-        return { path: null, timedOut: true, nodesRead };
-      }
+    const deadline = Date.now() + timeoutMs;
+    const neighborCache = new Map();
+    const entityByKey = new Map([
+        [startEntity.key, startEntity],
+        [endEntity.key, endEntity],
+    ]);
+    const startParents = new Map([[startEntity.key, null]]);
+    const endParents = new Map([[endEntity.key, null]]);
+    let startFrontier = [startEntity];
+    let endFrontier = [endEntity];
+    let nodesRead = 0;
 
-      nodesRead += 1;
-      const neighbors = await getLocalNeighborsForEntity(entity, neighborCache);
-      for (const neighbor of neighbors) {
-        if (!neighbor?.key || ownParents.has(neighbor.key)) {
-          continue;
+    while (startFrontier.length > 0 && endFrontier.length > 0) {
+        if (Date.now() > deadline) {
+            return { path: null, timedOut: true, nodesRead };
         }
 
-        ownParents.set(neighbor.key, entity.key);
-        entityByKey.set(neighbor.key, neighbor);
+        const expandStartSide = startFrontier.length <= endFrontier.length;
+        const frontier = expandStartSide ? startFrontier : endFrontier;
+        const ownParents = expandStartSide ? startParents : endParents;
+        const otherParents = expandStartSide ? endParents : startParents;
+        const nextFrontier = [];
 
-        if (otherParents.has(neighbor.key)) {
-          return {
-            path: reconstructBidirectionalPath(
-              neighbor.key,
-              startParents,
-              endParents,
-              entityByKey,
-            ),
-            timedOut: false,
-            nodesRead,
-          };
+        for (const entity of frontier) {
+            if (Date.now() > deadline) {
+                return { path: null, timedOut: true, nodesRead };
+            }
+
+            nodesRead += 1;
+            const neighbors = await getLocalNeighborsForEntity(entity, neighborCache);
+            for (const neighbor of neighbors) {
+                if (!neighbor?.key || ownParents.has(neighbor.key)) {
+                    continue;
+                }
+
+                ownParents.set(neighbor.key, entity.key);
+                entityByKey.set(neighbor.key, neighbor);
+
+                if (otherParents.has(neighbor.key)) {
+                    return {
+                        path: reconstructBidirectionalPath(
+                            neighbor.key,
+                            startParents,
+                            endParents,
+                            entityByKey,
+                        ),
+                        timedOut: false,
+                        nodesRead,
+                    };
+                }
+
+                nextFrontier.push(neighbor);
+            }
         }
 
-        nextFrontier.push(neighbor);
-      }
+        if (expandStartSide) {
+            startFrontier = nextFrontier;
+        } else {
+            endFrontier = nextFrontier;
+        }
     }
 
-    if (expandStartSide) {
-      startFrontier = nextFrontier;
-    } else {
-      endFrontier = nextFrontier;
-    }
-  }
-
-  return { path: null, timedOut: false, nodesRead };
+    return { path: null, timedOut: false, nodesRead };
 }
 
 function createBookmarkActionButton(label, onClick, tone = "neutral") {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.textContent = label;
-  button.style.border = `1px solid ${tone === "danger" ? "#5b2a2a" : "#334155"}`;
-  button.style.borderRadius = "999px";
-  button.style.padding = "9px 14px";
-  button.style.fontSize = "13px";
-  button.style.fontWeight = "600";
-  button.style.cursor = "pointer";
-  button.style.whiteSpace = "nowrap";
-  button.style.background = tone === "danger"
-    ? "linear-gradient(180deg, #412020 0%, #321818 100%)"
-    : "linear-gradient(180deg, #1c2940 0%, #162237 100%)";
-  button.style.color = tone === "danger" ? "#fecaca" : "#e2e8f0";
-  button.style.boxShadow = "inset 0 1px 0 rgba(255, 255, 255, 0.05)";
-  button.addEventListener("click", onClick);
-  return button;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.style.border = `1px solid ${tone === "danger" ? "#5b2a2a" : "#334155"}`;
+    button.style.borderRadius = "999px";
+    button.style.padding = "9px 14px";
+    button.style.fontSize = "13px";
+    button.style.fontWeight = "600";
+    button.style.cursor = "pointer";
+    button.style.whiteSpace = "nowrap";
+    button.style.background = tone === "danger"
+        ? "linear-gradient(180deg, #412020 0%, #321818 100%)"
+        : "linear-gradient(180deg, #1c2940 0%, #162237 100%)";
+    button.style.color = tone === "danger" ? "#fecaca" : "#e2e8f0";
+    button.style.boxShadow = "inset 0 1px 0 rgba(255, 255, 255, 0.05)";
+    button.addEventListener("click", onClick);
+    return button;
 }
 
 function applyHorizontalScrollableRowStyle(element, paddingBottom = "8px") {
-  element.style.display = "flex";
-  element.style.flexWrap = "nowrap";
-  element.style.width = getGenericExtensionTrackWidth();
-  element.style.maxWidth = getGenericExtensionTrackWidth();
-  element.style.minWidth = getGenericExtensionTrackWidth();
-  element.style.overflowX = "auto";
-  element.style.overflowY = "visible";
-  element.style.paddingBottom = paddingBottom;
-  element.style.boxSizing = "border-box";
+    element.style.display = "flex";
+    element.style.flexWrap = "nowrap";
+    element.style.width = getGenericExtensionTrackWidth();
+    element.style.maxWidth = getGenericExtensionTrackWidth();
+    element.style.minWidth = getGenericExtensionTrackWidth();
+    element.style.overflowX = "auto";
+    element.style.overflowY = "visible";
+    element.style.paddingBottom = paddingBottom;
+    element.style.boxSizing = "border-box";
 }
 
 function restoreGenericExtensionSearchInputFocus() {
-  if (!genericExtensionSearchState.shouldFocusInput) {
-    return;
-  }
-
-  window.requestAnimationFrame(() => {
-    const input = document.querySelector('[data-cinenerdle2-search-input="true"]');
-    if (!(input instanceof HTMLInputElement)) {
-      return;
+    if (!genericExtensionSearchState.shouldFocusInput) {
+        return;
     }
 
-    input.focus({ preventScroll: true });
-    const selectionStart =
-      typeof genericExtensionSearchState.selectionStart === "number"
-        ? genericExtensionSearchState.selectionStart
-        : input.value.length;
-    const selectionEnd =
-      typeof genericExtensionSearchState.selectionEnd === "number"
-        ? genericExtensionSearchState.selectionEnd
-        : selectionStart;
-    input.setSelectionRange(selectionStart, selectionEnd);
-  });
+    window.requestAnimationFrame(() => {
+        const input = document.querySelector('[data-cinenerdle2-search-input="true"]');
+        if (!(input instanceof HTMLInputElement)) {
+            return;
+        }
+
+        input.focus({ preventScroll: true });
+        const selectionStart =
+            typeof genericExtensionSearchState.selectionStart === "number"
+                ? genericExtensionSearchState.selectionStart
+                : input.value.length;
+        const selectionEnd =
+            typeof genericExtensionSearchState.selectionEnd === "number"
+                ? genericExtensionSearchState.selectionEnd
+                : selectionStart;
+        input.setSelectionRange(selectionStart, selectionEnd);
+    });
 }
 
 function resetGenericExtensionSearchState() {
-  genericExtensionSearchState.query = "";
-  genericExtensionSearchState.suggestions = [];
-  genericExtensionSearchState.targetSelection = null;
-  genericExtensionSearchState.status = "";
-  genericExtensionSearchState.resultPath = null;
-  genericExtensionSearchState.searching = false;
-  genericExtensionSearchState.shouldFocusInput = false;
-  genericExtensionSearchState.selectionStart = null;
-  genericExtensionSearchState.selectionEnd = null;
+    genericExtensionSearchState.query = "";
+    genericExtensionSearchState.suggestions = [];
+    genericExtensionSearchState.targetSelection = null;
+    genericExtensionSearchState.status = "";
+    genericExtensionSearchState.resultPath = null;
+    genericExtensionSearchState.searching = false;
+    genericExtensionSearchState.shouldFocusInput = false;
+    genericExtensionSearchState.selectionStart = null;
+    genericExtensionSearchState.selectionEnd = null;
 }
 
 async function updateGenericExtensionSearchSuggestions(rootRow, query) {
-  genericExtensionSearchState.query = query;
-  genericExtensionSearchState.targetSelection = null;
-  genericExtensionSearchState.resultPath = null;
-  genericExtensionSearchState.status = "";
+    genericExtensionSearchState.query = query;
+    genericExtensionSearchState.targetSelection = null;
+    genericExtensionSearchState.resultPath = null;
+    genericExtensionSearchState.status = "";
 
-  if (!query.trim()) {
-    genericExtensionSearchState.suggestions = [];
+    if (!query.trim()) {
+        genericExtensionSearchState.suggestions = [];
+        renderGenericExtensionStack(rootRow);
+        return;
+    }
+
+    const suggestions = await searchLocalEntities(query, 8);
+    if (genericExtensionSearchState.query !== query) {
+        return;
+    }
+
+    genericExtensionSearchState.suggestions = suggestions;
     renderGenericExtensionStack(rootRow);
-    return;
-  }
-
-  const suggestions = await searchLocalEntities(query, 8);
-  if (genericExtensionSearchState.query !== query) {
-    return;
-  }
-
-  genericExtensionSearchState.suggestions = suggestions;
-  renderGenericExtensionStack(rootRow);
 }
 
 function selectGenericExtensionSearchSuggestion(rootRow, suggestion) {
-  genericExtensionSearchState.targetSelection = suggestion;
-  genericExtensionSearchState.query = suggestion.label;
-  genericExtensionSearchState.suggestions = [];
-  genericExtensionSearchState.resultPath = null;
-  genericExtensionSearchState.status = "";
-  genericExtensionSearchState.shouldFocusInput = false;
-  genericExtensionSearchState.selectionStart = null;
-  genericExtensionSearchState.selectionEnd = null;
-  renderGenericExtensionStack(rootRow);
+    genericExtensionSearchState.targetSelection = suggestion;
+    genericExtensionSearchState.query = suggestion.label;
+    genericExtensionSearchState.suggestions = [];
+    genericExtensionSearchState.resultPath = null;
+    genericExtensionSearchState.status = "";
+    genericExtensionSearchState.shouldFocusInput = false;
+    genericExtensionSearchState.selectionStart = null;
+    genericExtensionSearchState.selectionEnd = null;
+    renderGenericExtensionStack(rootRow);
 }
 
 function getSearchEntityIcon(kind) {
-  return kind === "movie" ? "🎬" : "👤";
+    return kind === "movie" ? "🎬" : "👤";
 }
 
 function createAutocompleteField(rootRow, placeholder) {
-  const fieldWrap = document.createElement("div");
-  fieldWrap.style.position = "relative";
-  fieldWrap.style.zIndex = "5";
-  fieldWrap.style.display = "flex";
-  fieldWrap.style.flexDirection = "column";
-  fieldWrap.style.gap = "8px";
-  fieldWrap.style.minWidth = "260px";
-  fieldWrap.style.flex = "0 0 320px";
+    const fieldWrap = document.createElement("div");
+    fieldWrap.style.position = "relative";
+    fieldWrap.style.zIndex = "5";
+    fieldWrap.style.display = "flex";
+    fieldWrap.style.flexDirection = "column";
+    fieldWrap.style.gap = "8px";
+    fieldWrap.style.minWidth = "260px";
+    fieldWrap.style.flex = "0 0 320px";
 
-  const inputShell = document.createElement("div");
-  inputShell.style.display = "flex";
-  inputShell.style.alignItems = "center";
-  inputShell.style.gap = "10px";
-  inputShell.style.padding = "0 12px";
-  inputShell.style.borderRadius = "12px";
-  inputShell.style.border = "1px solid #334155";
-  inputShell.style.backgroundColor = "#0f172a";
+    const inputShell = document.createElement("div");
+    inputShell.style.display = "flex";
+    inputShell.style.alignItems = "center";
+    inputShell.style.gap = "10px";
+    inputShell.style.padding = "0 12px";
+    inputShell.style.borderRadius = "12px";
+    inputShell.style.border = "1px solid #334155";
+    inputShell.style.backgroundColor = "#0f172a";
 
-  const inputIcon = document.createElement("div");
-  inputIcon.textContent = genericExtensionSearchState.targetSelection
-    ? getSearchEntityIcon(genericExtensionSearchState.targetSelection.kind)
-    : "";
-  inputIcon.style.flex = "0 0 auto";
-  inputIcon.style.fontSize = "16px";
-  inputIcon.style.width = "18px";
-  inputIcon.style.textAlign = "center";
-  inputShell.appendChild(inputIcon);
+    const inputIcon = document.createElement("div");
+    inputIcon.textContent = genericExtensionSearchState.targetSelection
+        ? getSearchEntityIcon(genericExtensionSearchState.targetSelection.kind)
+        : "";
+    inputIcon.style.flex = "0 0 auto";
+    inputIcon.style.fontSize = "16px";
+    inputIcon.style.width = "18px";
+    inputIcon.style.textAlign = "center";
+    inputShell.appendChild(inputIcon);
 
-  const input = document.createElement("input");
-  input.type = "text";
-  input.dataset.cinenerdle2SearchInput = "true";
-  input.value = genericExtensionSearchState.query;
-  input.placeholder = placeholder;
-  input.style.flex = "1 1 auto";
-  input.style.minWidth = "0";
-  input.style.height = "44px";
-  input.style.padding = "0";
-  input.style.border = "0";
-  input.style.outline = "none";
-  input.style.backgroundColor = "transparent";
-  input.style.color = "#f8fafc";
-  input.style.fontSize = "14px";
-  input.addEventListener("input", (event) => {
-    genericExtensionSearchState.shouldFocusInput = true;
-    genericExtensionSearchState.selectionStart = event.target.selectionStart;
-    genericExtensionSearchState.selectionEnd = event.target.selectionEnd;
-    updateGenericExtensionSearchSuggestions(rootRow, event.target.value).catch(
-      (error) => {
-        console.error("cinenerdle2.updateGenericExtensionSearchSuggestions", error);
-        alert(error.message);
-      },
-    );
-  });
-  inputShell.appendChild(input);
-  fieldWrap.appendChild(inputShell);
-
-  const suggestions = genericExtensionSearchState.suggestions;
-  if (suggestions.length > 0) {
-    const suggestionsWrap = document.createElement("div");
-    suggestionsWrap.style.position = "absolute";
-    suggestionsWrap.style.top = "calc(100% + 6px)";
-    suggestionsWrap.style.left = "0";
-    suggestionsWrap.style.right = "0";
-    suggestionsWrap.style.zIndex = "20";
-    suggestionsWrap.style.display = "flex";
-    suggestionsWrap.style.flexDirection = "column";
-    suggestionsWrap.style.gap = "6px";
-    suggestionsWrap.style.maxHeight = "180px";
-    suggestionsWrap.style.overflowY = "auto";
-    suggestionsWrap.style.padding = "8px";
-    suggestionsWrap.style.border = "1px solid #243041";
-    suggestionsWrap.style.borderRadius = "14px";
-    suggestionsWrap.style.backgroundColor = "#0f172a";
-    suggestionsWrap.style.boxShadow = "0 18px 40px rgba(0, 0, 0, 0.35)";
-
-    suggestions.forEach((suggestion) => {
-      const suggestionButton = document.createElement("button");
-      suggestionButton.type = "button";
-      suggestionButton.style.textAlign = "left";
-      suggestionButton.style.padding = "8px 10px";
-      suggestionButton.style.borderRadius = "10px";
-      suggestionButton.style.border = "1px solid #243041";
-      suggestionButton.style.backgroundColor = "#111827";
-      suggestionButton.style.color = "#e2e8f0";
-      suggestionButton.style.cursor = "pointer";
-
-      const suggestionContent = document.createElement("div");
-      suggestionContent.style.display = "flex";
-      suggestionContent.style.alignItems = "center";
-      suggestionContent.style.gap = "8px";
-
-      const suggestionIcon = document.createElement("div");
-      suggestionIcon.textContent = getSearchEntityIcon(suggestion.kind);
-      suggestionContent.appendChild(suggestionIcon);
-
-      const suggestionLabel = document.createElement("div");
-      suggestionLabel.textContent = suggestion.label;
-      suggestionContent.appendChild(suggestionLabel);
-
-      suggestionButton.appendChild(suggestionContent);
-      suggestionButton.addEventListener("click", () => {
-        selectGenericExtensionSearchSuggestion(rootRow, suggestion);
-      });
-      suggestionsWrap.appendChild(suggestionButton);
+    const input = document.createElement("input");
+    input.type = "text";
+    input.dataset.cinenerdle2SearchInput = "true";
+    input.value = genericExtensionSearchState.query;
+    input.placeholder = placeholder;
+    input.style.flex = "1 1 auto";
+    input.style.minWidth = "0";
+    input.style.height = "44px";
+    input.style.padding = "0";
+    input.style.border = "0";
+    input.style.outline = "none";
+    input.style.backgroundColor = "transparent";
+    input.style.color = "#f8fafc";
+    input.style.fontSize = "14px";
+    input.addEventListener("input", (event) => {
+        genericExtensionSearchState.shouldFocusInput = true;
+        genericExtensionSearchState.selectionStart = event.target.selectionStart;
+        genericExtensionSearchState.selectionEnd = event.target.selectionEnd;
+        updateGenericExtensionSearchSuggestions(rootRow, event.target.value).catch(
+            (error) => {
+                console.error("cinenerdle2.updateGenericExtensionSearchSuggestions", error);
+                alert(error.message);
+            },
+        );
     });
+    inputShell.appendChild(input);
+    fieldWrap.appendChild(inputShell);
 
-    fieldWrap.appendChild(suggestionsWrap);
-  }
+    const suggestions = genericExtensionSearchState.suggestions;
+    if (suggestions.length > 0) {
+        const suggestionsWrap = document.createElement("div");
+        suggestionsWrap.style.position = "absolute";
+        suggestionsWrap.style.top = "calc(100% + 6px)";
+        suggestionsWrap.style.left = "0";
+        suggestionsWrap.style.right = "0";
+        suggestionsWrap.style.zIndex = "20";
+        suggestionsWrap.style.display = "flex";
+        suggestionsWrap.style.flexDirection = "column";
+        suggestionsWrap.style.gap = "6px";
+        suggestionsWrap.style.maxHeight = "180px";
+        suggestionsWrap.style.overflowY = "auto";
+        suggestionsWrap.style.padding = "8px";
+        suggestionsWrap.style.border = "1px solid #243041";
+        suggestionsWrap.style.borderRadius = "14px";
+        suggestionsWrap.style.backgroundColor = "#0f172a";
+        suggestionsWrap.style.boxShadow = "0 18px 40px rgba(0, 0, 0, 0.35)";
 
-  return fieldWrap;
+        suggestions.forEach((suggestion) => {
+            const suggestionButton = document.createElement("button");
+            suggestionButton.type = "button";
+            suggestionButton.style.textAlign = "left";
+            suggestionButton.style.padding = "8px 10px";
+            suggestionButton.style.borderRadius = "10px";
+            suggestionButton.style.border = "1px solid #243041";
+            suggestionButton.style.backgroundColor = "#111827";
+            suggestionButton.style.color = "#e2e8f0";
+            suggestionButton.style.cursor = "pointer";
+
+            const suggestionContent = document.createElement("div");
+            suggestionContent.style.display = "flex";
+            suggestionContent.style.alignItems = "center";
+            suggestionContent.style.gap = "8px";
+
+            const suggestionIcon = document.createElement("div");
+            suggestionIcon.textContent = getSearchEntityIcon(suggestion.kind);
+            suggestionContent.appendChild(suggestionIcon);
+
+            const suggestionLabel = document.createElement("div");
+            suggestionLabel.textContent = suggestion.label;
+            suggestionContent.appendChild(suggestionLabel);
+
+            suggestionButton.appendChild(suggestionContent);
+            suggestionButton.addEventListener("click", () => {
+                selectGenericExtensionSearchSuggestion(rootRow, suggestion);
+            });
+            suggestionsWrap.appendChild(suggestionButton);
+        });
+
+        fieldWrap.appendChild(suggestionsWrap);
+    }
+
+    return fieldWrap;
 }
 
 function loadGenericExtensionPath(pathNodes) {
-  const nextUrl = `${window.location.origin}${window.location.pathname}?generic_extension=${serializeGenericExtensionPath(pathNodes)}`;
-  window.history.pushState({}, "", nextUrl);
-  maybeShowGenericExtensionEntry("replace").catch((error) => {
-    console.error("cinenerdle2.loadGenericExtensionPath", error);
-    alert(error.message);
-  });
+    const nextUrl = `${window.location.origin}${window.location.pathname}?generic_extension=${serializeGenericExtensionPath(pathNodes)}`;
+    window.history.pushState({}, "", nextUrl);
+    maybeShowGenericExtensionEntry("replace").catch((error) => {
+        console.error("cinenerdle2.loadGenericExtensionPath", error);
+        alert(error.message);
+    });
 }
 
 function getCurrentSearchSourceEntity(rootRow) {
-  let currentRow = rootRow;
-  let selectedCard = getSelectedCard(currentRow);
-  while (currentRow && selectedCard?.childRow) {
-    const childSelectedCard = getSelectedCard(selectedCard.childRow);
-    if (!childSelectedCard) {
-      break;
+    let currentRow = rootRow;
+    let selectedCard = getSelectedCard(currentRow);
+    while (currentRow && selectedCard?.childRow) {
+        const childSelectedCard = getSelectedCard(selectedCard.childRow);
+        if (!childSelectedCard) {
+            break;
+        }
+
+        currentRow = selectedCard.childRow;
+        selectedCard = childSelectedCard;
     }
 
-    currentRow = selectedCard.childRow;
-    selectedCard = childSelectedCard;
-  }
+    if (!selectedCard) {
+        return null;
+    }
 
-  if (!selectedCard) {
-    return null;
-  }
-
-  return selectedCard.kind === "movie"
-    ? {
-        kind: "movie",
-        id: selectedCard.id ?? "",
-        name: selectedCard.name ?? "",
-        year: selectedCard.year ?? "",
-        key: selectedCard.key ?? getMovieCardKey(selectedCard.name ?? "", selectedCard.year ?? ""),
-        label: formatMoviePathLabel(selectedCard.name ?? "", selectedCard.year ?? ""),
-      }
-    : {
-        kind: "person",
-        id: selectedCard.id ?? "",
-        name: selectedCard.name ?? "",
-        key: selectedCard.key ?? getPersonCardKey(selectedCard.name ?? ""),
-        label: selectedCard.name ?? "",
-      };
+    return selectedCard.kind === "movie"
+        ? {
+            kind: "movie",
+            id: selectedCard.id ?? "",
+            name: selectedCard.name ?? "",
+            year: selectedCard.year ?? "",
+            key: selectedCard.key ?? getMovieCardKey(selectedCard.name ?? "", selectedCard.year ?? ""),
+            label: formatMoviePathLabel(selectedCard.name ?? "", selectedCard.year ?? ""),
+        }
+        : {
+            kind: "person",
+            id: selectedCard.id ?? "",
+            name: selectedCard.name ?? "",
+            key: selectedCard.key ?? getPersonCardKey(selectedCard.name ?? ""),
+            label: selectedCard.name ?? "",
+        };
 }
 
 async function connectGenericExtensionSearchEndpoints(rootRow) {
-  const sourceSelection = getCurrentSearchSourceEntity(rootRow);
-  const { targetSelection } = genericExtensionSearchState;
-  if (!sourceSelection) {
-    genericExtensionSearchState.status = "No current source selected";
-    renderGenericExtensionStack(rootRow);
-    return;
-  }
-
-  if (!targetSelection) {
-    genericExtensionSearchState.status = "Select a destination first";
-    renderGenericExtensionStack(rootRow);
-    return;
-  }
-
-  genericExtensionSearchState.searching = true;
-  genericExtensionSearchState.resultPath = null;
-  genericExtensionSearchState.status = "Searching...";
-  renderGenericExtensionStack(rootRow);
-
-  try {
-    const startedAt = performance.now();
-    const result = await findLocalConnectionPath(sourceSelection, targetSelection, 5000);
-    const elapsedSeconds = ((performance.now() - startedAt) / 1000).toFixed(1);
-    if (result.path?.length) {
-      genericExtensionSearchState.resultPath = result.path;
-      genericExtensionSearchState.status =
-        `Found path with ${result.path.length} nodes after reading ${result.nodesRead} nodes in ${elapsedSeconds} seconds.`;
-    } else if (result.timedOut) {
-      genericExtensionSearchState.status =
-        `No connection found in ${elapsedSeconds} seconds after reading ${result.nodesRead} nodes. Searched locally only, no remote lookups.`;
-    } else {
-      genericExtensionSearchState.status =
-        `No connection found in ${elapsedSeconds} seconds after reading ${result.nodesRead} nodes. Searched locally only, no remote lookups.`;
+    const sourceSelection = getCurrentSearchSourceEntity(rootRow);
+    const { targetSelection } = genericExtensionSearchState;
+    if (!sourceSelection) {
+        genericExtensionSearchState.status = "No current source selected";
+        renderGenericExtensionStack(rootRow);
+        return;
     }
-  } catch (error) {
-    console.error("cinenerdle2.connectGenericExtensionSearchEndpoints", error);
-    genericExtensionSearchState.status = error.message;
-  } finally {
-    genericExtensionSearchState.searching = false;
+
+    if (!targetSelection) {
+        genericExtensionSearchState.status = "Select a destination first";
+        renderGenericExtensionStack(rootRow);
+        return;
+    }
+
+    genericExtensionSearchState.searching = true;
+    genericExtensionSearchState.resultPath = null;
+    genericExtensionSearchState.status = "Searching...";
     renderGenericExtensionStack(rootRow);
-  }
+
+    try {
+        const startedAt = performance.now();
+        const result = await findLocalConnectionPath(sourceSelection, targetSelection, 5000);
+        const elapsedSeconds = ((performance.now() - startedAt) / 1000).toFixed(1);
+        if (result.path?.length) {
+            genericExtensionSearchState.resultPath = result.path;
+            genericExtensionSearchState.status =
+                `Found path with ${result.path.length} nodes after reading ${result.nodesRead} nodes in ${elapsedSeconds} seconds.`;
+        } else if (result.timedOut) {
+            genericExtensionSearchState.status =
+                `No connection found in ${elapsedSeconds} seconds after reading ${result.nodesRead} nodes. Searched locally only, no remote lookups.`;
+        } else {
+            genericExtensionSearchState.status =
+                `No connection found in ${elapsedSeconds} seconds after reading ${result.nodesRead} nodes. Searched locally only, no remote lookups.`;
+        }
+    } catch (error) {
+        console.error("cinenerdle2.connectGenericExtensionSearchEndpoints", error);
+        genericExtensionSearchState.status = error.message;
+    } finally {
+        genericExtensionSearchState.searching = false;
+        renderGenericExtensionStack(rootRow);
+    }
 }
 
 function createGenericExtensionSearchBar(rootRow) {
-  const wrapper = document.createElement("section");
-  wrapper.style.display = "flex";
-  wrapper.style.flexDirection = "column";
-  wrapper.style.gap = "12px";
-  wrapper.style.width = getGenericExtensionTrackWidth();
-  wrapper.style.maxWidth = getGenericExtensionTrackWidth();
-  wrapper.style.minWidth = getGenericExtensionTrackWidth();
-  wrapper.style.boxSizing = "border-box";
-  wrapper.style.overflow = "visible";
-  wrapper.style.position = "relative";
-  wrapper.style.zIndex = "3";
+    const wrapper = document.createElement("section");
+    wrapper.style.display = "flex";
+    wrapper.style.flexDirection = "column";
+    wrapper.style.gap = "12px";
+    wrapper.style.width = getGenericExtensionTrackWidth();
+    wrapper.style.maxWidth = getGenericExtensionTrackWidth();
+    wrapper.style.minWidth = getGenericExtensionTrackWidth();
+    wrapper.style.boxSizing = "border-box";
+    wrapper.style.overflow = "visible";
+    wrapper.style.position = "relative";
+    wrapper.style.zIndex = "3";
 
-  const sourceSelection = getCurrentSearchSourceEntity(rootRow);
-  const topRow = document.createElement("div");
-  topRow.style.display = "flex";
-  topRow.style.alignItems = "center";
-  topRow.style.gap = "12px";
-  topRow.style.flexWrap = "nowrap";
-  topRow.style.width = "100%";
-  topRow.style.maxWidth = "100%";
-  topRow.style.boxSizing = "border-box";
-  topRow.style.overflow = "visible";
+    const sourceSelection = getCurrentSearchSourceEntity(rootRow);
+    const topRow = document.createElement("div");
+    topRow.style.display = "flex";
+    topRow.style.alignItems = "center";
+    topRow.style.gap = "12px";
+    topRow.style.flexWrap = "nowrap";
+    topRow.style.width = "100%";
+    topRow.style.maxWidth = "100%";
+    topRow.style.boxSizing = "border-box";
+    topRow.style.overflow = "visible";
 
-  const sourceChip = document.createElement("div");
-  sourceChip.style.display = "flex";
-  sourceChip.style.alignItems = "center";
-  sourceChip.style.flex = "0 0 280px";
-  sourceChip.style.minHeight = "46px";
-  sourceChip.style.padding = "0 16px";
-  sourceChip.style.border = "1px solid #334155";
-  sourceChip.style.borderRadius = "14px";
-  sourceChip.style.backgroundColor = "#111827";
-  sourceChip.style.color = sourceSelection ? "#e2e8f0" : "#64748b";
-  sourceChip.style.fontSize = "14px";
-  sourceChip.style.fontWeight = "600";
-  sourceChip.style.whiteSpace = "nowrap";
-  sourceChip.style.overflowX = "auto";
-  sourceChip.style.overflowY = "hidden";
-  sourceChip.textContent = sourceSelection ? getSearchEntityLabel(sourceSelection) : "Current selection";
-  topRow.appendChild(sourceChip);
+    const sourceChip = document.createElement("div");
+    sourceChip.style.display = "flex";
+    sourceChip.style.alignItems = "center";
+    sourceChip.style.flex = "0 0 280px";
+    sourceChip.style.minHeight = "46px";
+    sourceChip.style.padding = "0 16px";
+    sourceChip.style.border = "1px solid #334155";
+    sourceChip.style.borderRadius = "14px";
+    sourceChip.style.backgroundColor = "#111827";
+    sourceChip.style.color = sourceSelection ? "#e2e8f0" : "#64748b";
+    sourceChip.style.fontSize = "14px";
+    sourceChip.style.fontWeight = "600";
+    sourceChip.style.whiteSpace = "nowrap";
+    sourceChip.style.overflowX = "auto";
+    sourceChip.style.overflowY = "hidden";
+    sourceChip.textContent = sourceSelection ? getSearchEntityLabel(sourceSelection) : "Current selection";
+    topRow.appendChild(sourceChip);
 
-  topRow.appendChild(createAutocompleteField(rootRow, "Connect to movie or person"));
+    topRow.appendChild(createAutocompleteField(rootRow, "Connect to movie or person"));
 
-  const actions = document.createElement("div");
-  actions.style.display = "flex";
-  actions.style.gap = "8px";
-  actions.style.flexWrap = "nowrap";
-  actions.style.flex = "0 0 auto";
-  actions.appendChild(
-    createBookmarkActionButton(
-      genericExtensionSearchState.searching ? "Searching..." : "Connect",
-      () => {
-        connectGenericExtensionSearchEndpoints(rootRow).catch((error) => {
-          console.error("cinenerdle2.connectButton", error);
-          alert(error.message);
-        });
-      },
-    ),
-  );
-  actions.appendChild(
-    createBookmarkActionButton(
-      "Clear DB",
-      async () => {
-        try {
-          const estimatedBytes = await estimateIndexedDbUsageBytes();
-          const shouldClearDb = window.confirm(
-            `Clear the DB and reclaim about ${formatByteCount(estimatedBytes)} of local cache?`,
-          );
-          if (!shouldClearDb) {
-            return;
-          }
-
-          await clearIndexedDb();
-          resetGenericExtensionSearchState();
-          renderGenericExtensionStack(rootRow);
-        } catch (error) {
-          console.error("cinenerdle2.clearIndexedDbButton", error);
-          alert(`Failed to clear cinenerdle2 cache: ${error.message}`);
-        }
-      },
-      "danger",
-    ),
-  );
-  topRow.appendChild(actions);
-  wrapper.appendChild(topRow);
-
-  if (genericExtensionSearchState.status) {
-    const status = document.createElement("div");
-    status.textContent = genericExtensionSearchState.status;
-    status.style.fontSize = "12px";
-    status.style.color = "#94a3b8";
-    wrapper.appendChild(status);
-  }
-
-  if (genericExtensionSearchState.resultPath?.length) {
-    const resultRow = document.createElement("div");
-    resultRow.style.display = "flex";
-    resultRow.style.alignItems = "center";
-    resultRow.style.gap = "8px";
-    resultRow.style.flexWrap = "nowrap";
-    applyHorizontalScrollableRowStyle(resultRow, "4px");
-
-    genericExtensionSearchState.resultPath.forEach((entity, index) => {
-      resultRow.appendChild(createChip(getSearchEntityLabel(entity)));
-      if (index < genericExtensionSearchState.resultPath.length - 1) {
-        const arrow = document.createElement("div");
-        arrow.textContent = "->";
-        arrow.style.color = "#64748b";
-        arrow.style.fontSize = "12px";
-        resultRow.appendChild(arrow);
-      }
-    });
-
-    resultRow.appendChild(
-      createBookmarkActionButton("Load Path", () => {
-        const currentPathNodes = collectSelectedPathNodes(rootRow);
-        const appendedPathNodes = genericExtensionSearchState.resultPath
-          .slice(1)
-          .map(getSearchEntityPathNode);
-        loadGenericExtensionPath(
-          [...currentPathNodes, ...appendedPathNodes],
-        );
-      }),
+    const actions = document.createElement("div");
+    actions.style.display = "flex";
+    actions.style.gap = "8px";
+    actions.style.flexWrap = "nowrap";
+    actions.style.flex = "0 0 auto";
+    actions.appendChild(
+        createBookmarkActionButton(
+            genericExtensionSearchState.searching ? "Searching..." : "Connect",
+            () => {
+                connectGenericExtensionSearchEndpoints(rootRow).catch((error) => {
+                    console.error("cinenerdle2.connectButton", error);
+                    alert(error.message);
+                });
+            },
+        ),
     );
-    wrapper.appendChild(resultRow);
-  }
+    actions.appendChild(
+        createBookmarkActionButton(
+            "Clear DB",
+            async () => {
+                try {
+                    const estimatedBytes = await estimateIndexedDbUsageBytes();
+                    const shouldClearDb = window.confirm(
+                        `Clear the DB and reclaim about ${formatByteCount(estimatedBytes)} of local cache?`,
+                    );
+                    if (!shouldClearDb) {
+                        return;
+                    }
 
-  return wrapper;
+                    await clearIndexedDb();
+                    resetGenericExtensionSearchState();
+                    renderGenericExtensionStack(rootRow);
+                } catch (error) {
+                    console.error("cinenerdle2.clearIndexedDbButton", error);
+                    alert(`Failed to clear cinenerdle2 cache: ${error.message}`);
+                }
+            },
+            "danger",
+        ),
+    );
+    topRow.appendChild(actions);
+    wrapper.appendChild(topRow);
+
+    if (genericExtensionSearchState.status) {
+        const status = document.createElement("div");
+        status.textContent = genericExtensionSearchState.status;
+        status.style.fontSize = "12px";
+        status.style.color = "#94a3b8";
+        wrapper.appendChild(status);
+    }
+
+    if (genericExtensionSearchState.resultPath?.length) {
+        const resultRow = document.createElement("div");
+        resultRow.style.display = "flex";
+        resultRow.style.alignItems = "center";
+        resultRow.style.gap = "8px";
+        resultRow.style.flexWrap = "nowrap";
+        applyHorizontalScrollableRowStyle(resultRow, "4px");
+
+        genericExtensionSearchState.resultPath.forEach((entity, index) => {
+            resultRow.appendChild(createChip(getSearchEntityLabel(entity)));
+            if (index < genericExtensionSearchState.resultPath.length - 1) {
+                const arrow = document.createElement("div");
+                arrow.textContent = "->";
+                arrow.style.color = "#64748b";
+                arrow.style.fontSize = "12px";
+                resultRow.appendChild(arrow);
+            }
+        });
+
+        resultRow.appendChild(
+            createBookmarkActionButton("Load Path", () => {
+                const currentPathNodes = collectSelectedPathNodes(rootRow);
+                const appendedPathNodes = genericExtensionSearchState.resultPath
+                    .slice(1)
+                    .map(getSearchEntityPathNode);
+                loadGenericExtensionPath(
+                    [...currentPathNodes, ...appendedPathNodes],
+                );
+            }),
+        );
+        wrapper.appendChild(resultRow);
+    }
+
+    return wrapper;
 }
 
 function createGenericExtensionBookmarksBar(rootRow) {
-  const wrapper = document.createElement("section");
-  wrapper.style.display = "flex";
-  wrapper.style.alignItems = "center";
-  wrapper.style.gap = "12px";
-  wrapper.style.width = getGenericExtensionTrackWidth();
-  wrapper.style.maxWidth = getGenericExtensionTrackWidth();
-  wrapper.style.minWidth = getGenericExtensionTrackWidth();
-  wrapper.style.boxSizing = "border-box";
-  wrapper.style.overflow = "visible";
+    const wrapper = document.createElement("section");
+    wrapper.style.display = "flex";
+    wrapper.style.alignItems = "center";
+    wrapper.style.gap = "12px";
+    wrapper.style.width = getGenericExtensionTrackWidth();
+    wrapper.style.maxWidth = getGenericExtensionTrackWidth();
+    wrapper.style.minWidth = getGenericExtensionTrackWidth();
+    wrapper.style.boxSizing = "border-box";
+    wrapper.style.overflow = "visible";
 
-  const title = document.createElement("div");
-  title.textContent = "Bookmarks";
-  title.style.flex = "0 0 auto";
-  title.style.fontSize = "12px";
-  title.style.fontWeight = "700";
-  title.style.letterSpacing = "0.08em";
-  title.style.textTransform = "uppercase";
-  title.style.color = "#94a3b8";
-  wrapper.appendChild(title);
+    const title = document.createElement("div");
+    title.textContent = "Bookmarks";
+    title.style.flex = "0 0 auto";
+    title.style.fontSize = "12px";
+    title.style.fontWeight = "700";
+    title.style.letterSpacing = "0.08em";
+    title.style.textTransform = "uppercase";
+    title.style.color = "#94a3b8";
+    wrapper.appendChild(title);
 
-  const bookmarks = getGenericExtensionBookmarks();
+    const bookmarks = getGenericExtensionBookmarks();
 
-  const bookmarkSelect = document.createElement("select");
-  bookmarkSelect.style.flex = "0 0 360px";
-  bookmarkSelect.style.maxWidth = "360px";
-  bookmarkSelect.style.minWidth = "260px";
-  bookmarkSelect.style.height = "46px";
-  bookmarkSelect.style.padding = "0 14px";
-  bookmarkSelect.style.border = "1px solid #334155";
-  bookmarkSelect.style.borderRadius = "14px";
-  bookmarkSelect.style.backgroundColor = "#111827";
-  bookmarkSelect.style.color = bookmarks.length ? "#e2e8f0" : "#64748b";
-  bookmarkSelect.style.fontSize = "14px";
-  bookmarkSelect.style.outline = "none";
+    const bookmarkSelect = document.createElement("select");
+    bookmarkSelect.style.flex = "0 0 360px";
+    bookmarkSelect.style.maxWidth = "360px";
+    bookmarkSelect.style.minWidth = "260px";
+    bookmarkSelect.style.height = "46px";
+    bookmarkSelect.style.padding = "0 14px";
+    bookmarkSelect.style.border = "1px solid #334155";
+    bookmarkSelect.style.borderRadius = "14px";
+    bookmarkSelect.style.backgroundColor = "#111827";
+    bookmarkSelect.style.color = bookmarks.length ? "#e2e8f0" : "#64748b";
+    bookmarkSelect.style.fontSize = "14px";
+    bookmarkSelect.style.outline = "none";
 
-  if (bookmarks.length === 0) {
-    const emptyOption = document.createElement("option");
-    emptyOption.textContent = "No bookmarks saved";
-    emptyOption.value = "";
-    bookmarkSelect.appendChild(emptyOption);
-    bookmarkSelect.disabled = true;
-  } else {
-    const placeholderOption = document.createElement("option");
-    placeholderOption.textContent = "Select a bookmark";
-    placeholderOption.value = "";
-    placeholderOption.selected = true;
-    bookmarkSelect.appendChild(placeholderOption);
+    if (bookmarks.length === 0) {
+        const emptyOption = document.createElement("option");
+        emptyOption.textContent = "No bookmarks saved";
+        emptyOption.value = "";
+        bookmarkSelect.appendChild(emptyOption);
+        bookmarkSelect.disabled = true;
+    } else {
+        const placeholderOption = document.createElement("option");
+        placeholderOption.textContent = "Select a bookmark";
+        placeholderOption.value = "";
+        placeholderOption.selected = true;
+        bookmarkSelect.appendChild(placeholderOption);
 
-    bookmarks.forEach((bookmark, index) => {
-      const option = document.createElement("option");
-      option.value = bookmark.path;
-      option.textContent = bookmark.name;
-      bookmarkSelect.appendChild(option);
-    });
-  }
-  wrapper.appendChild(bookmarkSelect);
+        bookmarks.forEach((bookmark, index) => {
+            const option = document.createElement("option");
+            option.value = bookmark.path;
+            option.textContent = bookmark.name;
+            bookmarkSelect.appendChild(option);
+        });
+    }
+    wrapper.appendChild(bookmarkSelect);
 
-  const getSelectedBookmark = () =>
-    bookmarks.find((bookmark) => bookmark.path === bookmarkSelect.value) ?? null;
+    const getSelectedBookmark = () =>
+        bookmarks.find((bookmark) => bookmark.path === bookmarkSelect.value) ?? null;
 
-  wrapper.appendChild(
-    createBookmarkActionButton("Save Current View", () => {
-      saveCurrentViewAsBookmark(rootRow);
-      renderGenericExtensionStack(rootRow);
-    }),
-  );
-  wrapper.appendChild(
-    createBookmarkActionButton("Load", () => {
-      const bookmark = getSelectedBookmark();
-      if (!bookmark) {
-        return;
-      }
+    wrapper.appendChild(
+        createBookmarkActionButton("Save Current View", () => {
+            saveCurrentViewAsBookmark(rootRow);
+            renderGenericExtensionStack(rootRow);
+        }),
+    );
+    wrapper.appendChild(
+        createBookmarkActionButton("Load", () => {
+            const bookmark = getSelectedBookmark();
+            if (!bookmark) {
+                return;
+            }
 
-      const nextUrl = `${window.location.origin}${window.location.pathname}?generic_extension=${bookmark.path}`;
-      window.history.pushState({}, "", nextUrl);
-      maybeShowGenericExtensionEntry("replace").catch((error) => {
-        console.error("cinenerdle2.loadBookmark", error);
-        alert(error.message);
-      });
-    }),
-  );
-  wrapper.appendChild(
-    createBookmarkActionButton(
-      "Remove",
-      () => {
-        const bookmark = getSelectedBookmark();
-        if (!bookmark) {
-          return;
-        }
+            const nextUrl = `${window.location.origin}${window.location.pathname}?generic_extension=${bookmark.path}`;
+            window.history.pushState({}, "", nextUrl);
+            maybeShowGenericExtensionEntry("replace").catch((error) => {
+                console.error("cinenerdle2.loadBookmark", error);
+                alert(error.message);
+            });
+        }),
+    );
+    wrapper.appendChild(
+        createBookmarkActionButton(
+            "Remove",
+            () => {
+                const bookmark = getSelectedBookmark();
+                if (!bookmark) {
+                    return;
+                }
 
-        saveGenericExtensionBookmarks(
-          getGenericExtensionBookmarks().filter(
-            (existingBookmark) => existingBookmark.path !== bookmark.path,
-          ),
-        );
-        renderGenericExtensionStack(rootRow);
-      },
-      "danger",
-    ),
-  );
-  return wrapper;
+                saveGenericExtensionBookmarks(
+                    getGenericExtensionBookmarks().filter(
+                        (existingBookmark) => existingBookmark.path !== bookmark.path,
+                    ),
+                );
+                renderGenericExtensionStack(rootRow);
+            },
+            "danger",
+        ),
+    );
+    return wrapper;
 }
 
 async function ensurePersonRecordByName(personName) {
-  let personRecord = await getPersonRecordByName(personName);
+    let personRecord = await getPersonRecordByName(personName);
 
-  if (!personRecord || !personRecord.rawTmdbMovieCreditsResponse) {
-    personRecord = await fetchAndCachePerson(personName);
-  }
+    if (!personRecord || !personRecord.rawTmdbMovieCreditsResponse) {
+        personRecord = await fetchAndCachePerson(personName);
+    }
 
-  return personRecord;
+    return personRecord;
 }
 
 async function getFilmRecordByTitleAndYear(title, year = "") {
-  return (
-    (await getFilmRecordsByTitle(title)).find(
-      (record) =>
-        normalizeTitle(record.title) === normalizeTitle(title) &&
-        (!year || record.year === year),
-    ) ?? null
-  );
+    return (
+        (await getFilmRecordsByTitle(title)).find(
+            (record) =>
+                normalizeTitle(record.title) === normalizeTitle(title) &&
+                (!year || record.year === year),
+        ) ?? null
+    );
 }
 
 async function ensureMovieRecordByPathNode(pathNode) {
-  let movieRecord = await getFilmRecordByTitleAndYear(pathNode.name, pathNode.year);
+    let movieRecord = await getFilmRecordByTitleAndYear(pathNode.name, pathNode.year);
 
-  if (!movieRecord) {
-    movieRecord = await fetchAndCacheMovie(pathNode.name, null, pathNode.year);
-  }
+    if (!movieRecord) {
+        movieRecord = await fetchAndCacheMovie(pathNode.name, null, pathNode.year);
+    }
 
-  return movieRecord;
+    return movieRecord;
 }
 
 async function ensureMovieRecordForCard(card) {
-  if (card?.record?.id) {
-    return (await getFilmRecordById(card.record.id)) ?? card.record;
-  }
+    if (card?.record?.id) {
+        return (await getFilmRecordById(card.record.id)) ?? card.record;
+    }
 
-  return ensureMovieRecordByPathNode(getPathNodeFromCard(card));
+    return ensureMovieRecordByPathNode(getPathNodeFromCard(card));
 }
 
 async function ensureMovieCreditsRecord(movieRecord) {
-  if (!movieRecord) {
-    return null;
-  }
+    if (!movieRecord) {
+        return null;
+    }
 
-  return movieRecord.rawTmdbMovieCreditsResponse
-    ? movieRecord
-    : fetchAndCacheMovieCredits(movieRecord);
+    return movieRecord.rawTmdbMovieCreditsResponse
+        ? movieRecord
+        : fetchAndCacheMovieCredits(movieRecord);
 }
 
 function createMovieCardRecordFromCredit(credit) {
-  const title = getMovieTitleFromCredit(credit);
-  const year = getMovieYearFromCredit(credit);
+    const title = getMovieTitleFromCredit(credit);
+    const year = getMovieYearFromCredit(credit);
 
-  return {
-    id: credit.id,
-    title,
-    titleLower: normalizeTitle(title),
-    year,
-    titleYear: getFilmKey(title, year),
-    popularity: credit.popularity ?? 0,
-    rawTmdbMovie: credit,
-  };
+    return {
+        id: credit.id,
+        title,
+        titleLower: normalizeTitle(title),
+        year,
+        titleYear: getFilmKey(title, year),
+        popularity: credit.popularity ?? 0,
+        rawTmdbMovie: credit,
+    };
 }
 
 function createPersonRootCard(personRecord, requestedName) {
-  const personName = personRecord?.name ?? requestedName;
-  const cinenerdleConnectionsCount = personRecord?.domConnections?.length ?? 0;
+    const personName = personRecord?.name ?? requestedName;
+    const cinenerdleConnectionsCount = personRecord?.domConnections?.length ?? 0;
 
-  return {
-    key: getPersonCardKey(personName, personRecord?.id),
-    kind: "person",
-    name: personName,
-    subtitle: "Person",
-    imageUrl: getPersonProfileImageUrl(personRecord),
-    metrics: [
-      `TMDb ID: ${personRecord?.id ?? "unknown"}`,
-      `Cinenerdle links: ${cinenerdleConnectionsCount}`,
-    ],
-    record: personRecord,
-    childRow: null,
-  };
+    return {
+        key: getPersonCardKey(personName, personRecord?.id),
+        kind: "person",
+        name: personName,
+        subtitle: "Person",
+        imageUrl: getPersonProfileImageUrl(personRecord),
+        metrics: [
+            `TMDb ID: ${personRecord?.id ?? "unknown"}`,
+            `Cinenerdle links: ${cinenerdleConnectionsCount}`,
+        ],
+        record: personRecord,
+        childRow: null,
+    };
 }
 
 function createMovieRootCard(movieRecord, requestedName) {
-  const movieTitle = movieRecord?.title ?? requestedName;
-  const movieYear = getMovieRecordYear(movieRecord);
-  const sources = [];
+    const movieTitle = movieRecord?.title ?? requestedName;
+    const movieYear = getMovieRecordYear(movieRecord);
+    const sources = [];
 
-  if (movieRecord?.rawTmdbMovie || movieRecord?.rawTmdbMovieSearchResponse) {
-    sources.push({ iconUrl: TMDB_ICON_URL, label: "TMDb" });
-  }
+    if (movieRecord?.rawTmdbMovie || movieRecord?.rawTmdbMovieSearchResponse) {
+        sources.push({ iconUrl: TMDB_ICON_URL, label: "TMDb" });
+    }
 
-  if (movieRecord?.domSnapshot) {
-    sources.push({ iconUrl: CINENERDLE_ICON_URL, label: "Cinenerdle" });
-  }
+    if (movieRecord?.domSnapshot) {
+        sources.push({ iconUrl: CINENERDLE_ICON_URL, label: "Cinenerdle" });
+    }
 
-  return {
-    key: getMovieCardKey(movieTitle, movieYear, movieRecord?.id),
-    kind: "movie",
-    name: movieTitle,
-    year: movieYear,
-    subtitle: movieYear || "Movie",
-    imageUrl: getMoviePosterUrl(movieRecord),
-    popularity: movieRecord?.popularity,
-    voteAverage: movieRecord?.rawTmdbMovie?.vote_average,
-    voteCount: movieRecord?.rawTmdbMovie?.vote_count,
-    sources,
-    status: null,
-    record: movieRecord,
-    childRow: null,
-  };
+    return {
+        key: getMovieCardKey(movieTitle, movieYear, movieRecord?.id),
+        kind: "movie",
+        name: movieTitle,
+        year: movieYear,
+        subtitle: movieYear || "Movie",
+        imageUrl: getMoviePosterUrl(movieRecord),
+        popularity: movieRecord?.popularity,
+        voteAverage: movieRecord?.rawTmdbMovie?.vote_average,
+        voteCount: movieRecord?.rawTmdbMovie?.vote_count,
+        sources,
+        status: null,
+        record: movieRecord,
+        childRow: null,
+    };
 }
 
 function createMovieAssociationCard(personRecord, credit, filmRecord = null) {
-  const title = getMovieTitleFromCredit(credit);
-  const year = getMovieYearFromCredit(credit);
-  const movieRecord = filmRecord ?? createMovieCardRecordFromCredit(credit);
-  const association = buildAssociationPresentation(
-    personRecord,
-    getMovieKeyFromCredit(credit),
-    filmRecord,
-  );
+    const title = getMovieTitleFromCredit(credit);
+    const year = getMovieYearFromCredit(credit);
+    const movieRecord = filmRecord ?? createMovieCardRecordFromCredit(credit);
+    const association = buildAssociationPresentation(
+        personRecord,
+        getMovieKeyFromCredit(credit),
+        filmRecord,
+    );
 
-  return {
-    key: getMovieCardKey(title, year, credit.id),
-    kind: "movie",
-    name: title,
-    year,
-    subtitle: getTmdbCreditCategoryText(credit),
-    imageUrl: getPosterUrl(credit.poster_path),
-    popularity: credit.popularity,
-    voteAverage: credit.vote_average,
-    voteCount: credit.vote_count,
-    sources: association.sources,
-    status: association.status,
-    record: movieRecord,
-    childRow: null,
-  };
+    return {
+        key: getMovieCardKey(title, year, credit.id),
+        kind: "movie",
+        name: title,
+        year,
+        subtitle: getTmdbCreditCategoryText(credit),
+        imageUrl: getPosterUrl(credit.poster_path),
+        popularity: credit.popularity,
+        voteAverage: credit.vote_average,
+        voteCount: credit.vote_count,
+        sources: association.sources,
+        status: association.status,
+        record: movieRecord,
+        childRow: null,
+    };
 }
 
 function createPersonAssociationCard(credit, movieRecord, cachedPersonRecord = null) {
-  const personName = cachedPersonRecord?.name ?? credit?.name?.trim() ?? "Unknown";
-  const cinenerdleRole = getCinenerdleRoleFromSnapshot(movieRecord?.domSnapshot, personName);
-  const missingFromCinenerdle = !!movieRecord?.domSnapshot && !!credit && !cinenerdleRole;
-  const sources = [{ iconUrl: TMDB_ICON_URL, label: "TMDb" }];
+    const personName = cachedPersonRecord?.name ?? credit?.name?.trim() ?? "Unknown";
+    const cinenerdleRole = getCinenerdleRoleFromSnapshot(movieRecord?.domSnapshot, personName);
+    const missingFromCinenerdle = !!movieRecord?.domSnapshot && !!credit && !cinenerdleRole;
+    const sources = [{ iconUrl: TMDB_ICON_URL, label: "TMDb" }];
 
-  if (cinenerdleRole) {
-    sources.push({
-      iconUrl: CINENERDLE_ICON_URL,
-      label: cinenerdleRole,
-    });
-  } else if (movieRecord?.domSnapshot) {
-    sources.push({
-      iconUrl: CINENERDLE_ICON_URL,
-      label: "Cinenerdle loaded for parent, not associated here",
-      filter: "grayscale(1)",
-      opacity: "0.9",
-    });
-  }
+    if (cinenerdleRole) {
+        sources.push({
+            iconUrl: CINENERDLE_ICON_URL,
+            label: cinenerdleRole,
+        });
+    } else if (movieRecord?.domSnapshot) {
+        sources.push({
+            iconUrl: CINENERDLE_ICON_URL,
+            label: "Cinenerdle loaded for parent, not associated here",
+            filter: "grayscale(1)",
+            opacity: "0.9",
+        });
+    }
 
-  return {
-    key: getPersonCardKey(personName, cachedPersonRecord?.id ?? credit?.id),
-    kind: "person",
-    name: personName,
-    subtitle: [
-      getTmdbCreditCategoryText(credit),
-    ]
-      .filter(Boolean)
-      .join(" • "),
-    imageUrl:
-      getPersonProfileImageUrl(cachedPersonRecord) ??
-      getPosterUrl(credit?.profile_path, "w300_and_h450_face"),
-    popularity: credit?.popularity,
-    sources,
-    status: null,
-    record: cachedPersonRecord ?? null,
-    childRow: null,
-  };
+    return {
+        key: getPersonCardKey(personName, cachedPersonRecord?.id ?? credit?.id),
+        kind: "person",
+        name: personName,
+        subtitle: [
+            getTmdbCreditCategoryText(credit),
+        ]
+            .filter(Boolean)
+            .join(" • "),
+        imageUrl:
+            getPersonProfileImageUrl(cachedPersonRecord) ??
+            getPosterUrl(credit?.profile_path, "w300_and_h450_face"),
+        popularity: credit?.popularity,
+        sources,
+        status: null,
+        record: cachedPersonRecord ?? null,
+        childRow: null,
+    };
 }
 
 function createCinenerdleOnlyPersonCard(personName, role) {
-  return {
-    key: getPersonCardKey(personName),
-    kind: "person",
-    name: personName,
-    subtitle: role,
-    imageUrl: null,
-    sources: [
-      {
-        iconUrl: CINENERDLE_ICON_URL,
-        label: role,
-      },
-    ],
-    status: { text: "Cinenerdle only", tone: "success" },
-    record: null,
-    childRow: null,
-  };
+    return {
+        key: getPersonCardKey(personName),
+        kind: "person",
+        name: personName,
+        subtitle: role,
+        imageUrl: null,
+        sources: [
+            {
+                iconUrl: CINENERDLE_ICON_URL,
+                label: role,
+            },
+        ],
+        status: { text: "Cinenerdle only", tone: "success" },
+        record: null,
+        childRow: null,
+    };
 }
 
 function createStackCardFooter(card) {
-  if (card.metrics?.length) {
-    return createMetricRow(card.metrics);
-  }
+    if (card.metrics?.length) {
+        return createMetricRow(card.metrics);
+    }
 
-  if (
-    card.sources?.length ||
-    typeof card.popularity === "number" ||
-    typeof card.voteAverage === "number" ||
-    typeof card.voteCount === "number" ||
-    card.status?.text
-  ) {
-    return createMovieMetaBlock({
-      popularity: card.popularity,
-      voteAverage: card.voteAverage,
-      voteCount: card.voteCount,
-      sources: card.sources,
-      status: card.status,
-    });
-  }
+    if (
+        card.sources?.length ||
+        typeof card.popularity === "number" ||
+        typeof card.voteAverage === "number" ||
+        typeof card.voteCount === "number" ||
+        card.status?.text
+    ) {
+        return createMovieMetaBlock({
+            popularity: card.popularity,
+            voteAverage: card.voteAverage,
+            voteCount: card.voteCount,
+            sources: card.sources,
+            status: card.status,
+        });
+    }
 
-  return null;
+    return null;
 }
 
 function applyStackCardSelectionStyle(cardElement, isSelected, isLocked = false) {
-  cardElement.style.transition = "box-shadow 120ms ease, border-color 120ms ease";
-  cardElement.style.borderWidth = isSelected ? "3px" : "1px";
-  cardElement.style.borderStyle = "solid";
-  cardElement.style.borderColor = isSelected ? "#fbbf24" : "#243041";
-  cardElement.style.boxShadow = isSelected
-    ? "0 0 0 2px rgba(251, 191, 36, 0.35), 0 18px 40px rgba(251, 191, 36, 0.32)"
-    : "0 8px 24px rgba(0, 0, 0, 0.35)";
-  cardElement.style.transform = "";
-  cardElement.style.outline = "none";
-  if (isLocked) {
+    cardElement.style.transition = "box-shadow 120ms ease, border-color 120ms ease";
+    cardElement.style.borderWidth = isSelected ? "3px" : "1px";
+    cardElement.style.borderStyle = "solid";
+    cardElement.style.borderColor = isSelected ? "#fbbf24" : "#243041";
     cardElement.style.boxShadow = isSelected
-      ? "0 0 0 3px rgba(251, 191, 36, 0.5), 0 18px 40px rgba(251, 191, 36, 0.32)"
-      : "0 0 0 2px rgba(251, 191, 36, 0.35), 0 8px 24px rgba(0, 0, 0, 0.35)";
-  }
+        ? "0 0 0 2px rgba(251, 191, 36, 0.35), 0 18px 40px rgba(251, 191, 36, 0.32)"
+        : "0 8px 24px rgba(0, 0, 0, 0.35)";
+    cardElement.style.transform = "";
+    cardElement.style.outline = "none";
+    if (isLocked) {
+        cardElement.style.boxShadow = isSelected
+            ? "0 0 0 3px rgba(251, 191, 36, 0.5), 0 18px 40px rgba(251, 191, 36, 0.32)"
+            : "0 0 0 2px rgba(251, 191, 36, 0.35), 0 8px 24px rgba(0, 0, 0, 0.35)";
+    }
 }
 
 function createGenericExtensionCardElement(
-  card,
-  { isSelected = false, isLocked = false, onSelect = null } = {},
+    card,
+    { isSelected = false, isLocked = false, onSelect = null } = {},
 ) {
-  const cardElement = createPosterCard({
-    imageUrl: card.imageUrl,
-    title: card.name,
-    subtitle: card.subtitle,
-    footer: createStackCardFooter(card),
-  });
-
-  applyStackCardSelectionStyle(cardElement, isSelected, isLocked);
-  cardElement.style.cursor = onSelect ? "pointer" : isLocked ? "default" : "pointer";
-
-  const titleElement = cardElement.querySelector('[data-cinenerdle2-card-title="true"]');
-  if (titleElement instanceof HTMLElement) {
-    titleElement.style.cursor = "pointer";
-    titleElement.style.textDecoration = "underline";
-    titleElement.style.textDecorationColor = "rgba(148, 163, 184, 0.55)";
-    titleElement.style.textUnderlineOffset = "3px";
-    titleElement.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      loadGenericExtensionPath([getPathNodeFromCard(card)]);
+    const cardElement = createPosterCard({
+        imageUrl: card.imageUrl,
+        title: card.name,
+        subtitle: card.subtitle,
+        footer: createStackCardFooter(card),
     });
-  }
 
-  if (onSelect) {
-    cardElement.addEventListener("click", onSelect);
-  }
+    applyStackCardSelectionStyle(cardElement, isSelected, isLocked);
+    cardElement.style.cursor = onSelect ? "pointer" : isLocked ? "default" : "pointer";
 
-  return cardElement;
+    const titleElement = cardElement.querySelector('[data-cinenerdle2-card-title="true"]');
+    if (titleElement instanceof HTMLElement) {
+        titleElement.style.cursor = "pointer";
+        titleElement.style.textDecoration = "underline";
+        titleElement.style.textDecorationColor = "rgba(148, 163, 184, 0.55)";
+        titleElement.style.textUnderlineOffset = "3px";
+        titleElement.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            loadGenericExtensionPath([getPathNodeFromCard(card)]);
+        });
+    }
+
+    if (onSelect) {
+        cardElement.addEventListener("click", onSelect);
+    }
+
+    return cardElement;
 }
 
 function createGenericExtensionRowElement(row, rootRow) {
-  const sectionRow = createRowSection();
-  sectionRow.body.style.display = "flex";
-  sectionRow.body.style.alignItems = "flex-start";
-  sectionRow.body.style.gap = "14px";
-  applyHorizontalScrollableRowStyle(sectionRow.body, "8px");
+    const sectionRow = createRowSection();
+    sectionRow.body.style.display = "flex";
+    sectionRow.body.style.alignItems = "flex-start";
+    sectionRow.body.style.gap = "14px";
+    applyHorizontalScrollableRowStyle(sectionRow.body, "8px");
 
-  if ((row.cards ?? []).length === 0) {
-    sectionRow.body.appendChild(createChip("No associated items found"));
+    if ((row.cards ?? []).length === 0) {
+        sectionRow.body.appendChild(createChip("No associated items found"));
+        return sectionRow.section;
+    }
+
+    row.cards.forEach((card) => {
+        sectionRow.body.appendChild(
+            createGenericExtensionCardElement(card, {
+                isSelected: row.selectedCardKey === card.key,
+                isLocked: row.isRoot,
+                onSelect:
+                    row.isRoot
+                        ? null
+                        : () => {
+                            selectGenericExtensionCard(rootRow, row, card).catch((error) => {
+                                console.error("cinenerdle2.selectGenericExtensionCard", error);
+                                alert(error.message);
+                            });
+                        },
+            }),
+        );
+    });
+
     return sectionRow.section;
-  }
-
-  row.cards.forEach((card) => {
-    sectionRow.body.appendChild(
-      createGenericExtensionCardElement(card, {
-        isSelected: row.selectedCardKey === card.key,
-        isLocked: row.isRoot,
-        onSelect:
-          row.isRoot
-            ? null
-            : () => {
-                selectGenericExtensionCard(rootRow, row, card).catch((error) => {
-                  console.error("cinenerdle2.selectGenericExtensionCard", error);
-                  alert(error.message);
-                });
-              },
-      }),
-    );
-  });
-
-  return sectionRow.section;
 }
 
 function getCurrentGenericExtensionTitle(rootRow) {
-  const visibleRows = getVisibleGenericExtensionRows(rootRow);
-  for (let index = visibleRows.length - 1; index >= 0; index -= 1) {
-    const selectedCard = getSelectedCard(visibleRows[index]);
-    if (selectedCard) {
-      return selectedCard.name;
+    const visibleRows = getVisibleGenericExtensionRows(rootRow);
+    for (let index = visibleRows.length - 1; index >= 0; index -= 1) {
+        const selectedCard = getSelectedCard(visibleRows[index]);
+        if (selectedCard) {
+            return selectedCard.name;
+        }
     }
-  }
 
-  return "cinenerdle2";
+    return "cinenerdle2";
 }
 
 function renderGenericExtensionStack(rootRow) {
-  const pageBackground =
-    "linear-gradient(180deg, #020617 0%, #08111f 24%, #0d1730 58%, #172554 100%)";
+    const pageBackground =
+        "linear-gradient(180deg, #020617 0%, #08111f 24%, #0d1730 58%, #172554 100%)";
 
-  document.documentElement.style.margin = "0";
-  document.documentElement.style.height = "100%";
-  document.documentElement.style.minHeight = "100%";
-  document.documentElement.style.background = pageBackground;
-  document.body.style.margin = "0";
-  document.body.style.height = "100%";
-  document.body.style.minHeight = "100vh";
-  document.body.style.background = pageBackground;
-  document.body.style.overflowY = "hidden";
-  document.body.style.overflowX = "hidden";
-  document.body.style.color = "#f8fafc";
-  document.body.style.fontFamily =
-    'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-  document.title = `${getCurrentGenericExtensionTitle(rootRow)} | cinenerdle2`;
 
-  const appRoot = document.createElement("div");
-  appRoot.style.display = "flex";
-  appRoot.style.flexDirection = "column";
-  appRoot.style.gap = "20px";
-  appRoot.style.height = "100vh";
-  appRoot.style.overflowY = "scroll";
-  appRoot.style.overflowX = "hidden";
-  appRoot.style.padding = `${GENERIC_EXTENSION_PAGE_PADDING_PX}px`;
-  appRoot.style.boxSizing = "border-box";
-  appRoot.style.background = "transparent";
+    document.documentElement.style.margin = "0";
+    document.documentElement.style.height = "100%";
+    document.documentElement.style.minHeight = "100%";
+    document.documentElement.style.background = pageBackground;
+    document.body.style.margin = "0";
+    document.body.style.height = "100%";
+    document.body.style.minHeight = "100vh";
+    document.body.style.background = pageBackground;
+    document.body.style.overflowY = "hidden";
+    document.body.style.overflowX = "hidden";
+    document.body.style.color = "#f8fafc";
+    document.body.style.fontFamily =
+        'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    document.title = `${getCurrentGenericExtensionTitle(rootRow)} | cinenerdle2`;
 
-  appRoot.appendChild(createGenericExtensionBookmarksBar(rootRow));
-  appRoot.appendChild(createGenericExtensionSearchBar(rootRow));
+    const appRoot = document.createElement("div");
+    appRoot.style.display = "flex";
+    appRoot.style.flexDirection = "column";
+    appRoot.style.gap = "20px";
+    appRoot.style.height = "100vh";
+    appRoot.style.overflowY = "scroll";
+    appRoot.style.overflowX = "hidden";
+    appRoot.style.padding = `${GENERIC_EXTENSION_PAGE_PADDING_PX}px`;
+    appRoot.style.boxSizing = "border-box";
+    appRoot.style.background = "transparent";
 
-  getVisibleGenericExtensionRows(rootRow)
-    .slice()
-    .reverse()
-    .forEach((row) => {
-      appRoot.appendChild(createGenericExtensionRowElement(row, rootRow));
-    });
+    appRoot.appendChild(createGenericExtensionBookmarksBar(rootRow));
+    appRoot.appendChild(createGenericExtensionSearchBar(rootRow));
 
-  document.body.replaceChildren(appRoot);
-  restoreGenericExtensionSearchInputFocus();
+    getVisibleGenericExtensionRows(rootRow)
+        .slice()
+        .reverse()
+        .forEach((row) => {
+            appRoot.appendChild(createGenericExtensionRowElement(row, rootRow));
+        });
+
+    document.body.replaceChildren(appRoot);
+    restoreGenericExtensionSearchInputFocus();
 }
 
 async function buildMovieRowForPersonCard(card) {
-  const personRecord = await ensurePersonRecordByName(card.name);
-  card.record = personRecord;
+    const personRecord = await ensurePersonRecordByName(card.name);
+    card.record = personRecord;
 
-  const movieCredits = getUniqueSortedTmdbMovieCredits(personRecord);
-  const filmRecordsById = await getFilmRecordsByIds(movieCredits.map((credit) => credit.id));
+    const movieCredits = getUniqueSortedTmdbMovieCredits(personRecord);
+    const filmRecordsById = await getFilmRecordsByIds(movieCredits.map((credit) => credit.id));
 
-  return {
-    title: "Movies",
-    entityType: "movie",
-    selectedCardKey: null,
-    isRoot: false,
-    cards: movieCredits.map((credit) =>
-      createMovieAssociationCard(personRecord, credit, filmRecordsById.get(credit.id) ?? null),
-    ),
-  };
+    return {
+        title: "Movies",
+        entityType: "movie",
+        selectedCardKey: null,
+        isRoot: false,
+        cards: movieCredits.map((credit) =>
+            createMovieAssociationCard(personRecord, credit, filmRecordsById.get(credit.id) ?? null),
+        ),
+    };
 }
 
 async function buildPersonRowForMovieCard(card) {
-  const movieRecord = await ensureMovieCreditsRecord(await ensureMovieRecordForCard(card));
-  card.record = movieRecord;
+    const movieRecord = await ensureMovieCreditsRecord(await ensureMovieRecordForCard(card));
+    card.record = movieRecord;
 
-  const tmdbCredits = getAssociatedPeopleFromMovieCredits(movieRecord);
-  const cachedPersonRecords = await Promise.all(
-    tmdbCredits.map((credit) => getPersonRecordByName(credit.name ?? "")),
-  );
+    const tmdbCredits = getAssociatedPeopleFromMovieCredits(movieRecord);
+    const cachedPersonRecords = await Promise.all(
+        tmdbCredits.map((credit) => getPersonRecordByName(credit.name ?? "")),
+    );
 
-  const cards = tmdbCredits.map((credit, index) =>
-    createPersonAssociationCard(credit, movieRecord, cachedPersonRecords[index] ?? null),
-  );
+    const cards = tmdbCredits.map((credit, index) =>
+        createPersonAssociationCard(credit, movieRecord, cachedPersonRecords[index] ?? null),
+    );
 
-  const seenPersonNames = new Set(cards.map((personCard) => normalizeName(personCard.name)));
-  Object.entries(movieRecord?.domSnapshot?.peopleByRole ?? {}).forEach(([role, people]) => {
-    people.forEach((personName) => {
-      const normalizedPersonName = normalizeName(personName);
-      if (seenPersonNames.has(normalizedPersonName)) {
-        return;
-      }
+    const seenPersonNames = new Set(cards.map((personCard) => normalizeName(personCard.name)));
+    Object.entries(movieRecord?.domSnapshot?.peopleByRole ?? {}).forEach(([role, people]) => {
+        people.forEach((personName) => {
+            const normalizedPersonName = normalizeName(personName);
+            if (seenPersonNames.has(normalizedPersonName)) {
+                return;
+            }
 
-      cards.push(createCinenerdleOnlyPersonCard(personName, role));
-      seenPersonNames.add(normalizedPersonName);
+            cards.push(createCinenerdleOnlyPersonCard(personName, role));
+            seenPersonNames.add(normalizedPersonName);
+        });
     });
-  });
 
-  return {
-    title: "People",
-    entityType: "person",
-    selectedCardKey: null,
-    isRoot: false,
-    cards,
-  };
+    return {
+        title: "People",
+        entityType: "person",
+        selectedCardKey: null,
+        isRoot: false,
+        cards,
+    };
 }
 
 async function buildChildRowForCard(card) {
-  if (card.kind === "person") {
-    return buildMovieRowForPersonCard(card);
-  }
+    if (card.kind === "person") {
+        return buildMovieRowForPersonCard(card);
+    }
 
-  if (card.kind === "movie") {
-    return buildPersonRowForMovieCard(card);
-  }
+    if (card.kind === "movie") {
+        return buildPersonRowForMovieCard(card);
+    }
 
-  return null;
+    return null;
 }
 
 async function selectGenericExtensionCard(rootRow, row, card, historyMode = "push") {
-  if (!row || !card) {
-    return;
-  }
+    if (!row || !card) {
+        return;
+    }
 
-  if (row.selectedCardKey === card.key) {
-    row.selectedCardKey = null;
+    if (row.selectedCardKey === card.key) {
+        row.selectedCardKey = null;
+        renderGenericExtensionStack(rootRow);
+        updateGenericExtensionHistory(rootRow, historyMode);
+        return;
+    }
+
+    row.selectedCardKey = card.key;
     renderGenericExtensionStack(rootRow);
     updateGenericExtensionHistory(rootRow, historyMode);
-    return;
-  }
 
-  row.selectedCardKey = card.key;
-  renderGenericExtensionStack(rootRow);
-  updateGenericExtensionHistory(rootRow, historyMode);
+    if (!card.childRow) {
+        card.childRow = await buildChildRowForCard(card);
+    }
 
-  if (!card.childRow) {
-    card.childRow = await buildChildRowForCard(card);
-  }
-
-  renderGenericExtensionStack(rootRow);
+    renderGenericExtensionStack(rootRow);
 }
 
 async function createRootRowFromPathNode(pathNode) {
-  if (pathNode.kind === "person") {
-    const personRecord = await ensurePersonRecordByName(pathNode.name);
-    const rootCard = createPersonRootCard(personRecord, pathNode.name);
-    return {
-      title: "Person",
-      entityType: "person",
-      selectedCardKey: rootCard.key,
-      isRoot: true,
-      cards: [rootCard],
-    };
-  }
+    if (pathNode.kind === "person") {
+        const personRecord = await ensurePersonRecordByName(pathNode.name);
+        const rootCard = createPersonRootCard(personRecord, pathNode.name);
+        return {
+            title: "Person",
+            entityType: "person",
+            selectedCardKey: rootCard.key,
+            isRoot: true,
+            cards: [rootCard],
+        };
+    }
 
-  if (pathNode.kind === "movie") {
-    const movieRecord = await ensureMovieRecordByPathNode(pathNode);
-    const rootCard = createMovieRootCard(movieRecord, pathNode.name);
-    return {
-      title: "Movie",
-      entityType: "movie",
-      selectedCardKey: rootCard.key,
-      isRoot: true,
-      cards: [rootCard],
-    };
-  }
+    if (pathNode.kind === "movie") {
+        const movieRecord = await ensureMovieRecordByPathNode(pathNode);
+        const rootCard = createMovieRootCard(movieRecord, pathNode.name);
+        return {
+            title: "Movie",
+            entityType: "movie",
+            selectedCardKey: rootCard.key,
+            isRoot: true,
+            cards: [rootCard],
+        };
+    }
 
-  return null;
+    return null;
 }
 
 async function createRootRowFromSegment(segment) {
-  const prefersMovie = /\(\d{4}\)$/.test(segment);
-  const attempts = prefersMovie
-    ? [
-        () => createRootRowFromPathNode(parseMoviePathLabel(segment)),
-        () => createRootRowFromPathNode(createPathNode("person", segment)),
-      ]
-    : [
-        () => createRootRowFromPathNode(createPathNode("person", segment)),
-        () => createRootRowFromPathNode(parseMoviePathLabel(segment)),
-      ];
+    const prefersMovie = /\(\d{4}\)$/.test(segment);
+    const attempts = prefersMovie
+        ? [
+            () => createRootRowFromPathNode(parseMoviePathLabel(segment)),
+            () => createRootRowFromPathNode(createPathNode("person", segment)),
+        ]
+        : [
+            () => createRootRowFromPathNode(createPathNode("person", segment)),
+            () => createRootRowFromPathNode(parseMoviePathLabel(segment)),
+        ];
 
-  for (const attempt of attempts) {
-    try {
-      const rootRow = await attempt();
-      if (rootRow) {
-        return rootRow;
-      }
-    } catch (error) {
-      console.warn("cinenerdle2.createRootRowFromSegment", segment, error);
+    for (const attempt of attempts) {
+        try {
+            const rootRow = await attempt();
+            if (rootRow) {
+                return rootRow;
+            }
+        } catch (error) {
+            console.warn("cinenerdle2.createRootRowFromSegment", segment, error);
+        }
     }
-  }
 
-  return null;
+    return null;
 }
 
 async function ensureVisibleChildRow(row) {
-  const selectedCard = getSelectedCard(row);
-  if (!selectedCard) {
-    return null;
-  }
+    const selectedCard = getSelectedCard(row);
+    if (!selectedCard) {
+        return null;
+    }
 
-  if (!selectedCard.childRow) {
-    selectedCard.childRow = await buildChildRowForCard(selectedCard);
-  }
+    if (!selectedCard.childRow) {
+        selectedCard.childRow = await buildChildRowForCard(selectedCard);
+    }
 
-  return selectedCard.childRow;
+    return selectedCard.childRow;
 }
 
 async function applyPathToRootRow(rootRow, pathNodes) {
-  let currentRow = rootRow;
-  let currentChildRow = await ensureVisibleChildRow(currentRow);
+    let currentRow = rootRow;
+    let currentChildRow = await ensureVisibleChildRow(currentRow);
 
-  for (let index = 1; index < pathNodes.length; index += 1) {
-    if (!currentChildRow) {
-      return;
+    for (let index = 1; index < pathNodes.length; index += 1) {
+        if (!currentChildRow) {
+            return;
+        }
+
+        const matchingCard =
+            currentChildRow.cards.find((card) => matchesPathNode(card, pathNodes[index])) ?? null;
+        if (!matchingCard) {
+            currentChildRow.selectedCardKey = null;
+            return;
+        }
+
+        currentChildRow.selectedCardKey = matchingCard.key;
+        currentRow = currentChildRow;
+        currentChildRow = await ensureVisibleChildRow(currentRow);
     }
 
-    const matchingCard =
-      currentChildRow.cards.find((card) => matchesPathNode(card, pathNodes[index])) ?? null;
-    if (!matchingCard) {
-      currentChildRow.selectedCardKey = null;
-      return;
+    if (currentChildRow) {
+        currentChildRow.selectedCardKey = null;
     }
-
-    currentChildRow.selectedCardKey = matchingCard.key;
-    currentRow = currentChildRow;
-    currentChildRow = await ensureVisibleChildRow(currentRow);
-  }
-
-  if (currentChildRow) {
-    currentChildRow.selectedCardKey = null;
-  }
 }
 
 async function buildGenericExtensionRootRow(rootSegment) {
-  if (!rootSegment) {
-    return null;
-  }
+    if (!rootSegment) {
+        return null;
+    }
 
-  if (
-    genericExtensionRootRow &&
-    normalizeTitle(getPathNodeLabel(getPathNodeFromCard(getSelectedCard(genericExtensionRootRow)))) ===
-      normalizeTitle(rootSegment)
-  ) {
-    return genericExtensionRootRow;
-  }
+    if (
+        genericExtensionRootRow &&
+        normalizeTitle(getPathNodeLabel(getPathNodeFromCard(getSelectedCard(genericExtensionRootRow)))) ===
+        normalizeTitle(rootSegment)
+    ) {
+        return genericExtensionRootRow;
+    }
 
-  return createRootRowFromSegment(rootSegment);
+    return createRootRowFromSegment(rootSegment);
 }
 
 async function maybeShowGenericExtensionEntry(historyMode = "replace") {
-  const genericExtensionValue = getGenericExtensionEntryUrl();
-  if (!genericExtensionValue) {
-    return false;
-  }
+    const genericExtensionValue = getGenericExtensionEntryUrl();
+    if (!genericExtensionValue) {
+        return false;
+    }
 
-  const pathSegments = parseGenericExtensionSegments(genericExtensionValue);
-  if (pathSegments.length === 0) {
-    return false;
-  }
+    const pathSegments = parseGenericExtensionSegments(genericExtensionValue);
+    if (pathSegments.length === 0) {
+        return false;
+    }
 
-  const rootRow = await buildGenericExtensionRootRow(pathSegments[0]);
-  if (!rootRow) {
-    return false;
-  }
+    const rootRow = await buildGenericExtensionRootRow(pathSegments[0]);
+    if (!rootRow) {
+        return false;
+    }
 
-  const resolvedRootCard = getSelectedCard(rootRow);
-  const pathNodes = buildGenericExtensionPathNodes(resolvedRootCard?.kind, pathSegments);
-  if (pathNodes.length === 0) {
-    return false;
-  }
+    const resolvedRootCard = getSelectedCard(rootRow);
+    const pathNodes = buildGenericExtensionPathNodes(resolvedRootCard?.kind, pathSegments);
+    if (pathNodes.length === 0) {
+        return false;
+    }
 
-  genericExtensionRootRow = rootRow;
-  await applyPathToRootRow(genericExtensionRootRow, pathNodes);
-  renderGenericExtensionStack(genericExtensionRootRow);
-  updateGenericExtensionHistory(genericExtensionRootRow, historyMode);
+    genericExtensionRootRow = rootRow;
+    await applyPathToRootRow(genericExtensionRootRow, pathNodes);
+    renderGenericExtensionStack(genericExtensionRootRow);
+    updateGenericExtensionHistory(genericExtensionRootRow, historyMode);
 
-  if (!genericExtensionPopstateBound) {
-    window.addEventListener("popstate", () => {
-      maybeShowGenericExtensionEntry("replace").catch((error) => {
-        console.error("cinenerdle2.popstate", error);
-        alert(error.message);
-      });
-    });
-    genericExtensionPopstateBound = true;
-  }
+    if (!genericExtensionPopstateBound) {
+        window.addEventListener("popstate", () => {
+            maybeShowGenericExtensionEntry("replace").catch((error) => {
+                console.error("cinenerdle2.popstate", error);
+                alert(error.message);
+            });
+        });
+        genericExtensionPopstateBound = true;
+    }
 
-  return true;
+    return true;
 }
 
 async function handlePersonClick(personName, sourceElement, targetWindow = null) {
-  const domFilmSnapshot = parseDomFilmSnapshotFromElement(sourceElement);
-  let personRecord = await getPersonRecordByName(personName);
+    const domFilmSnapshot = parseDomFilmSnapshotFromElement(sourceElement);
+    let personRecord = await getPersonRecordByName(personName);
 
-  if (!personRecord) {
-    personRecord = await fetchAndCachePerson(personName, domFilmSnapshot);
-  } else {
-    await syncDomSnapshotToCachedRecords(domFilmSnapshot);
-  }
+    if (!personRecord) {
+        personRecord = await fetchAndCachePerson(personName, domFilmSnapshot);
+    } else {
+        await syncDomSnapshotToCachedRecords(domFilmSnapshot);
+    }
 
-  if (!personRecord) {
-    return;
-  }
+    if (!personRecord) {
+        return;
+    }
 
-  const targetUrl = getGenericExtensionUrl("person", personName);
-  if (targetWindow) {
-    targetWindow.location.href = targetUrl;
-    return;
-  }
+    const targetUrl = getGenericExtensionUrl("person", personName);
+    if (targetWindow) {
+        targetWindow.location.href = targetUrl;
+        return;
+    }
 
-  openGenericExtensionPage("person", personName);
+    openGenericExtensionPage("person", personName);
 }
 
 async function handleMovieClick(movieTitle, movieYear = "", sourceElement, targetWindow = null) {
-  const domFilmSnapshot = parseDomFilmSnapshotFromElement(sourceElement);
-  const resolvedMovieYear = movieYear || domFilmSnapshot?.year || "";
-  const existingMovieRecord =
-    (await getFilmRecordByTitleAndYear(movieTitle, resolvedMovieYear)) ??
-    (await getFilmRecordsByTitle(movieTitle)).find(
-      (record) =>
-        normalizeTitle(record.title) === normalizeTitle(movieTitle) &&
-        (!resolvedMovieYear || record.year === resolvedMovieYear),
-    ) ??
-    null;
+    const domFilmSnapshot = parseDomFilmSnapshotFromElement(sourceElement);
+    const resolvedMovieYear = movieYear || domFilmSnapshot?.year || "";
+    const existingMovieRecord =
+        (await getFilmRecordByTitleAndYear(movieTitle, resolvedMovieYear)) ??
+        (await getFilmRecordsByTitle(movieTitle)).find(
+            (record) =>
+                normalizeTitle(record.title) === normalizeTitle(movieTitle) &&
+                (!resolvedMovieYear || record.year === resolvedMovieYear),
+        ) ??
+        null;
 
-  if (existingMovieRecord) {
-    await syncDomSnapshotToCachedRecords(domFilmSnapshot);
-  } else {
-    await fetchAndCacheMovie(movieTitle, domFilmSnapshot, resolvedMovieYear);
-  }
+    if (existingMovieRecord) {
+        await syncDomSnapshotToCachedRecords(domFilmSnapshot);
+    } else {
+        await fetchAndCacheMovie(movieTitle, domFilmSnapshot, resolvedMovieYear);
+    }
 
-  const targetUrl = getGenericExtensionUrl(
-    "movie",
-    movieTitle,
-    existingMovieRecord?.year ?? resolvedMovieYear,
-  );
-  if (targetWindow) {
-    targetWindow.location.href = targetUrl;
-    return;
-  }
+    const targetUrl = getGenericExtensionUrl(
+        "movie",
+        movieTitle,
+        existingMovieRecord?.year ?? resolvedMovieYear,
+    );
+    if (targetWindow) {
+        targetWindow.location.href = targetUrl;
+        return;
+    }
 
-  openGenericExtensionPage(
-    "movie",
-    movieTitle,
-    existingMovieRecord?.year ?? resolvedMovieYear,
-  );
+    openGenericExtensionPage(
+        "movie",
+        movieTitle,
+        existingMovieRecord?.year ?? resolvedMovieYear,
+    );
 }
 
 function applyLoadedStyle(element, existsInDb) {
-  element.style.cursor = "pointer";
-  element.style.textDecoration = existsInDb ? "none" : "underline";
-  element.style.textUnderlineOffset = existsInDb ? "" : "3px";
-  element.style.fontStyle = existsInDb ? "italic" : "normal";
+    element.style.cursor = "pointer";
+    element.style.textDecoration = existsInDb ? "none" : "underline";
+    element.style.textUnderlineOffset = existsInDb ? "" : "3px";
+    element.style.fontStyle = existsInDb ? "italic" : "normal";
 }
 
 function bindPersonSpan(span, personName) {
-  if (span.getAttribute(PERSON_BOUND_ATTR) === "true") {
-    return;
-  }
+    if (span.getAttribute(PERSON_BOUND_ATTR) === "true") {
+        return;
+    }
 
-  span.setAttribute(PERSON_BOUND_ATTR, "true");
-  span.setAttribute("data-cinenerdle2-person-name", personName);
-  applyLoadedStyle(span, false);
-  span.addEventListener("click", () => {
-    const targetWindow = window.open("about:blank", "_blank");
-    handlePersonClick(personName, span, targetWindow).catch((error) => {
-      console.error("cinenerdle2.handlePersonClick", error);
-      targetWindow?.close();
-      alert(error.message);
+    span.setAttribute(PERSON_BOUND_ATTR, "true");
+    span.setAttribute("data-cinenerdle2-person-name", personName);
+    applyLoadedStyle(span, false);
+    span.addEventListener("click", () => {
+        const targetWindow = window.open("about:blank", "_blank");
+        handlePersonClick(personName, span, targetWindow).catch((error) => {
+            console.error("cinenerdle2.handlePersonClick", error);
+            targetWindow?.close();
+            alert(error.message);
+        });
     });
-  });
 
-  getPersonRecordByName(personName)
-    .then((personRecord) => applyLoadedStyle(span, !!personRecord))
-    .catch((error) =>
-      console.error("cinenerdle2.getPersonRecordByName", personName, error),
-    );
+    getPersonRecordByName(personName)
+        .then((personRecord) => applyLoadedStyle(span, !!personRecord))
+        .catch((error) =>
+            console.error("cinenerdle2.getPersonRecordByName", personName, error),
+        );
 }
 
 function createPersonSpan(personName) {
-  const span = document.createElement("span");
-  span.textContent = personName;
-  bindPersonSpan(span, personName);
-  return span;
+    const span = document.createElement("span");
+    span.textContent = personName;
+    bindPersonSpan(span, personName);
+    return span;
 }
 
 function bindExistingPersonSpans(container) {
-  Array.from(container.querySelectorAll("span")).forEach((span) => {
-    const personName = getText(span);
-    if (!personName || !looksLikePersonName(personName)) {
-      return;
-    }
+    Array.from(container.querySelectorAll("span")).forEach((span) => {
+        const personName = getText(span);
+        if (!personName || !looksLikePersonName(personName)) {
+            return;
+        }
 
-    bindPersonSpan(span, personName);
-  });
+        bindPersonSpan(span, personName);
+    });
 }
 
 function replaceCommaSeparatedTextNode(textNode) {
-  const text = textNode.textContent ?? "";
-  if (!text.includes(",")) {
-    return;
-  }
-
-  const people = text
-    .split(",")
-    .map((person) => person.trim())
-    .filter(Boolean);
-
-  if (people.length < 2 || !people.every(looksLikePersonName)) {
-    return;
-  }
-
-  const fragment = document.createDocumentFragment();
-
-  people.forEach((person, index) => {
-    if (index > 0) {
-      fragment.appendChild(document.createTextNode(", "));
+    const text = textNode.textContent ?? "";
+    if (!text.includes(",")) {
+        return;
     }
 
-    fragment.appendChild(createPersonSpan(person));
-  });
+    const people = text
+        .split(",")
+        .map((person) => person.trim())
+        .filter(Boolean);
 
-  textNode.replaceWith(fragment);
+    if (people.length < 2 || !people.every(looksLikePersonName)) {
+        return;
+    }
+
+    const fragment = document.createDocumentFragment();
+
+    people.forEach((person, index) => {
+        if (index > 0) {
+            fragment.appendChild(document.createTextNode(", "));
+        }
+
+        fragment.appendChild(createPersonSpan(person));
+    });
+
+    textNode.replaceWith(fragment);
 }
 
 function replaceSinglePersonTextNode(textNode) {
-  const personName = (textNode.textContent ?? "").trim();
-  if (!looksLikePersonName(personName)) {
-    return;
-  }
+    const personName = (textNode.textContent ?? "").trim();
+    if (!looksLikePersonName(personName)) {
+        return;
+    }
 
-  textNode.replaceWith(createPersonSpan(personName));
+    textNode.replaceWith(createPersonSpan(personName));
 }
 
 function upgradeContainerPeople(container) {
-  bindExistingPersonSpans(container);
+    bindExistingPersonSpans(container);
 
-  Array.from(container.childNodes).forEach((childNode) => {
-    if (childNode.nodeType !== Node.TEXT_NODE) {
-      return;
-    }
+    Array.from(container.childNodes).forEach((childNode) => {
+        if (childNode.nodeType !== Node.TEXT_NODE) {
+            return;
+        }
 
-    if ((childNode.textContent ?? "").includes(",")) {
-      replaceCommaSeparatedTextNode(childNode);
-      return;
-    }
+        if ((childNode.textContent ?? "").includes(",")) {
+            replaceCommaSeparatedTextNode(childNode);
+            return;
+        }
 
-    replaceSinglePersonTextNode(childNode);
-  });
+        replaceSinglePersonTextNode(childNode);
+    });
 }
 
 function getVisibleCastContainers() {
-  return Array.from(document.querySelectorAll("div.text-pretty.text-white"))
-    .filter(isVisible)
-    .filter(elementHasCastContext);
+    return Array.from(document.querySelectorAll("div.text-pretty.text-white"))
+        .filter(isVisible)
+        .filter(elementHasCastContext);
 }
 
 function getVisibleMovieTitleElements() {
-  return Array.from(document.querySelectorAll("div")).filter(
-    (element) =>
-      isVisible(element) &&
-      / \(\d{4}\)$/.test(getText(element)) &&
-      element.children.length === 0 &&
-      !!getNearestFilmCard(element),
-  );
+    return Array.from(document.querySelectorAll("div")).filter(
+        (element) =>
+            isVisible(element) &&
+            / \(\d{4}\)$/.test(getText(element)) &&
+            element.children.length === 0 &&
+            !!getNearestFilmCard(element),
+    );
 }
 
 function findMovieTitleElement(startElement) {
-  let current = startElement;
+    let current = startElement;
 
-  while (current) {
-    if (
-      current instanceof HTMLElement &&
-      current.tagName === "DIV" &&
-      / \(\d{4}\)$/.test(getText(current)) &&
-      current.children.length === 0 &&
-      getNearestFilmCard(current)
-    ) {
-      return current;
+    while (current) {
+        if (
+            current instanceof HTMLElement &&
+            current.tagName === "DIV" &&
+            / \(\d{4}\)$/.test(getText(current)) &&
+            current.children.length === 0 &&
+            getNearestFilmCard(current)
+        ) {
+            return current;
+        }
+
+        current = current.parentElement;
     }
 
-    current = current.parentElement;
-  }
-
-  return null;
+    return null;
 }
 
 function buildMovieDatabaseTooltip(filmTitleAndYear, filmRecords, domFilmSnapshot = null) {
-  const matchingFilmRecords = (filmRecords ?? []).filter(
-    (record) =>
-      normalizeTitle(record?.title ?? "") === normalizeTitle(filmTitleAndYear.title) &&
-      (!filmTitleAndYear.year || record?.year === filmTitleAndYear.year),
-  );
-
-  const mergedPeopleByRole = {};
-  matchingFilmRecords.forEach((record) => {
-    Object.entries(record?.domSnapshot?.peopleByRole ?? {}).forEach(([role, people]) => {
-      mergedPeopleByRole[role] = Array.from(
-        new Set([...(mergedPeopleByRole[role] ?? []), ...people]),
-      );
-    });
-  });
-  Object.entries(domFilmSnapshot?.peopleByRole ?? {}).forEach(([role, people]) => {
-    mergedPeopleByRole[role] = Array.from(
-      new Set([...(mergedPeopleByRole[role] ?? []), ...people]),
+    const matchingFilmRecords = (filmRecords ?? []).filter(
+        (record) =>
+            normalizeTitle(record?.title ?? "") === normalizeTitle(filmTitleAndYear.title) &&
+            (!filmTitleAndYear.year || record?.year === filmTitleAndYear.year),
     );
-  });
 
-  const combinedEntry = {
-    title: filmTitleAndYear.title,
-    year: filmTitleAndYear.year,
-    ids: Array.from(new Set(matchingFilmRecords.map((record) => record?.id).filter(Boolean))),
-    popularity:
-      matchingFilmRecords.find((record) => typeof record?.popularity === "number")?.popularity ??
-      null,
-    tmdbMovie: matchingFilmRecords.some((record) => !!record?.rawTmdbMovie),
-    tmdbSearch: matchingFilmRecords.some((record) => !!record?.rawTmdbMovieSearchResponse),
-    tmdbCredits: matchingFilmRecords.some((record) => !!record?.rawTmdbMovieCreditsResponse),
-    cinenerdleDom:
-      matchingFilmRecords.some((record) => !!record?.domSnapshot) || !!domFilmSnapshot,
-    peopleByRole: mergedPeopleByRole,
-    tmdbSavedAt:
-      matchingFilmRecords.find((record) => record?.tmdbSavedAt)?.tmdbSavedAt ?? null,
-    tmdbCreditsSavedAt:
-      matchingFilmRecords.find((record) => record?.tmdbCreditsSavedAt)?.tmdbCreditsSavedAt ?? null,
-    domSavedAt:
-      matchingFilmRecords.find((record) => record?.domSnapshot?.domSavedAt)?.domSnapshot?.domSavedAt ??
-      domFilmSnapshot?.domSavedAt ??
-      null,
-  };
+    const mergedPeopleByRole = {};
+    matchingFilmRecords.forEach((record) => {
+        Object.entries(record?.domSnapshot?.peopleByRole ?? {}).forEach(([role, people]) => {
+            mergedPeopleByRole[role] = Array.from(
+                new Set([...(mergedPeopleByRole[role] ?? []), ...people]),
+            );
+        });
+    });
+    Object.entries(domFilmSnapshot?.peopleByRole ?? {}).forEach(([role, people]) => {
+        mergedPeopleByRole[role] = Array.from(
+            new Set([...(mergedPeopleByRole[role] ?? []), ...people]),
+        );
+    });
 
-  return JSON.stringify(combinedEntry, null, 2);
+    const combinedEntry = {
+        title: filmTitleAndYear.title,
+        year: filmTitleAndYear.year,
+        ids: Array.from(new Set(matchingFilmRecords.map((record) => record?.id).filter(Boolean))),
+        popularity:
+            matchingFilmRecords.find((record) => typeof record?.popularity === "number")?.popularity ??
+            null,
+        tmdbMovie: matchingFilmRecords.some((record) => !!record?.rawTmdbMovie),
+        tmdbSearch: matchingFilmRecords.some((record) => !!record?.rawTmdbMovieSearchResponse),
+        tmdbCredits: matchingFilmRecords.some((record) => !!record?.rawTmdbMovieCreditsResponse),
+        cinenerdleDom:
+            matchingFilmRecords.some((record) => !!record?.domSnapshot) || !!domFilmSnapshot,
+        peopleByRole: mergedPeopleByRole,
+        tmdbSavedAt:
+            matchingFilmRecords.find((record) => record?.tmdbSavedAt)?.tmdbSavedAt ?? null,
+        tmdbCreditsSavedAt:
+            matchingFilmRecords.find((record) => record?.tmdbCreditsSavedAt)?.tmdbCreditsSavedAt ?? null,
+        domSavedAt:
+            matchingFilmRecords.find((record) => record?.domSnapshot?.domSavedAt)?.domSnapshot?.domSavedAt ??
+            domFilmSnapshot?.domSavedAt ??
+            null,
+    };
+
+    return JSON.stringify(combinedEntry, null, 2);
 }
 
 function bindMovieTitleElement(titleElement) {
-  if (titleElement.getAttribute(MOVIE_BOUND_ATTR) === "true") {
-    return;
-  }
+    if (titleElement.getAttribute(MOVIE_BOUND_ATTR) === "true") {
+        return;
+    }
 
-  const cardElement = getNearestFilmCard(titleElement);
-  const filmTitleAndYear = cardElement ? getFilmTitleAndYear(cardElement) : null;
-  if (!filmTitleAndYear) {
-    return;
-  }
-  const domFilmSnapshot = parseDomFilmSnapshotFromElement(titleElement);
+    const cardElement = getNearestFilmCard(titleElement);
+    const filmTitleAndYear = cardElement ? getFilmTitleAndYear(cardElement) : null;
+    if (!filmTitleAndYear) {
+        return;
+    }
+    const domFilmSnapshot = parseDomFilmSnapshotFromElement(titleElement);
 
-  titleElement.setAttribute(MOVIE_BOUND_ATTR, "true");
-  applyLoadedStyle(titleElement, false);
-  titleElement.title = buildMovieDatabaseTooltip(filmTitleAndYear, [], domFilmSnapshot);
+    titleElement.setAttribute(MOVIE_BOUND_ATTR, "true");
+    applyLoadedStyle(titleElement, false);
+    titleElement.title = buildMovieDatabaseTooltip(filmTitleAndYear, [], domFilmSnapshot);
 
-  getFilmRecordsByTitle(filmTitleAndYear.title)
-    .then((filmRecords) => {
-      titleElement.title = buildMovieDatabaseTooltip(
-        filmTitleAndYear,
-        filmRecords,
-        domFilmSnapshot,
-      );
-      applyLoadedStyle(
-        titleElement,
-        filmRecords.some(
-          (record) =>
-            normalizeTitle(record.title) === normalizeTitle(filmTitleAndYear.title) &&
-            (!filmTitleAndYear.year || record.year === filmTitleAndYear.year),
-        ),
-      );
-    })
-    .catch((error) =>
-      console.error("cinenerdle2.getFilmRecordsByTitle", filmTitleAndYear.title, error),
-    );
+    getFilmRecordsByTitle(filmTitleAndYear.title)
+        .then((filmRecords) => {
+            titleElement.title = buildMovieDatabaseTooltip(
+                filmTitleAndYear,
+                filmRecords,
+                domFilmSnapshot,
+            );
+            applyLoadedStyle(
+                titleElement,
+                filmRecords.some(
+                    (record) =>
+                        normalizeTitle(record.title) === normalizeTitle(filmTitleAndYear.title) &&
+                        (!filmTitleAndYear.year || record.year === filmTitleAndYear.year),
+                ),
+            );
+        })
+        .catch((error) =>
+            console.error("cinenerdle2.getFilmRecordsByTitle", filmTitleAndYear.title, error),
+        );
 }
 
 function bindMovieTitleClickDelegate() {
-  if (movieTitleClickDelegateBound) {
-    return;
-  }
-
-  document.addEventListener(
-    "click",
-    (event) => {
-      const titleElement = findMovieTitleElement(event.target);
-      if (!titleElement) {
+    if (movieTitleClickDelegateBound) {
         return;
-      }
+    }
 
-      const cardElement = getNearestFilmCard(titleElement);
-      const filmTitleAndYear = cardElement ? getFilmTitleAndYear(cardElement) : null;
-      if (!filmTitleAndYear) {
-        return;
-      }
+    document.addEventListener(
+        "click",
+        (event) => {
+            const titleElement = findMovieTitleElement(event.target);
+            if (!titleElement) {
+                return;
+            }
 
-      event.preventDefault();
-      event.stopPropagation();
+            const cardElement = getNearestFilmCard(titleElement);
+            const filmTitleAndYear = cardElement ? getFilmTitleAndYear(cardElement) : null;
+            if (!filmTitleAndYear) {
+                return;
+            }
 
-      const targetWindow = window.open("about:blank", "_blank");
-      handleMovieClick(
-        filmTitleAndYear.title,
-        filmTitleAndYear.year,
-        titleElement,
-        targetWindow,
-      ).catch((error) => {
-        console.error("cinenerdle2.handleMovieClick", error);
-        targetWindow?.close();
-        alert(error.message);
-      });
-    },
-    true,
-  );
+            event.preventDefault();
+            event.stopPropagation();
 
-  movieTitleClickDelegateBound = true;
+            const targetWindow = window.open("about:blank", "_blank");
+            handleMovieClick(
+                filmTitleAndYear.title,
+                filmTitleAndYear.year,
+                titleElement,
+                targetWindow,
+            ).catch((error) => {
+                console.error("cinenerdle2.handleMovieClick", error);
+                targetWindow?.close();
+                alert(error.message);
+            });
+        },
+        true,
+    );
+
+    movieTitleClickDelegateBound = true;
 }
 
 function handlePractice() {
-  const practiceModeEl = findPracticeModeEl();
-  if (practiceModeEl) {
-    bindPracticeModeClick(practiceModeEl);
-  }
+    const practiceModeEl = findPracticeModeEl();
+    if (practiceModeEl) {
+        bindPracticeModeClick(practiceModeEl);
+    }
 
-  bindMovieTitleClickDelegate();
-  getVisibleCastContainers().forEach(upgradeContainerPeople);
-  getVisibleMovieTitleElements().forEach(bindMovieTitleElement);
-  getVisibleMovieTitleElements()
-    .map((titleElement) => parseDomFilmSnapshotFromElement(titleElement))
-    .filter(Boolean)
-    .forEach((domFilmSnapshot) => {
-      syncDomSnapshotToCachedRecords(domFilmSnapshot).catch((error) => {
-        console.error("cinenerdle2.syncDomSnapshotToCachedRecords", error);
-      });
-    });
+    bindMovieTitleClickDelegate();
+    getVisibleCastContainers().forEach(upgradeContainerPeople);
+    getVisibleMovieTitleElements().forEach(bindMovieTitleElement);
+    getVisibleMovieTitleElements()
+        .map((titleElement) => parseDomFilmSnapshotFromElement(titleElement))
+        .filter(Boolean)
+        .forEach((domFilmSnapshot) => {
+            syncDomSnapshotToCachedRecords(domFilmSnapshot).catch((error) => {
+                console.error("cinenerdle2.syncDomSnapshotToCachedRecords", error);
+            });
+        });
 }
 
 function main() {
-  if (!document.body) {
-    return;
-  }
-
-  if (isGenericExtensionEntryPage() && !getGenericExtensionEntryUrl()) {
-    const currentUrl = new URL(window.location.href);
-    currentUrl.searchParams.delete("generic_extension");
-    const baseHref = `${currentUrl.origin}${currentUrl.pathname}${currentUrl.search}`;
-    const separator = baseHref.includes("?") ? "&" : "?";
-    window.location.replace(`${baseHref}${separator}generic_extension=Brad+Pitt`);
-    return;
-  }
-
-  maybeShowGenericExtensionEntry()
-    .then((didRenderEntry) => {
-      if (didRenderEntry) {
+    if (!document.body) {
         return;
-      }
+    }
 
-      handlePractice();
+    if (isGenericExtensionEntryPage() && !getGenericExtensionEntryUrl()) {
+        const currentUrl = new URL(window.location.href);
+        currentUrl.searchParams.delete("generic_extension");
+        const baseHref = `${currentUrl.origin}${currentUrl.pathname}${currentUrl.search}`;
+        const separator = baseHref.includes("?") ? "&" : "?";
+        window.location.replace(`${baseHref}${separator}generic_extension=Brad+Pitt`);
+        return;
+    }
 
-      const observer = new MutationObserver(() => {
-        handlePractice();
-      });
+    maybeShowGenericExtensionEntry()
+        .then((didRenderEntry) => {
+            if (didRenderEntry) {
+                return;
+            }
 
-      observer.observe(document.body, {
-        childList: true,
-        subtree: true,
-        characterData: true,
-      });
-    })
-    .catch((error) => {
-      console.error("cinenerdle2.main", error);
-      alert(error.message);
-    });
+            handlePractice();
+
+            const observer = new MutationObserver(() => {
+                handlePractice();
+            });
+
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true,
+                characterData: true,
+            });
+        })
+        .catch((error) => {
+            console.error("cinenerdle2.main", error);
+            alert(error.message);
+        });
 }
 
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", main, { once: true });
+    document.addEventListener("DOMContentLoaded", main, { once: true });
 } else {
-  main();
+    main();
 }
