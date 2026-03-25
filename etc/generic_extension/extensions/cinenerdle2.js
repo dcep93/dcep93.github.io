@@ -2979,7 +2979,7 @@ function getCurrentGenericExtensionTitle(rootRow) {
 }
 
 function renderGenericExtensionStack(rootRow) {
-  const pageBackground = "linear-gradient(180deg, #020617 0%, #0f172a 100%)";
+  const pageBackground = "#0f172a";
 
   document.documentElement.style.margin = "0";
   document.documentElement.style.minHeight = "100%";
