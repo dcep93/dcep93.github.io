@@ -2106,7 +2106,14 @@ async function buildChildRowForCard(card) {
 }
 
 async function selectGenericExtensionCard(rootRow, row, card, historyMode = "push") {
-  if (!row || !card || row.selectedCardKey === card.key) {
+  if (!row || !card) {
+    return;
+  }
+
+  if (row.selectedCardKey === card.key) {
+    row.selectedCardKey = null;
+    renderGenericExtensionStack(rootRow);
+    updateGenericExtensionHistory(rootRow, historyMode);
     return;
   }
 
