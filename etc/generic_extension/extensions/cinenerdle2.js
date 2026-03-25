@@ -1146,13 +1146,15 @@ function createPosterCard({ imageUrl, title, subtitle, subtitleDetail = "", foot
     card.style.maxWidth = "194px";
     card.style.display = "flex";
     card.style.flexDirection = "column";
-    card.style.padding = "10px";
+    card.style.padding = "0";
     card.style.border = "1px solid #243041";
     card.style.borderRadius = "14px";
     card.style.backgroundColor = "#111827";
     card.style.boxShadow = "none";
     card.style.height = "100%";
     card.style.boxSizing = "border-box";
+    card.style.position = "relative";
+    card.style.overflow = "hidden";
 
     const imageFrame = document.createElement("div");
     imageFrame.dataset.cinenerdle2CardImageFrame = "true";
@@ -1166,6 +1168,8 @@ function createPosterCard({ imageUrl, title, subtitle, subtitleDetail = "", foot
     imageFrame.style.alignItems = "center";
     imageFrame.style.justifyContent = "center";
     imageFrame.style.flex = "0 0 auto";
+    imageFrame.style.position = "relative";
+    imageFrame.style.zIndex = "0";
 
     if (imageUrl) {
         const image = document.createElement("img");
@@ -1192,7 +1196,9 @@ function createPosterCard({ imageUrl, title, subtitle, subtitleDetail = "", foot
     content.style.flexDirection = "column";
     content.style.flex = "1";
     content.style.gap = "6px";
-    content.style.paddingTop = "6px";
+    content.style.padding = "10px";
+    content.style.position = "relative";
+    content.style.zIndex = "1";
 
     content.appendChild(createCardTitle(title));
 
