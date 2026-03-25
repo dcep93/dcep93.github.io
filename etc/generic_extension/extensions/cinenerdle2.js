@@ -1823,6 +1823,13 @@ function getGenericExtensionEntryUrl() {
   return match?.[1]?.trim() ?? "";
 }
 
+function isGenericExtensionEntryPage() {
+  return (
+    window.location.pathname.endsWith("/cinenerdle2.html") ||
+    window.location.pathname.endsWith("/icon.png")
+  );
+}
+
 function updateGenericExtensionHistory(rootRow, mode = "push") {
   const serializedPath = serializeGenericExtensionPath(collectSelectedPathNodes(rootRow));
   const nextUrl = `${window.location.origin}${window.location.pathname}?generic_extension=${serializedPath}`;
@@ -3594,11 +3601,13 @@ function main() {
     return;
   }
 
-  if (
-    window.location.pathname.endsWith("/cinenerdle2.html") &&
-    !getGenericExtensionEntryUrl()
-  ) {
-    alert("default");
+  if (isGenericExtensionEntryPage() && !getGenericExtensionEntryUrl()) {
+    const currentUrl = new URL(window.location.href);
+    currentUrl.searchParams.delete("generic_extension");
+    const baseHref = `${currentUrl.origin}${currentUrl.pathname}${currentUrl.search}`;
+    const separator = baseHref.includes("?") ? "&" : "?";
+    window.location.replace(`${baseHref}${separator}generic_extension=Brad+Pitt`);
+    return;
   }
 
   maybeShowGenericExtensionEntry()
