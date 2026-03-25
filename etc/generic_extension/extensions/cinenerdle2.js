@@ -9,6 +9,8 @@ const FILMS_STORE_NAME = "films";
 const CINENERDLE_ICON_URL = "https://www.cinenerdle2.app/icon.png";
 const TMDB_ICON_URL =
   "https://www.themoviedb.org/assets/2/favicon-32x32-543a21832c8931d3494a68881f6afcafc58e96c5d324345377f3197a37b367b5.png";
+const GENERIC_EXTENSION_BOOKMARKS_STORAGE_KEY =
+  "cinenerdle2.genericExtensionBookmarks";
 
 const practiceModeClickBound = new WeakSet();
 let movieTitleClickDelegateBound = false;
@@ -16,6 +18,17 @@ let latestQueryResponseText = "No query response yet.";
 let practiceModeClearInFlight = false;
 let genericExtensionPopstateBound = false;
 let genericExtensionRootRow = null;
+const genericExtensionSearchState = {
+  query: "",
+  suggestions: [],
+  targetSelection: null,
+  status: "",
+  resultPath: null,
+  searching: false,
+  shouldFocusInput: false,
+  selectionStart: null,
+  selectionEnd: null,
+};
 
 function isVisible(element) {
   if (!(element instanceof HTMLElement)) {
@@ -509,6 +522,52 @@ async function getFilmRecordsByIds(ids) {
     );
     await transactionDonePromise(transaction);
     return new Map(records.filter(Boolean).map((record) => [record.id, record]));
+  } finally {
+    database.close();
+  }
+}
+
+async function getAllPersonRecords() {
+  const database = await openIndexedDb();
+
+  try {
+    const transaction = database.transaction(PEOPLE_STORE_NAME, "readonly");
+    const store = transaction.objectStore(PEOPLE_STORE_NAME);
+    const records = await indexedDbRequestToPromise(store.getAll());
+    await transactionDonePromise(transaction);
+    return records ?? [];
+  } finally {
+    database.close();
+  }
+}
+
+async function getAllFilmRecords() {
+  const database = await openIndexedDb();
+
+  try {
+    const transaction = database.transaction(FILMS_STORE_NAME, "readonly");
+    const store = transaction.objectStore(FILMS_STORE_NAME);
+    const records = await indexedDbRequestToPromise(store.getAll());
+    await transactionDonePromise(transaction);
+    return records ?? [];
+  } finally {
+    database.close();
+  }
+}
+
+async function getPersonRecordById(id) {
+  if (!id) {
+    return null;
+  }
+
+  const database = await openIndexedDb();
+
+  try {
+    const transaction = database.transaction(PEOPLE_STORE_NAME, "readonly");
+    const store = transaction.objectStore(PEOPLE_STORE_NAME);
+    const record = await indexedDbRequestToPromise(store.get(id));
+    await transactionDonePromise(transaction);
+    return record ?? null;
   } finally {
     database.close();
   }
@@ -1515,6 +1574,63 @@ function createPathNode(kind, name, year = "") {
   };
 }
 
+function getSearchEntityLabel(entity) {
+  return entity.kind === "movie"
+    ? formatMoviePathLabel(entity.name, entity.year)
+    : entity.name;
+}
+
+function createPersonSearchEntity(personRecord) {
+  return {
+    kind: "person",
+    id: personRecord?.id ?? "",
+    name: personRecord?.name ?? "",
+    key: getPersonCardKey(personRecord?.name ?? "", personRecord?.id),
+    label: personRecord?.name ?? "",
+  };
+}
+
+function createMovieSearchEntity(movieRecord) {
+  const year = movieRecord?.year ?? getMovieRecordYear(movieRecord);
+  const title = movieRecord?.title ?? "";
+  return {
+    kind: "movie",
+    id: movieRecord?.id ?? "",
+    name: title,
+    year,
+    key: getMovieCardKey(title, year, movieRecord?.id),
+    label: formatMoviePathLabel(title, year),
+  };
+}
+
+function createPersonSearchEntityFromCredit(credit) {
+  const personName = credit?.name?.trim() ?? "";
+  return {
+    kind: "person",
+    id: credit?.id ?? "",
+    name: personName,
+    key: getPersonCardKey(personName, credit?.id),
+    label: personName,
+  };
+}
+
+function createMovieSearchEntityFromCredit(credit) {
+  const title = getMovieTitleFromCredit(credit);
+  const year = getMovieYearFromCredit(credit);
+  return {
+    kind: "movie",
+    id: credit?.id ?? "",
+    name: title,
+    year,
+    key: getMovieCardKey(title, year, credit?.id),
+    label: formatMoviePathLabel(title, year),
+  };
+}
+
+function getSearchEntityPathNode(entity) {
+  return createPathNode(entity.kind, entity.name, entity.kind === "movie" ? entity.year : "");
+}
+
 function parseMoviePathLabel(label) {
   const match = label.match(/^(.*) \((\d{4})\)$/);
   if (!match) {
@@ -1524,46 +1640,32 @@ function parseMoviePathLabel(label) {
   return createPathNode("movie", match[1].trim(), match[2]);
 }
 
-function parseGenericExtensionValue(value) {
-  const segments = value
+function parseGenericExtensionSegments(value) {
+  return value
     .split("|")
     .map((segment) => segment.trim())
+    .filter(Boolean)
+    .map((segment) => decodeURIComponent(segment.replaceAll("+", "%20")))
     .filter(Boolean);
-  if (segments.length === 0) {
-    return [];
-  }
+}
 
-  const firstSegment = segments[0];
-  const separatorIndex = firstSegment.indexOf(":");
-  if (separatorIndex === -1) {
-    return [];
-  }
-
-  const rootKind = firstSegment.slice(0, separatorIndex).trim();
-  const rootValue = decodeURIComponent(
-    firstSegment.slice(separatorIndex + 1).trim().replaceAll("+", "%20"),
-  );
-  if (!rootKind || !rootValue) {
+function buildGenericExtensionPathNodes(rootKind, segments) {
+  if (!rootKind || segments.length === 0) {
     return [];
   }
 
   const pathNodes = [
     rootKind === "movie"
-      ? parseMoviePathLabel(rootValue)
-      : createPathNode(rootKind, rootValue),
+      ? parseMoviePathLabel(segments[0])
+      : createPathNode("person", segments[0]),
   ];
 
   let nextKind = rootKind === "person" ? "movie" : "person";
   segments.slice(1).forEach((segment) => {
-    const decodedValue = decodeURIComponent(segment.replaceAll("+", "%20"));
-    if (!decodedValue) {
-      return;
-    }
-
     pathNodes.push(
       nextKind === "movie"
-        ? parseMoviePathLabel(decodedValue)
-        : createPathNode("person", decodedValue),
+        ? parseMoviePathLabel(segment)
+        : createPathNode("person", segment),
     );
     nextKind = nextKind === "person" ? "movie" : "person";
   });
@@ -1588,15 +1690,7 @@ function serializePathNode(pathNode) {
 }
 
 function serializeGenericExtensionPath(pathNodes) {
-  if (pathNodes.length === 0) {
-    return "";
-  }
-
-  const [rootNode, ...remainingNodes] = pathNodes;
-  return [
-    `${rootNode.kind}:${serializePathNode(rootNode)}`,
-    ...remainingNodes.map(serializePathNode),
-  ].join("|");
+  return pathNodes.map(serializePathNode).join("|");
 }
 
 function buildGenericExtensionUrlFromPath(pathNodes) {
@@ -1707,6 +1801,808 @@ function updateGenericExtensionHistory(rootRow, mode = "push") {
   }
 
   window.history.pushState({}, "", nextUrl);
+}
+
+function getGenericExtensionBookmarks() {
+  try {
+    const rawBookmarks = localStorage.getItem(
+      GENERIC_EXTENSION_BOOKMARKS_STORAGE_KEY,
+    );
+    if (!rawBookmarks) {
+      return [];
+    }
+
+    const parsedBookmarks = JSON.parse(rawBookmarks);
+    if (!Array.isArray(parsedBookmarks)) {
+      return [];
+    }
+
+    return parsedBookmarks.filter(
+      (bookmark) =>
+        bookmark &&
+        typeof bookmark.name === "string" &&
+        typeof bookmark.path === "string" &&
+        bookmark.name.trim() &&
+        bookmark.path.trim(),
+    );
+  } catch (error) {
+    console.error("cinenerdle2.getGenericExtensionBookmarks", error);
+    return [];
+  }
+}
+
+function saveGenericExtensionBookmarks(bookmarks) {
+  localStorage.setItem(
+    GENERIC_EXTENSION_BOOKMARKS_STORAGE_KEY,
+    JSON.stringify(bookmarks),
+  );
+}
+
+function getCurrentGenericExtensionBookmarkName(rootRow) {
+  return collectSelectedPathNodes(rootRow)
+    .map((pathNode) => getPathNodeLabel(pathNode))
+    .join(" -> ");
+}
+
+function saveCurrentViewAsBookmark(rootRow) {
+  const defaultBookmarkName = getCurrentGenericExtensionBookmarkName(rootRow);
+  const promptedName = window.prompt("Bookmark name", defaultBookmarkName);
+  const bookmarkName = promptedName?.trim();
+  if (!bookmarkName) {
+    return;
+  }
+
+  const bookmarkPath = serializeGenericExtensionPath(collectSelectedPathNodes(rootRow));
+  const existingBookmarks = getGenericExtensionBookmarks().filter(
+    (bookmark) => bookmark.name !== bookmarkName,
+  );
+  existingBookmarks.unshift({
+    name: bookmarkName,
+    path: bookmarkPath,
+    savedAt: new Date().toISOString(),
+  });
+  saveGenericExtensionBookmarks(existingBookmarks);
+}
+
+async function searchLocalEntities(query, limit = 8) {
+  const normalizedQuery = normalizeTitle(query);
+  if (!normalizedQuery) {
+    return [];
+  }
+
+  const [peopleRecords, filmRecords] = await Promise.all([
+    getAllPersonRecords(),
+    getAllFilmRecords(),
+  ]);
+  const suggestions = [];
+  const seenKeys = new Set();
+
+  peopleRecords.forEach((personRecord) => {
+    const personName = personRecord?.name ?? "";
+    const normalizedName = normalizeName(personName);
+    if (!normalizedName.includes(normalizedQuery)) {
+      return;
+    }
+
+    const entity = createPersonSearchEntity(personRecord);
+    if (seenKeys.has(entity.key)) {
+      return;
+    }
+
+    suggestions.push({
+      ...entity,
+      score: normalizedName.startsWith(normalizedQuery) ? 0 : 1,
+    });
+    seenKeys.add(entity.key);
+  });
+
+  filmRecords.forEach((filmRecord) => {
+    const movieTitle = filmRecord?.title ?? "";
+    const normalizedMovieTitle = normalizeTitle(movieTitle);
+    if (!normalizedMovieTitle.includes(normalizedQuery)) {
+      return;
+    }
+
+    const entity = createMovieSearchEntity(filmRecord);
+    if (seenKeys.has(entity.key)) {
+      return;
+    }
+
+    suggestions.push({
+      ...entity,
+      score: normalizedMovieTitle.startsWith(normalizedQuery) ? 0 : 1,
+    });
+    seenKeys.add(entity.key);
+  });
+
+  return suggestions
+    .sort((left, right) => {
+      if (left.score !== right.score) {
+        return left.score - right.score;
+      }
+
+      return left.label.localeCompare(right.label);
+    })
+    .slice(0, limit);
+}
+
+function createNeighborEntityMap(entities) {
+  const neighborsByKey = new Map();
+  entities.forEach((entity) => {
+    if (!neighborsByKey.has(entity.key)) {
+      neighborsByKey.set(entity.key, entity);
+    }
+  });
+  return Array.from(neighborsByKey.values());
+}
+
+async function getLocalNeighborsForEntity(entity, cache) {
+  if (cache.has(entity.key)) {
+    return cache.get(entity.key);
+  }
+
+  let neighbors = [];
+
+  if (entity.kind === "person") {
+    const personRecord =
+      (entity.id ? await getPersonRecordById(entity.id) : null) ??
+      (entity.name ? await getPersonRecordByName(entity.name) : null);
+
+    if (personRecord) {
+      neighbors = createNeighborEntityMap([
+        ...getUniqueSortedTmdbMovieCredits(personRecord)
+          .map((credit) => createMovieSearchEntityFromCredit(credit)),
+        ...(personRecord.domConnections ?? []).map((connection) => ({
+          kind: "movie",
+          id: "",
+          name: connection.title,
+          year: connection.year,
+          key: getMovieCardKey(connection.title, connection.year),
+          label: formatMoviePathLabel(connection.title, connection.year),
+        })),
+      ]);
+    }
+  } else if (entity.kind === "movie") {
+    const movieRecord =
+      (entity.id ? await getFilmRecordById(entity.id) : null) ??
+      (entity.name ? await getFilmRecordByTitleAndYear(entity.name, entity.year) : null);
+
+    if (movieRecord) {
+      const credits = movieRecord.rawTmdbMovieCreditsResponse ?? {};
+      const creditPeople = [...(credits.cast ?? []), ...(credits.crew ?? [])];
+      const tmdbPeople = creditPeople
+        .map((credit) => createPersonSearchEntityFromCredit(credit));
+      const cinenerdlePeople = Object.values(movieRecord?.domSnapshot?.peopleByRole ?? {})
+        .flat()
+        .map((personName) => ({
+          kind: "person",
+          id: "",
+          name: personName,
+          key: getPersonCardKey(personName),
+          label: personName,
+        }));
+
+      neighbors = createNeighborEntityMap([...tmdbPeople, ...cinenerdlePeople]);
+    }
+  }
+
+  cache.set(entity.key, neighbors);
+  return neighbors;
+}
+
+function reconstructBidirectionalPath(meetingKey, startParents, endParents, entityByKey) {
+  const startKeys = [];
+  let currentKey = meetingKey;
+  while (currentKey) {
+    startKeys.push(currentKey);
+    currentKey = startParents.get(currentKey) ?? null;
+  }
+  startKeys.reverse();
+
+  const endKeys = [];
+  currentKey = endParents.get(meetingKey) ?? null;
+  while (currentKey) {
+    endKeys.push(currentKey);
+    currentKey = endParents.get(currentKey) ?? null;
+  }
+
+  return [...startKeys, ...endKeys].map((key) => entityByKey.get(key));
+}
+
+async function findLocalConnectionPath(startEntity, endEntity, timeoutMs = 5000) {
+  if (!startEntity || !endEntity) {
+    return { path: null, timedOut: false, nodesRead: 0 };
+  }
+
+  if (startEntity.key === endEntity.key) {
+    return { path: [startEntity], timedOut: false, nodesRead: 1 };
+  }
+
+  const deadline = Date.now() + timeoutMs;
+  const neighborCache = new Map();
+  const entityByKey = new Map([
+    [startEntity.key, startEntity],
+    [endEntity.key, endEntity],
+  ]);
+  const startParents = new Map([[startEntity.key, null]]);
+  const endParents = new Map([[endEntity.key, null]]);
+  let startFrontier = [startEntity];
+  let endFrontier = [endEntity];
+  let nodesRead = 0;
+
+  while (startFrontier.length > 0 && endFrontier.length > 0) {
+    if (Date.now() > deadline) {
+      return { path: null, timedOut: true, nodesRead };
+    }
+
+    const expandStartSide = startFrontier.length <= endFrontier.length;
+    const frontier = expandStartSide ? startFrontier : endFrontier;
+    const ownParents = expandStartSide ? startParents : endParents;
+    const otherParents = expandStartSide ? endParents : startParents;
+    const nextFrontier = [];
+
+    for (const entity of frontier) {
+      if (Date.now() > deadline) {
+        return { path: null, timedOut: true, nodesRead };
+      }
+
+      nodesRead += 1;
+      const neighbors = await getLocalNeighborsForEntity(entity, neighborCache);
+      for (const neighbor of neighbors) {
+        if (!neighbor?.key || ownParents.has(neighbor.key)) {
+          continue;
+        }
+
+        ownParents.set(neighbor.key, entity.key);
+        entityByKey.set(neighbor.key, neighbor);
+
+        if (otherParents.has(neighbor.key)) {
+          return {
+            path: reconstructBidirectionalPath(
+              neighbor.key,
+              startParents,
+              endParents,
+              entityByKey,
+            ),
+            timedOut: false,
+            nodesRead,
+          };
+        }
+
+        nextFrontier.push(neighbor);
+      }
+    }
+
+    if (expandStartSide) {
+      startFrontier = nextFrontier;
+    } else {
+      endFrontier = nextFrontier;
+    }
+  }
+
+  return { path: null, timedOut: false, nodesRead };
+}
+
+function createBookmarkActionButton(label, onClick, tone = "neutral") {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = label;
+  button.style.border = `1px solid ${tone === "danger" ? "#5b2a2a" : "#334155"}`;
+  button.style.borderRadius = "999px";
+  button.style.padding = "9px 14px";
+  button.style.fontSize = "13px";
+  button.style.fontWeight = "600";
+  button.style.cursor = "pointer";
+  button.style.whiteSpace = "nowrap";
+  button.style.background = tone === "danger"
+    ? "linear-gradient(180deg, #412020 0%, #321818 100%)"
+    : "linear-gradient(180deg, #1c2940 0%, #162237 100%)";
+  button.style.color = tone === "danger" ? "#fecaca" : "#e2e8f0";
+  button.style.boxShadow = "inset 0 1px 0 rgba(255, 255, 255, 0.05)";
+  button.addEventListener("click", onClick);
+  return button;
+}
+
+function applyHorizontalScrollableRowStyle(element, paddingBottom = "8px") {
+  element.style.display = "flex";
+  element.style.flexWrap = "nowrap";
+  element.style.width = "100vw";
+  element.style.maxWidth = "100vw";
+  element.style.minWidth = "100vw";
+  element.style.overflowX = "auto";
+  element.style.overflowY = "visible";
+  element.style.paddingBottom = paddingBottom;
+  element.style.boxSizing = "border-box";
+}
+
+function restoreGenericExtensionSearchInputFocus() {
+  if (!genericExtensionSearchState.shouldFocusInput) {
+    return;
+  }
+
+  window.requestAnimationFrame(() => {
+    const input = document.querySelector('[data-cinenerdle2-search-input="true"]');
+    if (!(input instanceof HTMLInputElement)) {
+      return;
+    }
+
+    input.focus({ preventScroll: true });
+    const selectionStart =
+      typeof genericExtensionSearchState.selectionStart === "number"
+        ? genericExtensionSearchState.selectionStart
+        : input.value.length;
+    const selectionEnd =
+      typeof genericExtensionSearchState.selectionEnd === "number"
+        ? genericExtensionSearchState.selectionEnd
+        : selectionStart;
+    input.setSelectionRange(selectionStart, selectionEnd);
+  });
+}
+
+function resetGenericExtensionSearchState() {
+  genericExtensionSearchState.query = "";
+  genericExtensionSearchState.suggestions = [];
+  genericExtensionSearchState.targetSelection = null;
+  genericExtensionSearchState.status = "";
+  genericExtensionSearchState.resultPath = null;
+  genericExtensionSearchState.searching = false;
+  genericExtensionSearchState.shouldFocusInput = false;
+  genericExtensionSearchState.selectionStart = null;
+  genericExtensionSearchState.selectionEnd = null;
+}
+
+async function updateGenericExtensionSearchSuggestions(rootRow, query) {
+  genericExtensionSearchState.query = query;
+  genericExtensionSearchState.targetSelection = null;
+  genericExtensionSearchState.resultPath = null;
+  genericExtensionSearchState.status = "";
+
+  if (!query.trim()) {
+    genericExtensionSearchState.suggestions = [];
+    renderGenericExtensionStack(rootRow);
+    return;
+  }
+
+  const suggestions = await searchLocalEntities(query, 8);
+  if (genericExtensionSearchState.query !== query) {
+    return;
+  }
+
+  genericExtensionSearchState.suggestions = suggestions;
+  renderGenericExtensionStack(rootRow);
+}
+
+function selectGenericExtensionSearchSuggestion(rootRow, suggestion) {
+  genericExtensionSearchState.targetSelection = suggestion;
+  genericExtensionSearchState.query = suggestion.label;
+  genericExtensionSearchState.suggestions = [];
+  genericExtensionSearchState.resultPath = null;
+  genericExtensionSearchState.status = "";
+  genericExtensionSearchState.shouldFocusInput = false;
+  genericExtensionSearchState.selectionStart = null;
+  genericExtensionSearchState.selectionEnd = null;
+  renderGenericExtensionStack(rootRow);
+}
+
+function getSearchEntityIcon(kind) {
+  return kind === "movie" ? "🎬" : "👤";
+}
+
+function createAutocompleteField(rootRow, placeholder) {
+  const fieldWrap = document.createElement("div");
+  fieldWrap.style.position = "relative";
+  fieldWrap.style.zIndex = "5";
+  fieldWrap.style.display = "flex";
+  fieldWrap.style.flexDirection = "column";
+  fieldWrap.style.gap = "8px";
+  fieldWrap.style.minWidth = "260px";
+  fieldWrap.style.flex = "0 0 320px";
+
+  const inputShell = document.createElement("div");
+  inputShell.style.display = "flex";
+  inputShell.style.alignItems = "center";
+  inputShell.style.gap = "10px";
+  inputShell.style.padding = "0 12px";
+  inputShell.style.borderRadius = "12px";
+  inputShell.style.border = "1px solid #334155";
+  inputShell.style.backgroundColor = "#0f172a";
+
+  const inputIcon = document.createElement("div");
+  inputIcon.textContent = genericExtensionSearchState.targetSelection
+    ? getSearchEntityIcon(genericExtensionSearchState.targetSelection.kind)
+    : "";
+  inputIcon.style.flex = "0 0 auto";
+  inputIcon.style.fontSize = "16px";
+  inputIcon.style.width = "18px";
+  inputIcon.style.textAlign = "center";
+  inputShell.appendChild(inputIcon);
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.dataset.cinenerdle2SearchInput = "true";
+  input.value = genericExtensionSearchState.query;
+  input.placeholder = placeholder;
+  input.style.flex = "1 1 auto";
+  input.style.minWidth = "0";
+  input.style.height = "44px";
+  input.style.padding = "0";
+  input.style.border = "0";
+  input.style.outline = "none";
+  input.style.backgroundColor = "transparent";
+  input.style.color = "#f8fafc";
+  input.style.fontSize = "14px";
+  input.addEventListener("input", (event) => {
+    genericExtensionSearchState.shouldFocusInput = true;
+    genericExtensionSearchState.selectionStart = event.target.selectionStart;
+    genericExtensionSearchState.selectionEnd = event.target.selectionEnd;
+    updateGenericExtensionSearchSuggestions(rootRow, event.target.value).catch(
+      (error) => {
+        console.error("cinenerdle2.updateGenericExtensionSearchSuggestions", error);
+        alert(error.message);
+      },
+    );
+  });
+  inputShell.appendChild(input);
+  fieldWrap.appendChild(inputShell);
+
+  const suggestions = genericExtensionSearchState.suggestions;
+  if (suggestions.length > 0) {
+    const suggestionsWrap = document.createElement("div");
+    suggestionsWrap.style.position = "absolute";
+    suggestionsWrap.style.top = "calc(100% + 6px)";
+    suggestionsWrap.style.left = "0";
+    suggestionsWrap.style.right = "0";
+    suggestionsWrap.style.zIndex = "20";
+    suggestionsWrap.style.display = "flex";
+    suggestionsWrap.style.flexDirection = "column";
+    suggestionsWrap.style.gap = "6px";
+    suggestionsWrap.style.maxHeight = "180px";
+    suggestionsWrap.style.overflowY = "auto";
+    suggestionsWrap.style.padding = "8px";
+    suggestionsWrap.style.border = "1px solid #243041";
+    suggestionsWrap.style.borderRadius = "14px";
+    suggestionsWrap.style.backgroundColor = "#0f172a";
+    suggestionsWrap.style.boxShadow = "0 18px 40px rgba(0, 0, 0, 0.35)";
+
+    suggestions.forEach((suggestion) => {
+      const suggestionButton = document.createElement("button");
+      suggestionButton.type = "button";
+      suggestionButton.style.textAlign = "left";
+      suggestionButton.style.padding = "8px 10px";
+      suggestionButton.style.borderRadius = "10px";
+      suggestionButton.style.border = "1px solid #243041";
+      suggestionButton.style.backgroundColor = "#111827";
+      suggestionButton.style.color = "#e2e8f0";
+      suggestionButton.style.cursor = "pointer";
+
+      const suggestionContent = document.createElement("div");
+      suggestionContent.style.display = "flex";
+      suggestionContent.style.alignItems = "center";
+      suggestionContent.style.gap = "8px";
+
+      const suggestionIcon = document.createElement("div");
+      suggestionIcon.textContent = getSearchEntityIcon(suggestion.kind);
+      suggestionContent.appendChild(suggestionIcon);
+
+      const suggestionLabel = document.createElement("div");
+      suggestionLabel.textContent = suggestion.label;
+      suggestionContent.appendChild(suggestionLabel);
+
+      suggestionButton.appendChild(suggestionContent);
+      suggestionButton.addEventListener("click", () => {
+        selectGenericExtensionSearchSuggestion(rootRow, suggestion);
+      });
+      suggestionsWrap.appendChild(suggestionButton);
+    });
+
+    fieldWrap.appendChild(suggestionsWrap);
+  }
+
+  return fieldWrap;
+}
+
+function loadGenericExtensionPath(pathNodes) {
+  const nextUrl = `${window.location.origin}${window.location.pathname}?generic_extension=${serializeGenericExtensionPath(pathNodes)}`;
+  window.history.pushState({}, "", nextUrl);
+  maybeShowGenericExtensionEntry("replace").catch((error) => {
+    console.error("cinenerdle2.loadGenericExtensionPath", error);
+    alert(error.message);
+  });
+}
+
+function getCurrentSearchSourceEntity(rootRow) {
+  let currentRow = rootRow;
+  let selectedCard = getSelectedCard(currentRow);
+  while (currentRow && selectedCard?.childRow) {
+    const childSelectedCard = getSelectedCard(selectedCard.childRow);
+    if (!childSelectedCard) {
+      break;
+    }
+
+    currentRow = selectedCard.childRow;
+    selectedCard = childSelectedCard;
+  }
+
+  if (!selectedCard) {
+    return null;
+  }
+
+  return selectedCard.kind === "movie"
+    ? {
+        kind: "movie",
+        id: selectedCard.id ?? "",
+        name: selectedCard.name ?? "",
+        year: selectedCard.year ?? "",
+        key: selectedCard.key ?? getMovieCardKey(selectedCard.name ?? "", selectedCard.year ?? ""),
+        label: formatMoviePathLabel(selectedCard.name ?? "", selectedCard.year ?? ""),
+      }
+    : {
+        kind: "person",
+        id: selectedCard.id ?? "",
+        name: selectedCard.name ?? "",
+        key: selectedCard.key ?? getPersonCardKey(selectedCard.name ?? ""),
+        label: selectedCard.name ?? "",
+      };
+}
+
+async function connectGenericExtensionSearchEndpoints(rootRow) {
+  const sourceSelection = getCurrentSearchSourceEntity(rootRow);
+  const { targetSelection } = genericExtensionSearchState;
+  if (!sourceSelection) {
+    genericExtensionSearchState.status = "No current source selected";
+    renderGenericExtensionStack(rootRow);
+    return;
+  }
+
+  if (!targetSelection) {
+    genericExtensionSearchState.status = "Select a destination first";
+    renderGenericExtensionStack(rootRow);
+    return;
+  }
+
+  genericExtensionSearchState.searching = true;
+  genericExtensionSearchState.resultPath = null;
+  genericExtensionSearchState.status = "Searching...";
+  renderGenericExtensionStack(rootRow);
+
+  try {
+    const startedAt = performance.now();
+    const result = await findLocalConnectionPath(sourceSelection, targetSelection, 5000);
+    const elapsedSeconds = ((performance.now() - startedAt) / 1000).toFixed(1);
+    if (result.path?.length) {
+      genericExtensionSearchState.resultPath = result.path;
+      genericExtensionSearchState.status =
+        `Found path with ${result.path.length} nodes after reading ${result.nodesRead} nodes in ${elapsedSeconds} seconds.`;
+    } else if (result.timedOut) {
+      genericExtensionSearchState.status =
+        `No connection found in ${elapsedSeconds} seconds after reading ${result.nodesRead} nodes. Searched locally only, no remote lookups.`;
+    } else {
+      genericExtensionSearchState.status =
+        `No connection found in ${elapsedSeconds} seconds after reading ${result.nodesRead} nodes. Searched locally only, no remote lookups.`;
+    }
+  } catch (error) {
+    console.error("cinenerdle2.connectGenericExtensionSearchEndpoints", error);
+    genericExtensionSearchState.status = error.message;
+  } finally {
+    genericExtensionSearchState.searching = false;
+    renderGenericExtensionStack(rootRow);
+  }
+}
+
+function createGenericExtensionSearchBar(rootRow) {
+  const wrapper = document.createElement("section");
+  wrapper.style.display = "flex";
+  wrapper.style.flexDirection = "column";
+  wrapper.style.gap = "12px";
+  wrapper.style.width = "100%";
+  wrapper.style.maxWidth = "100%";
+  wrapper.style.padding = "14px 16px";
+  wrapper.style.border = "1px solid #243041";
+  wrapper.style.borderRadius = "18px";
+  wrapper.style.background = "rgba(15, 23, 42, 0.82)";
+  wrapper.style.boxShadow = "0 10px 30px rgba(0, 0, 0, 0.18)";
+  wrapper.style.boxSizing = "border-box";
+  wrapper.style.overflow = "visible";
+  wrapper.style.position = "relative";
+  wrapper.style.zIndex = "3";
+
+  const sourceSelection = getCurrentSearchSourceEntity(rootRow);
+  const topRow = document.createElement("div");
+  topRow.style.display = "flex";
+  topRow.style.alignItems = "center";
+  topRow.style.gap = "12px";
+  topRow.style.flexWrap = "nowrap";
+  topRow.style.width = "100%";
+  topRow.style.maxWidth = "100%";
+  topRow.style.boxSizing = "border-box";
+  topRow.style.overflow = "visible";
+
+  const sourceChip = document.createElement("div");
+  sourceChip.style.display = "flex";
+  sourceChip.style.alignItems = "center";
+  sourceChip.style.flex = "0 0 280px";
+  sourceChip.style.minHeight = "46px";
+  sourceChip.style.padding = "0 16px";
+  sourceChip.style.border = "1px solid #334155";
+  sourceChip.style.borderRadius = "14px";
+  sourceChip.style.backgroundColor = "#111827";
+  sourceChip.style.color = sourceSelection ? "#e2e8f0" : "#64748b";
+  sourceChip.style.fontSize = "14px";
+  sourceChip.style.fontWeight = "600";
+  sourceChip.style.whiteSpace = "nowrap";
+  sourceChip.style.overflowX = "auto";
+  sourceChip.style.overflowY = "hidden";
+  sourceChip.textContent = sourceSelection ? getSearchEntityLabel(sourceSelection) : "Current selection";
+  topRow.appendChild(sourceChip);
+
+  topRow.appendChild(createAutocompleteField(rootRow, "Connect to movie or person"));
+
+  const actions = document.createElement("div");
+  actions.style.display = "flex";
+  actions.style.gap = "8px";
+  actions.style.flexWrap = "nowrap";
+  actions.style.flex = "0 0 auto";
+  actions.appendChild(
+    createBookmarkActionButton(
+      genericExtensionSearchState.searching ? "Searching..." : "Connect",
+      () => {
+        connectGenericExtensionSearchEndpoints(rootRow).catch((error) => {
+          console.error("cinenerdle2.connectButton", error);
+          alert(error.message);
+        });
+      },
+    ),
+  );
+  topRow.appendChild(actions);
+  wrapper.appendChild(topRow);
+
+  if (genericExtensionSearchState.status) {
+    const status = document.createElement("div");
+    status.textContent = genericExtensionSearchState.status;
+    status.style.fontSize = "12px";
+    status.style.color = "#94a3b8";
+    wrapper.appendChild(status);
+  }
+
+  if (genericExtensionSearchState.resultPath?.length) {
+    const resultRow = document.createElement("div");
+    resultRow.style.display = "flex";
+    resultRow.style.alignItems = "center";
+    resultRow.style.gap = "8px";
+    resultRow.style.flexWrap = "nowrap";
+    applyHorizontalScrollableRowStyle(resultRow, "4px");
+
+    genericExtensionSearchState.resultPath.forEach((entity, index) => {
+      resultRow.appendChild(createChip(getSearchEntityLabel(entity)));
+      if (index < genericExtensionSearchState.resultPath.length - 1) {
+        const arrow = document.createElement("div");
+        arrow.textContent = "->";
+        arrow.style.color = "#64748b";
+        arrow.style.fontSize = "12px";
+        resultRow.appendChild(arrow);
+      }
+    });
+
+    resultRow.appendChild(
+      createBookmarkActionButton("Load Path", () => {
+        const currentPathNodes = collectSelectedPathNodes(rootRow);
+        const appendedPathNodes = genericExtensionSearchState.resultPath
+          .slice(1)
+          .map(getSearchEntityPathNode);
+        loadGenericExtensionPath(
+          [...currentPathNodes, ...appendedPathNodes],
+        );
+      }),
+    );
+    wrapper.appendChild(resultRow);
+  }
+
+  return wrapper;
+}
+
+function createGenericExtensionBookmarksBar(rootRow) {
+  const wrapper = document.createElement("section");
+  wrapper.style.display = "flex";
+  wrapper.style.alignItems = "center";
+  wrapper.style.gap = "12px";
+  wrapper.style.width = "100%";
+  wrapper.style.maxWidth = "100%";
+  wrapper.style.padding = "14px 16px";
+  wrapper.style.border = "1px solid #243041";
+  wrapper.style.borderRadius = "18px";
+  wrapper.style.background = "rgba(15, 23, 42, 0.82)";
+  wrapper.style.boxShadow = "0 10px 30px rgba(0, 0, 0, 0.18)";
+  wrapper.style.boxSizing = "border-box";
+  wrapper.style.overflow = "visible";
+
+  const title = document.createElement("div");
+  title.textContent = "Bookmarks";
+  title.style.flex = "0 0 auto";
+  title.style.fontSize = "12px";
+  title.style.fontWeight = "700";
+  title.style.letterSpacing = "0.08em";
+  title.style.textTransform = "uppercase";
+  title.style.color = "#94a3b8";
+  wrapper.appendChild(title);
+
+  const bookmarks = getGenericExtensionBookmarks();
+
+  const bookmarkSelect = document.createElement("select");
+  bookmarkSelect.style.flex = "0 0 360px";
+  bookmarkSelect.style.maxWidth = "360px";
+  bookmarkSelect.style.minWidth = "260px";
+  bookmarkSelect.style.height = "46px";
+  bookmarkSelect.style.padding = "0 14px";
+  bookmarkSelect.style.border = "1px solid #334155";
+  bookmarkSelect.style.borderRadius = "14px";
+  bookmarkSelect.style.backgroundColor = "#111827";
+  bookmarkSelect.style.color = bookmarks.length ? "#e2e8f0" : "#64748b";
+  bookmarkSelect.style.fontSize = "14px";
+  bookmarkSelect.style.outline = "none";
+
+  if (bookmarks.length === 0) {
+    const emptyOption = document.createElement("option");
+    emptyOption.textContent = "No bookmarks saved";
+    emptyOption.value = "";
+    bookmarkSelect.appendChild(emptyOption);
+    bookmarkSelect.disabled = true;
+  } else {
+    bookmarks.forEach((bookmark, index) => {
+      const option = document.createElement("option");
+      option.value = bookmark.path;
+      option.textContent = bookmark.name;
+      if (index === 0) {
+        option.selected = true;
+      }
+      bookmarkSelect.appendChild(option);
+    });
+  }
+  wrapper.appendChild(bookmarkSelect);
+
+  const getSelectedBookmark = () =>
+    bookmarks.find((bookmark) => bookmark.path === bookmarkSelect.value) ?? null;
+
+  wrapper.appendChild(
+    createBookmarkActionButton("Save Current View", () => {
+      saveCurrentViewAsBookmark(rootRow);
+      renderGenericExtensionStack(rootRow);
+    }),
+  );
+  wrapper.appendChild(
+    createBookmarkActionButton("Load", () => {
+      const bookmark = getSelectedBookmark();
+      if (!bookmark) {
+        return;
+      }
+
+      const nextUrl = `${window.location.origin}${window.location.pathname}?generic_extension=${bookmark.path}`;
+      window.history.pushState({}, "", nextUrl);
+      maybeShowGenericExtensionEntry("replace").catch((error) => {
+        console.error("cinenerdle2.loadBookmark", error);
+        alert(error.message);
+      });
+    }),
+  );
+  wrapper.appendChild(
+    createBookmarkActionButton(
+      "Remove",
+      () => {
+        const bookmark = getSelectedBookmark();
+        if (!bookmark) {
+          return;
+        }
+
+        saveGenericExtensionBookmarks(
+          getGenericExtensionBookmarks().filter(
+            (existingBookmark) => existingBookmark.path !== bookmark.path,
+          ),
+        );
+        renderGenericExtensionStack(rootRow);
+      },
+      "danger",
+    ),
+  );
+  return wrapper;
 }
 
 async function ensurePersonRecordByName(personName) {
@@ -1971,9 +2867,7 @@ function createGenericExtensionRowElement(row, rootRow) {
   sectionRow.body.style.display = "flex";
   sectionRow.body.style.alignItems = "flex-start";
   sectionRow.body.style.gap = "14px";
-  sectionRow.body.style.overflowX = "auto";
-  sectionRow.body.style.overflowY = "hidden";
-  sectionRow.body.style.paddingBottom = "8px";
+  applyHorizontalScrollableRowStyle(sectionRow.body, "8px");
 
   if ((row.cards ?? []).length === 0) {
     sectionRow.body.appendChild(createChip("No associated items found"));
@@ -2014,9 +2908,15 @@ function getCurrentGenericExtensionTitle(rootRow) {
 }
 
 function renderGenericExtensionStack(rootRow) {
+  const pageBackground = "linear-gradient(180deg, #020617 0%, #0f172a 100%)";
+
+  document.documentElement.style.margin = "0";
+  document.documentElement.style.minHeight = "100%";
+  document.documentElement.style.background = pageBackground;
   document.body.style.margin = "0";
-  document.body.style.background =
-    "linear-gradient(180deg, #020617 0%, #0f172a 100%)";
+  document.body.style.minHeight = "100vh";
+  document.body.style.background = pageBackground;
+  document.body.style.overflowX = "hidden";
   document.body.style.color = "#f8fafc";
   document.body.style.fontFamily =
     'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
@@ -2026,9 +2926,11 @@ function renderGenericExtensionStack(rootRow) {
   appRoot.style.display = "flex";
   appRoot.style.flexDirection = "column";
   appRoot.style.gap = "20px";
-  appRoot.style.minHeight = "100vh";
   appRoot.style.padding = "24px";
   appRoot.style.boxSizing = "border-box";
+
+  appRoot.appendChild(createGenericExtensionBookmarksBar(rootRow));
+  appRoot.appendChild(createGenericExtensionSearchBar(rootRow));
 
   getVisibleGenericExtensionRows(rootRow)
     .slice()
@@ -2038,6 +2940,7 @@ function renderGenericExtensionStack(rootRow) {
     });
 
   document.body.replaceChildren(appRoot);
+  restoreGenericExtensionSearchInputFocus();
 }
 
 async function buildMovieRowForPersonCard(card) {
@@ -2118,12 +3021,14 @@ async function selectGenericExtensionCard(rootRow, row, card, historyMode = "pus
   }
 
   row.selectedCardKey = card.key;
+  renderGenericExtensionStack(rootRow);
+  updateGenericExtensionHistory(rootRow, historyMode);
+
   if (!card.childRow) {
     card.childRow = await buildChildRowForCard(card);
   }
 
   renderGenericExtensionStack(rootRow);
-  updateGenericExtensionHistory(rootRow, historyMode);
 }
 
 async function createRootRowFromPathNode(pathNode) {
@@ -2149,6 +3054,32 @@ async function createRootRowFromPathNode(pathNode) {
       isRoot: true,
       cards: [rootCard],
     };
+  }
+
+  return null;
+}
+
+async function createRootRowFromSegment(segment) {
+  const prefersMovie = /\(\d{4}\)$/.test(segment);
+  const attempts = prefersMovie
+    ? [
+        () => createRootRowFromPathNode(parseMoviePathLabel(segment)),
+        () => createRootRowFromPathNode(createPathNode("person", segment)),
+      ]
+    : [
+        () => createRootRowFromPathNode(createPathNode("person", segment)),
+        () => createRootRowFromPathNode(parseMoviePathLabel(segment)),
+      ];
+
+  for (const attempt of attempts) {
+    try {
+      const rootRow = await attempt();
+      if (rootRow) {
+        return rootRow;
+      }
+    } catch (error) {
+      console.warn("cinenerdle2.createRootRowFromSegment", segment, error);
+    }
   }
 
   return null;
@@ -2197,19 +3128,20 @@ function sameRootPathNode(left, right) {
   return !!left && !!right && matchesPathNode({ ...left, key: "root" }, right);
 }
 
-async function buildGenericExtensionRootRow(pathNodes) {
-  if (pathNodes.length === 0) {
+async function buildGenericExtensionRootRow(rootSegment) {
+  if (!rootSegment) {
     return null;
   }
 
   if (
     genericExtensionRootRow &&
-    sameRootPathNode(getPathNodeFromCard(getSelectedCard(genericExtensionRootRow)), pathNodes[0])
+    normalizeTitle(getPathNodeLabel(getPathNodeFromCard(getSelectedCard(genericExtensionRootRow)))) ===
+      normalizeTitle(rootSegment)
   ) {
     return genericExtensionRootRow;
   }
 
-  return createRootRowFromPathNode(pathNodes[0]);
+  return createRootRowFromSegment(rootSegment);
 }
 
 async function maybeShowGenericExtensionEntry(historyMode = "replace") {
@@ -2218,13 +3150,19 @@ async function maybeShowGenericExtensionEntry(historyMode = "replace") {
     return false;
   }
 
-  const pathNodes = parseGenericExtensionValue(genericExtensionValue);
-  if (pathNodes.length === 0) {
+  const pathSegments = parseGenericExtensionSegments(genericExtensionValue);
+  if (pathSegments.length === 0) {
     return false;
   }
 
-  const rootRow = await buildGenericExtensionRootRow(pathNodes);
+  const rootRow = await buildGenericExtensionRootRow(pathSegments[0]);
   if (!rootRow) {
+    return false;
+  }
+
+  const resolvedRootCard = getSelectedCard(rootRow);
+  const pathNodes = buildGenericExtensionPathNodes(resolvedRootCard?.kind, pathSegments);
+  if (pathNodes.length === 0) {
     return false;
   }
 
