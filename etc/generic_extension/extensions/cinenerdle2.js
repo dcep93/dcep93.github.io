@@ -2949,17 +2949,17 @@ function getCurrentGenericExtensionTitle(rootRow) {
 }
 
 function renderGenericExtensionStack(rootRow) {
-  const pageBackground = "linear-gradient(180deg, #020617 0%, #0b1220 38%, #172554 100%)";
-  const pageBase = "#020617";
+  const pageBackground =
+    "linear-gradient(180deg, #020617 0%, #08111f 24%, #0d1730 58%, #172554 100%)";
 
   document.documentElement.style.margin = "0";
   document.documentElement.style.height = "100%";
   document.documentElement.style.minHeight = "100%";
-  document.documentElement.style.background = pageBase;
+  document.documentElement.style.background = pageBackground;
   document.body.style.margin = "0";
   document.body.style.height = "100%";
   document.body.style.minHeight = "100vh";
-  document.body.style.background = pageBase;
+  document.body.style.background = pageBackground;
   document.body.style.overflowY = "hidden";
   document.body.style.overflowX = "hidden";
   document.body.style.color = "#f8fafc";
@@ -2971,14 +2971,12 @@ function renderGenericExtensionStack(rootRow) {
   appRoot.style.display = "flex";
   appRoot.style.flexDirection = "column";
   appRoot.style.gap = "20px";
-  appRoot.style.height = "calc(100vh - 24px)";
+  appRoot.style.height = "100vh";
   appRoot.style.overflowY = "scroll";
   appRoot.style.overflowX = "hidden";
   appRoot.style.padding = `${GENERIC_EXTENSION_PAGE_PADDING_PX}px`;
-  appRoot.style.margin = "12px";
   appRoot.style.boxSizing = "border-box";
-  appRoot.style.borderRadius = "24px";
-  appRoot.style.background = pageBackground;
+  appRoot.style.background = "transparent";
 
   appRoot.appendChild(createGenericExtensionBookmarksBar(rootRow));
   appRoot.appendChild(createGenericExtensionSearchBar(rootRow));
