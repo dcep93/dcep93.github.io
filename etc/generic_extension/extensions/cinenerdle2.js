@@ -3462,6 +3462,10 @@ function handlePractice() {
 }
 
 function main() {
+  if (!document.body) {
+    return;
+  }
+
   maybeShowGenericExtensionEntry()
     .then((didRenderEntry) => {
       if (didRenderEntry) {
@@ -3486,4 +3490,8 @@ function main() {
     });
 }
 
-main();
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", main, { once: true });
+} else {
+  main();
+}
