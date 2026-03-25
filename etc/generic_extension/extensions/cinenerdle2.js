@@ -989,7 +989,7 @@ function getPosterUrl(path, size = "w185") {
   return `https://image.tmdb.org/t/p/${size}${path}`;
 }
 
-function createCardTitle(text, secondaryText = "") {
+function createCardTitle(text) {
   const wrapper = document.createElement("div");
 
   const title = document.createElement("div");
@@ -999,9 +999,9 @@ function createCardTitle(text, secondaryText = "") {
   title.style.fontWeight = "700";
   title.style.lineHeight = "1.25";
   title.style.color = "#f8fafc";
-  title.style.height = "2em";
-  title.style.overflowY = "hidden";
+  title.style.height = "auto";
   title.style.overflowX = "auto";
+  title.style.overflowY = "hidden";
   title.style.whiteSpace = "nowrap";
 
   wrapper.appendChild(title);
@@ -1063,7 +1063,7 @@ function createPosterCard({ imageUrl, title, subtitle, footer = null }) {
   content.style.gap = "8px";
   content.style.paddingTop = "8px";
 
-  content.appendChild(createCardTitle(title, subtitle));
+  content.appendChild(createCardTitle(title));
 
   const spacer = document.createElement("div");
   spacer.style.flex = "1";
@@ -1101,26 +1101,15 @@ function createChip(text) {
   return chip;
 }
 
-function createRowSection(titleText) {
+function createRowSection() {
   const section = document.createElement("section");
   section.style.display = "flex";
   section.style.flexDirection = "column";
 
-  const title = document.createElement("div");
-  title.textContent = titleText;
-  title.style.fontSize = "13px";
-  title.style.fontWeight = "700";
-  title.style.letterSpacing = "0.08em";
-  title.style.textTransform = "uppercase";
-  title.style.color = "#94a3b8";
-  title.style.marginBottom = "12px";
-
   const body = document.createElement("div");
-
-  section.appendChild(title);
   section.appendChild(body);
 
-  return { section, title, body };
+  return { section, body };
 }
 
 function createSourceBadge(sources) {
@@ -1573,28 +1562,6 @@ function createMoviePeopleCards(movieRecord) {
       }),
     ),
   );
-}
-
-function createProfileDetailCard(titleText) {
-  const card = document.createElement("div");
-  card.style.display = "flex";
-  card.style.flexDirection = "column";
-  card.style.gap = "16px";
-  card.style.padding = "24px";
-  card.style.border = "1px solid #243041";
-  card.style.borderRadius = "18px";
-  card.style.backgroundColor = "#0f172a";
-  card.style.boxShadow = "0 18px 40px rgba(0, 0, 0, 0.35)";
-
-  const title = document.createElement("div");
-  title.textContent = titleText;
-  title.style.fontSize = "32px";
-  title.style.fontWeight = "800";
-  title.style.lineHeight = "1.1";
-  title.style.color = "#f8fafc";
-
-  card.appendChild(title);
-  return card;
 }
 
 function createPathNode(kind, name, year = "") {
@@ -2790,7 +2757,7 @@ function createMovieAssociationCard(personRecord, credit, filmRecord = null) {
     kind: "movie",
     name: title,
     year,
-    subtitle: `${credit.creditType.toUpperCase()}${year ? ` • ${year}` : ""}`,
+    subtitle: getTmdbCreditCategoryText(credit),
     imageUrl: getPosterUrl(credit.poster_path),
     popularity: credit.popularity,
     voteAverage: credit.vote_average,
@@ -2887,14 +2854,18 @@ function createStackCardFooter(card) {
 
 function applyStackCardSelectionStyle(cardElement, isSelected, isLocked = false) {
   cardElement.style.transition = "box-shadow 120ms ease, border-color 120ms ease";
+  cardElement.style.borderWidth = isSelected ? "3px" : "1px";
+  cardElement.style.borderStyle = "solid";
   cardElement.style.borderColor = isSelected ? "#fbbf24" : "#243041";
   cardElement.style.boxShadow = isSelected
-    ? "0 18px 40px rgba(251, 191, 36, 0.18)"
+    ? "0 0 0 2px rgba(251, 191, 36, 0.35), 0 18px 40px rgba(251, 191, 36, 0.32)"
     : "0 8px 24px rgba(0, 0, 0, 0.35)";
   cardElement.style.transform = "";
+  cardElement.style.outline = "none";
   if (isLocked) {
-    cardElement.style.outline = "1px solid rgba(251, 191, 36, 0.5)";
-    cardElement.style.outlineOffset = "2px";
+    cardElement.style.boxShadow = isSelected
+      ? "0 0 0 3px rgba(251, 191, 36, 0.5), 0 18px 40px rgba(251, 191, 36, 0.32)"
+      : "0 0 0 2px rgba(251, 191, 36, 0.35), 0 8px 24px rgba(0, 0, 0, 0.35)";
   }
 }
 
@@ -2933,8 +2904,7 @@ function createGenericExtensionCardElement(
 }
 
 function createGenericExtensionRowElement(row, rootRow) {
-  const sectionRow = createRowSection(row.title);
-  sectionRow.title.style.display = "none";
+  const sectionRow = createRowSection();
   sectionRow.body.style.display = "flex";
   sectionRow.body.style.alignItems = "flex-start";
   sectionRow.body.style.gap = "14px";
@@ -2979,14 +2949,18 @@ function getCurrentGenericExtensionTitle(rootRow) {
 }
 
 function renderGenericExtensionStack(rootRow) {
-  const pageBackground = "#0f172a";
+  const pageBackground = "linear-gradient(180deg, #020617 0%, #0b1220 38%, #172554 100%)";
+  const pageBase = "#020617";
 
   document.documentElement.style.margin = "0";
+  document.documentElement.style.height = "100%";
   document.documentElement.style.minHeight = "100%";
-  document.documentElement.style.background = pageBackground;
+  document.documentElement.style.background = pageBase;
   document.body.style.margin = "0";
+  document.body.style.height = "100%";
   document.body.style.minHeight = "100vh";
-  document.body.style.background = pageBackground;
+  document.body.style.background = pageBase;
+  document.body.style.overflowY = "hidden";
   document.body.style.overflowX = "hidden";
   document.body.style.color = "#f8fafc";
   document.body.style.fontFamily =
@@ -2997,8 +2971,14 @@ function renderGenericExtensionStack(rootRow) {
   appRoot.style.display = "flex";
   appRoot.style.flexDirection = "column";
   appRoot.style.gap = "20px";
+  appRoot.style.height = "calc(100vh - 24px)";
+  appRoot.style.overflowY = "scroll";
+  appRoot.style.overflowX = "hidden";
   appRoot.style.padding = `${GENERIC_EXTENSION_PAGE_PADDING_PX}px`;
+  appRoot.style.margin = "12px";
   appRoot.style.boxSizing = "border-box";
+  appRoot.style.borderRadius = "24px";
+  appRoot.style.background = pageBackground;
 
   appRoot.appendChild(createGenericExtensionBookmarksBar(rootRow));
   appRoot.appendChild(createGenericExtensionSearchBar(rootRow));
@@ -3195,10 +3175,6 @@ async function applyPathToRootRow(rootRow, pathNodes) {
   }
 }
 
-function sameRootPathNode(left, right) {
-  return !!left && !!right && matchesPathNode({ ...left, key: "root" }, right);
-}
-
 async function buildGenericExtensionRootRow(rootSegment) {
   if (!rootSegment) {
     return null;
@@ -3348,7 +3324,6 @@ function createPersonSpan(personName) {
   const span = document.createElement("span");
   span.textContent = personName;
   bindPersonSpan(span, personName);
-  console.log("cinenerdle2 span created", personName);
   return span;
 }
 
