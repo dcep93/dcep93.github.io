@@ -12,6 +12,8 @@ const TMDB_ICON_URL =
 const GENERIC_EXTENSION_BOOKMARKS_STORAGE_KEY =
     "cinenerdle2.genericExtensionBookmarks";
 const GENERIC_EXTENSION_PAGE_PADDING_PX = 24;
+const CINENERDLE_DAILY_STARTERS_URL =
+    "https://www.cinenerdle2.app/api/battle-data/daily-starters?";
 
 const practiceModeClickBound = new WeakSet();
 let movieTitleClickDelegateBound = false;
@@ -25,9 +27,12 @@ const genericExtensionSearchState = {
     suggestions: [],
     targetSelection: null,
     status: "",
+    resultSummary: "",
     resultPath: null,
     resultPathMetadataByKey: {},
     resultPathNeighborCountsByKey: {},
+    resultRows: [],
+    excludedConnectionNodeKeys: [],
     searching: false,
     shouldFocusInput: false,
     selectionStart: null,
@@ -383,6 +388,14 @@ function getMovieKeyFromCredit(credit) {
     return getFilmKey(getMovieTitleFromCredit(credit), getMovieYearFromCredit(credit));
 }
 
+function getCinenerdleMovieId(title, year = "") {
+    return getFilmKey(title, year);
+}
+
+function getCinenerdlePersonId(name) {
+    return normalizeName(name);
+}
+
 function getTmdbMovieCredits(personRecord) {
     const credits = personRecord?.rawTmdbMovieCreditsResponse ?? {};
     return [
@@ -414,6 +427,14 @@ function getTmdbCreditForMovie(personRecord, movieKey) {
             }
             return left.creditType === "cast" ? -1 : 1;
         })[0] ?? null;
+}
+
+function isAllowedBfsTmdbCredit(credit) {
+    if (!credit) {
+        return false;
+    }
+
+    return credit.creditType === "cast" || credit.job === "Director";
 }
 
 function getDomConnectionForMovie(personRecord, movieKey) {
@@ -678,6 +699,8 @@ function withDerivedPersonFields(personRecord) {
 
     return {
         ...personRecord,
+        tmdbId: personRecord?.rawTmdbPerson?.id ?? personRecord?.id ?? null,
+        cinenerdleId: getCinenerdlePersonId(personRecord?.name ?? ""),
         movieConnectionKeys: Array.from(new Set([...tmdbMovieKeys, ...domMovieKeys])),
     };
 }
@@ -698,6 +721,8 @@ function withDerivedFilmFields(filmRecord, extraPersonNames = []) {
 
     return {
         ...filmRecord,
+        tmdbId: filmRecord?.rawTmdbMovie?.id ?? filmRecord?.id ?? null,
+        cinenerdleId: getCinenerdleMovieId(filmRecord?.title ?? "", filmRecord?.year ?? ""),
         personConnectionKeys: Array.from(
             new Set([...existingPersonKeys, ...tmdbPersonKeys, ...domPersonKeys, ...extraPersonKeys]),
         ),
@@ -999,7 +1024,8 @@ async function fetchAndCacheMovie(movieName, domFilmSnapshot = null, preferredYe
 }
 
 async function fetchAndCacheMovieCredits(movieRecord) {
-    if (!movieRecord?.id) {
+    const tmdbId = movieRecord?.tmdbId ?? movieRecord?.id;
+    if (!tmdbId) {
         return movieRecord ?? null;
     }
 
@@ -1009,7 +1035,7 @@ async function fetchAndCacheMovieCredits(movieRecord) {
     }
 
     const creditsUrl = new URL(
-        `https://api.themoviedb.org/3/movie/${movieRecord.id}/credits`,
+        `https://api.themoviedb.org/3/movie/${tmdbId}/credits`,
     );
     creditsUrl.searchParams.set("api_key", apiKey);
 
@@ -1026,9 +1052,11 @@ async function fetchAndCacheMovieCredits(movieRecord) {
     try {
         const transaction = database.transaction(FILMS_STORE_NAME, "readwrite");
         const store = transaction.objectStore(FILMS_STORE_NAME);
-        const existingFilmRecord = await indexedDbRequestToPromise(store.get(movieRecord.id));
+        const existingFilmRecord = await indexedDbRequestToPromise(store.get(tmdbId));
         const updatedFilmRecord = {
             ...(existingFilmRecord ?? movieRecord),
+            id: tmdbId,
+            tmdbId,
             rawTmdbMovieCreditsResponse: creditsPayload,
             tmdbCreditsSavedAt: new Date().toISOString(),
         };
@@ -1054,7 +1082,7 @@ function createCardTitle(text) {
     const title = document.createElement("div");
     title.dataset.cinenerdle2CardTitle = "true";
     title.textContent = text;
-    title.style.fontSize = "15px";
+    title.style.fontSize = "13px";
     title.style.fontWeight = "700";
     title.style.lineHeight = "1.25";
     title.style.color = "#f8fafc";
@@ -1068,15 +1096,15 @@ function createCardTitle(text) {
     return wrapper;
 }
 
-function createPosterCard({ imageUrl, title, subtitle, footer = null }) {
+function createPosterCard({ imageUrl, title, subtitle, subtitleDetail = "", footer = null }) {
     const card = document.createElement("div");
-    card.style.flex = "0 0 216px";
-    card.style.width = "216px";
-    card.style.minWidth = "216px";
-    card.style.maxWidth = "216px";
+    card.style.flex = "0 0 176px";
+    card.style.width = "176px";
+    card.style.minWidth = "176px";
+    card.style.maxWidth = "176px";
     card.style.display = "flex";
     card.style.flexDirection = "column";
-    card.style.padding = "14px";
+    card.style.padding = "10px";
     card.style.border = "1px solid #243041";
     card.style.borderRadius = "14px";
     card.style.backgroundColor = "#111827";
@@ -1085,7 +1113,9 @@ function createPosterCard({ imageUrl, title, subtitle, footer = null }) {
     card.style.boxSizing = "border-box";
 
     const imageFrame = document.createElement("div");
-    imageFrame.style.height = "270px";
+    imageFrame.dataset.cinenerdle2CardImageFrame = "true";
+    imageFrame.style.width = "100%";
+    imageFrame.style.aspectRatio = "2 / 3";
     imageFrame.style.borderRadius = "10px";
     imageFrame.style.overflow = "hidden";
     imageFrame.style.background =
@@ -1101,7 +1131,7 @@ function createPosterCard({ imageUrl, title, subtitle, footer = null }) {
         image.alt = title;
         image.style.width = "100%";
         image.style.height = "100%";
-        image.style.objectFit = "cover";
+        image.style.objectFit = "contain";
         imageFrame.appendChild(image);
     } else {
         const fallback = document.createElement("div");
@@ -1119,8 +1149,8 @@ function createPosterCard({ imageUrl, title, subtitle, footer = null }) {
     content.style.display = "flex";
     content.style.flexDirection = "column";
     content.style.flex = "1";
-    content.style.gap = "8px";
-    content.style.paddingTop = "8px";
+    content.style.gap = "6px";
+    content.style.paddingTop = "6px";
 
     content.appendChild(createCardTitle(title));
 
@@ -1128,15 +1158,37 @@ function createPosterCard({ imageUrl, title, subtitle, footer = null }) {
     spacer.style.flex = "1";
     content.appendChild(spacer);
 
-    if (subtitle) {
+    if (subtitle || subtitleDetail) {
         const secondary = document.createElement("div");
-        secondary.textContent = subtitle;
-        secondary.style.fontSize = "12px";
-        secondary.style.color = "#94a3b8";
-        secondary.style.lineHeight = "1.35";
-        secondary.style.height = "2.7em";
-        secondary.style.overflowX = "auto";
-        secondary.style.overflowY = "hidden";
+        secondary.style.display = "flex";
+        secondary.style.flexDirection = "column";
+        secondary.style.gap = "2px";
+        secondary.style.minHeight = "2.7em";
+
+        if (subtitle) {
+            const secondaryTop = document.createElement("div");
+            secondaryTop.textContent = subtitle;
+            secondaryTop.style.fontSize = "10px";
+            secondaryTop.style.color = "#94a3b8";
+            secondaryTop.style.lineHeight = "1.35";
+            secondaryTop.style.whiteSpace = "nowrap";
+            secondaryTop.style.overflowX = "auto";
+            secondaryTop.style.overflowY = "hidden";
+            secondary.appendChild(secondaryTop);
+        }
+
+        if (subtitleDetail) {
+            const secondaryBottom = document.createElement("div");
+            secondaryBottom.textContent = subtitleDetail;
+            secondaryBottom.style.fontSize = "10px";
+            secondaryBottom.style.color = "#94a3b8";
+            secondaryBottom.style.lineHeight = "1.35";
+            secondaryBottom.style.whiteSpace = "nowrap";
+            secondaryBottom.style.overflowX = "auto";
+            secondaryBottom.style.overflowY = "hidden";
+            secondary.appendChild(secondaryBottom);
+        }
+
         content.appendChild(secondary);
     }
 
@@ -1195,9 +1247,9 @@ function createSourceBadge(sources) {
 function createStatusChip(text, tone = "info") {
     const chip = document.createElement("div");
     chip.textContent = text;
-    chip.style.padding = "6px 8px";
+    chip.style.padding = "3px 6px";
     chip.style.borderRadius = "999px";
-    chip.style.fontSize = "11px";
+    chip.style.fontSize = "9px";
     chip.style.fontWeight = "600";
     chip.style.whiteSpace = "nowrap";
 
@@ -1233,9 +1285,9 @@ function createHeatMetricChip(label, value, maxValue) {
 
     const chip = document.createElement("div");
     chip.textContent = `${label} ${value}`;
-    chip.style.padding = "6px 8px";
+    chip.style.padding = "3px 6px";
     chip.style.borderRadius = "999px";
-    chip.style.fontSize = "11px";
+    chip.style.fontSize = "9px";
     chip.style.fontWeight = "600";
     chip.style.whiteSpace = "nowrap";
     chip.style.backgroundColor = `hsl(${hue} 55% ${bgLightness}%)`;
@@ -1253,11 +1305,11 @@ function createMetricRow(metrics) {
     metrics.filter(Boolean).forEach((metric) => {
         const chip = document.createElement("div");
         chip.textContent = metric;
-        chip.style.padding = "6px 8px";
+        chip.style.padding = "3px 6px";
         chip.style.borderRadius = "999px";
         chip.style.backgroundColor = "#172033";
         chip.style.color = "#bfdbfe";
-        chip.style.fontSize = "11px";
+        chip.style.fontSize = "9px";
         row.appendChild(chip);
     });
 
@@ -1271,6 +1323,7 @@ function createMovieMetaBlock({
     voteCount,
     sources = [],
     status = null,
+    preserveEmptyBottomRow = false,
 }) {
     const block = document.createElement("div");
     block.style.display = "flex";
@@ -1285,6 +1338,7 @@ function createMovieMetaBlock({
     topRow.style.alignItems = "center";
     topRow.style.justifyContent = "space-between";
     topRow.style.gap = "8px";
+    topRow.style.minHeight = "32px";
 
     if (typeof connectionCount === "number" || sources.length > 0) {
         const sourcesRow = document.createElement("div");
@@ -1315,11 +1369,13 @@ function createMovieMetaBlock({
         const popularityChip = createHeatMetricChip("Popularity", popularity, 100);
         popularityChip.style.marginLeft = "auto";
         topRow.appendChild(popularityChip);
+    } else {
+        const popularitySpacer = document.createElement("div");
+        popularitySpacer.style.flex = "1 1 auto";
+        topRow.appendChild(popularitySpacer);
     }
 
-    if (topRow.childNodes.length > 0) {
-        block.appendChild(topRow);
-    }
+    block.appendChild(topRow);
 
     const bottomRow = document.createElement("div");
     bottomRow.style.display = "flex";
@@ -1331,6 +1387,7 @@ function createMovieMetaBlock({
     bottomRow.style.overflowX = "auto";
     bottomRow.style.overflowY = "hidden";
     bottomRow.style.whiteSpace = "nowrap";
+    bottomRow.style.minHeight = "32px";
 
     if (typeof voteCount === "number") {
         bottomRow.appendChild(createHeatMetricChip("Votes", voteCount, 20000));
@@ -1346,7 +1403,7 @@ function createMovieMetaBlock({
         bottomRow.appendChild(createStatusChip(status.text, status.tone));
     }
 
-    if (bottomRow.childNodes.length > 0) {
+    if (preserveEmptyBottomRow || bottomRow.childNodes.length > 0) {
         block.appendChild(bottomRow);
     }
 
@@ -1779,12 +1836,19 @@ function buildGenericExtensionPathNodes(rootKind, segments) {
     }
 
     const pathNodes = [
-        rootKind === "movie"
-            ? parseMoviePathLabel(segments[0])
-            : createPathNode("person", segments[0]),
+        rootKind === "cinenerdle"
+            ? createPathNode("cinenerdle", segments[0])
+            : rootKind === "movie"
+                ? parseMoviePathLabel(segments[0])
+                : createPathNode("person", segments[0]),
     ];
 
-    let nextKind = rootKind === "person" ? "movie" : "person";
+    let nextKind =
+        rootKind === "cinenerdle"
+            ? "movie"
+            : rootKind === "person"
+                ? "movie"
+                : "person";
     segments.slice(1).forEach((segment) => {
         pathNodes.push(
             nextKind === "movie"
@@ -1878,6 +1942,10 @@ function matchesPathNode(card, pathNode) {
         return false;
     }
 
+    if (pathNode.kind === "cinenerdle") {
+        return normalizeTitle(card.name) === normalizeTitle(pathNode.name);
+    }
+
     if (pathNode.kind === "movie") {
         return (
             normalizeTitle(card.name) === normalizeTitle(pathNode.name) &&
@@ -1920,6 +1988,40 @@ function collectSelectedPathNodes(rootRow) {
     }
 
     return pathNodes;
+}
+
+function collectSelectedCardKeys(rootRow) {
+    const selectedCardKeys = new Set();
+    let currentRow = rootRow;
+
+    while (currentRow) {
+        const selectedCard = getSelectedCard(currentRow);
+        if (!selectedCard) {
+            break;
+        }
+
+        selectedCardKeys.add(selectedCard.key);
+        currentRow = selectedCard.childRow ?? null;
+    }
+
+    return selectedCardKeys;
+}
+
+function collectAncestorSelectedCardKeys(rootRow, targetRow) {
+    const ancestorSelectedCards = [];
+    let currentRow = rootRow;
+
+    while (currentRow && currentRow !== targetRow) {
+        const selectedCard = getSelectedCard(currentRow);
+        if (!selectedCard) {
+            break;
+        }
+
+        ancestorSelectedCards.push(selectedCard);
+        currentRow = selectedCard.childRow ?? null;
+    }
+
+    return ancestorSelectedCards;
 }
 
 function getGenericExtensionEntryUrl() {
@@ -2094,6 +2196,7 @@ async function getLocalNeighborsForEntity(entity, cache) {
         if (personRecord) {
             neighbors = createNeighborEntityMap([
                 ...getUniqueSortedTmdbMovieCredits(personRecord)
+                    .filter(isAllowedBfsTmdbCredit)
                     .map((credit) => createMovieSearchEntityFromCredit(credit)),
                 ...(personRecord.domConnections ?? []).map((connection) => ({
                     kind: "movie",
@@ -2112,7 +2215,10 @@ async function getLocalNeighborsForEntity(entity, cache) {
 
         if (movieRecord) {
             const credits = movieRecord.rawTmdbMovieCreditsResponse ?? {};
-            const creditPeople = [...(credits.cast ?? []), ...(credits.crew ?? [])];
+            const creditPeople = [
+                ...(credits.cast ?? []).map((credit) => ({ ...credit, creditType: "cast" })),
+                ...(credits.crew ?? []).map((credit) => ({ ...credit, creditType: "crew" })),
+            ].filter(isAllowedBfsTmdbCredit);
             const tmdbPeople = creditPeople
                 .map((credit) => createPersonSearchEntityFromCredit(credit));
             const cinenerdlePeople = Object.values(movieRecord?.domSnapshot?.peopleByRole ?? {})
@@ -2228,8 +2334,28 @@ function reconstructBidirectionalPath(meetingKey, startParents, endParents, enti
     return [...startKeys, ...endKeys].map((key) => entityByKey.get(key));
 }
 
-async function findLocalConnectionPath(startEntity, endEntity, timeoutMs = 5000) {
+function getSearchEntityExclusionKey(entity) {
+    if (!entity) {
+        return "";
+    }
+
+    if (entity.kind === "movie") {
+        return `movie:${normalizeTitle(entity.name ?? "")}::${entity.year ?? ""}`;
+    }
+
+    return `person:${normalizeName(entity.name ?? "")}`;
+}
+
+async function findLocalConnectionPath(startEntity, endEntity, timeoutMs = 5000, excludedNodeKeys = []) {
     if (!startEntity || !endEntity) {
+        return { path: null, timedOut: false, nodesRead: 0 };
+    }
+
+    const excludedNodeKeySet = new Set(excludedNodeKeys);
+    if (
+        excludedNodeKeySet.has(getSearchEntityExclusionKey(startEntity)) ||
+        excludedNodeKeySet.has(getSearchEntityExclusionKey(endEntity))
+    ) {
         return { path: null, timedOut: false, nodesRead: 0 };
     }
 
@@ -2268,7 +2394,11 @@ async function findLocalConnectionPath(startEntity, endEntity, timeoutMs = 5000)
             nodesRead += 1;
             const neighbors = await getLocalNeighborsForEntity(entity, neighborCache);
             for (const neighbor of neighbors) {
-                if (!neighbor?.key || ownParents.has(neighbor.key)) {
+                if (
+                    !neighbor?.key ||
+                    ownParents.has(neighbor.key) ||
+                    excludedNodeKeySet.has(getSearchEntityExclusionKey(neighbor))
+                ) {
                     continue;
                 }
 
@@ -2363,9 +2493,12 @@ function resetGenericExtensionSearchState() {
     genericExtensionSearchState.suggestions = [];
     genericExtensionSearchState.targetSelection = null;
     genericExtensionSearchState.status = "";
+    genericExtensionSearchState.resultSummary = "";
     genericExtensionSearchState.resultPath = null;
     genericExtensionSearchState.resultPathMetadataByKey = {};
     genericExtensionSearchState.resultPathNeighborCountsByKey = {};
+    genericExtensionSearchState.resultRows = [];
+    genericExtensionSearchState.excludedConnectionNodeKeys = [];
     genericExtensionSearchState.searching = false;
 }
 
@@ -2374,6 +2507,9 @@ async function updateGenericExtensionSearchSuggestions(query) {
     genericExtensionSearchState.targetSelection = null;
     genericExtensionSearchState.resultPath = null;
     genericExtensionSearchState.status = "";
+    genericExtensionSearchState.resultSummary = "";
+    genericExtensionSearchState.resultRows = [];
+    genericExtensionSearchState.excludedConnectionNodeKeys = [];
 
     if (!query.trim()) {
         genericExtensionSearchState.suggestions = [];
@@ -2394,6 +2530,9 @@ async function selectGenericExtensionSearchSuggestion(rootRow, suggestion) {
     genericExtensionSearchState.suggestions = [];
     genericExtensionSearchState.resultPath = null;
     genericExtensionSearchState.status = "";
+    genericExtensionSearchState.resultSummary = "";
+    genericExtensionSearchState.resultRows = [];
+    genericExtensionSearchState.excludedConnectionNodeKeys = [];
     await connectGenericExtensionSearchEndpoints(rootRow);
 }
 
@@ -2472,10 +2611,10 @@ function createAutocompleteField(rootRow, placeholder) {
                 renderSuggestions();
             })
             .catch(
-            (error) => {
-                console.error("cinenerdle2.updateGenericExtensionSearchSuggestions", error);
-                alert(error.message);
-            },
+                (error) => {
+                    console.error("cinenerdle2.updateGenericExtensionSearchSuggestions", error);
+                    alert(error.message);
+                },
             );
     });
     input.addEventListener("focus", () => {
@@ -2637,6 +2776,10 @@ function getCurrentSearchSourceEntity(rootRow) {
         return null;
     }
 
+    if (selectedCard.kind === "cinenerdle") {
+        return null;
+    }
+
     return selectedCard.kind === "movie"
         ? {
             kind: "movie",
@@ -2655,7 +2798,10 @@ function getCurrentSearchSourceEntity(rootRow) {
         };
 }
 
-async function connectGenericExtensionSearchEndpoints(rootRow) {
+async function connectGenericExtensionSearchEndpoints(
+    rootRow,
+    { appendResult = false, insertBeforeResultRowIndex = null } = {},
+) {
     const sourceSelection = getCurrentSearchSourceEntity(rootRow);
     const { targetSelection } = genericExtensionSearchState;
     if (!sourceSelection) {
@@ -2674,12 +2820,21 @@ async function connectGenericExtensionSearchEndpoints(rootRow) {
     genericExtensionSearchState.resultPath = null;
     genericExtensionSearchState.resultPathMetadataByKey = {};
     genericExtensionSearchState.resultPathNeighborCountsByKey = {};
+    genericExtensionSearchState.resultSummary = "";
+    if (!appendResult) {
+        genericExtensionSearchState.resultRows = [];
+    }
     genericExtensionSearchState.status = "Searching...";
     renderGenericExtensionStack(rootRow);
 
     try {
         const startedAt = performance.now();
-        const result = await findLocalConnectionPath(sourceSelection, targetSelection, 5000);
+        const result = await findLocalConnectionPath(
+            sourceSelection,
+            targetSelection,
+            5000,
+            genericExtensionSearchState.excludedConnectionNodeKeys,
+        );
         const elapsedSeconds = ((performance.now() - startedAt) / 1000).toFixed(1);
         if (result.path?.length) {
             genericExtensionSearchState.resultPath = result.path;
@@ -2687,8 +2842,28 @@ async function connectGenericExtensionSearchEndpoints(rootRow) {
             genericExtensionSearchState.resultPathMetadataByKey = connectionPathRenderState.metadataByKey;
             genericExtensionSearchState.resultPathNeighborCountsByKey =
                 connectionPathRenderState.neighborCountsByKey;
-            genericExtensionSearchState.status =
+            genericExtensionSearchState.resultSummary =
                 `Found path with ${result.path.length} nodes after reading ${result.nodesRead} nodes in ${elapsedSeconds} seconds.`;
+            const newResultRowState = {
+                path: result.path,
+                metadataByKey: connectionPathRenderState.metadataByKey,
+                neighborCountsByKey: connectionPathRenderState.neighborCountsByKey,
+                summary: genericExtensionSearchState.resultSummary,
+                dimmedNodeIndexes: [],
+            };
+            if (appendResult) {
+                const insertionIndex = Number.isInteger(insertBeforeResultRowIndex)
+                    ? Math.max(0, Math.min(insertBeforeResultRowIndex, genericExtensionSearchState.resultRows.length))
+                    : 0;
+                genericExtensionSearchState.resultRows = [
+                    ...genericExtensionSearchState.resultRows.slice(0, insertionIndex),
+                    newResultRowState,
+                    ...genericExtensionSearchState.resultRows.slice(insertionIndex),
+                ];
+            } else {
+                genericExtensionSearchState.resultRows = [newResultRowState];
+            }
+            genericExtensionSearchState.status = "";
         } else if (result.timedOut) {
             genericExtensionSearchState.status =
                 `No connection found in ${elapsedSeconds} seconds after reading ${result.nodesRead} nodes. Searched locally only, no remote lookups.`;
@@ -2790,20 +2965,6 @@ function createGenericExtensionSearchBar(rootRow) {
         statusRow.style.gap = "10px";
         statusRow.style.flexWrap = "wrap";
 
-        if (genericExtensionSearchState.resultPath?.length) {
-            statusRow.appendChild(
-                createBookmarkActionButton("Load Path", () => {
-                    const currentPathNodes = collectSelectedPathNodes(rootRow);
-                    const appendedPathNodes = genericExtensionSearchState.resultPath
-                        .slice(1)
-                        .map(getSearchEntityPathNode);
-                    loadGenericExtensionPath(
-                        [...currentPathNodes, ...appendedPathNodes],
-                    );
-                }),
-            );
-        }
-
         const status = document.createElement("div");
         status.textContent = genericExtensionSearchState.status;
         status.style.fontSize = "12px";
@@ -2813,15 +2974,35 @@ function createGenericExtensionSearchBar(rootRow) {
         wrapper.appendChild(statusRow);
     }
 
-    if (genericExtensionSearchState.resultPath?.length) {
+    genericExtensionSearchState.resultRows.forEach((resultRowState, resultRowIndex) => {
         const resultRow = document.createElement("div");
+        resultRow.tabIndex = 0;
         resultRow.style.display = "flex";
         resultRow.style.alignItems = "stretch";
         resultRow.style.gap = "8px";
         resultRow.style.flexWrap = "nowrap";
+        resultRow.style.cursor = "pointer";
         applyHorizontalScrollableRowStyle(resultRow, "4px");
+        resultRow.addEventListener("click", () => {
+            loadGenericExtensionPath(
+                resultRowState.path.map(getSearchEntityPathNode),
+            );
+        });
+        const showResultSummaryTooltip = () => {
+            if (!resultRowState.summary) {
+                return;
+            }
 
-        genericExtensionSearchState.resultPath.forEach((entity, index) => {
+            showGenericExtensionTooltip(resultRow, resultRowState.summary);
+        };
+        resultRow.addEventListener("mouseenter", showResultSummaryTooltip);
+        resultRow.addEventListener("focus", showResultSummaryTooltip);
+        resultRow.addEventListener("mouseleave", hideGenericExtensionTooltip);
+        resultRow.addEventListener("blur", hideGenericExtensionTooltip);
+
+        resultRowState.path.forEach((entity, index) => {
+            const isEndpoint = index === 0 || index === resultRowState.path.length - 1;
+            const excludedBubbleTarget = entity;
             const entityBubble = document.createElement("div");
             entityBubble.style.display = "flex";
             entityBubble.style.flexDirection = "column";
@@ -2832,6 +3013,45 @@ function createGenericExtensionSearchBar(rootRow) {
             entityBubble.style.border = "1px solid #243041";
             entityBubble.style.backgroundColor = "#111827";
             entityBubble.style.flex = "0 0 auto";
+            entityBubble.style.transition = "opacity 120ms ease, background-color 120ms ease, transform 120ms ease";
+            entityBubble.style.opacity =
+                (resultRowState.dimmedNodeIndexes ?? []).includes(index) ? "0.25" : "1";
+            entityBubble.style.cursor = isEndpoint ? "default" : "pointer";
+            if (!isEndpoint) {
+                entityBubble.addEventListener("mouseenter", () => {
+                    entityBubble.style.backgroundColor = "#172033";
+                    entityBubble.style.transform = "translateY(-1px)";
+                });
+                entityBubble.addEventListener("mouseleave", () => {
+                    entityBubble.style.backgroundColor = "#111827";
+                    entityBubble.style.transform = "none";
+                });
+                entityBubble.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    entityBubble.style.opacity = "0.25";
+                    resultRowState.dimmedNodeIndexes = Array.from(
+                        new Set([...(resultRowState.dimmedNodeIndexes ?? []), index]),
+                    );
+                    genericExtensionSearchState.excludedConnectionNodeKeys = Array.from(
+                        new Set([
+                            ...genericExtensionSearchState.excludedConnectionNodeKeys,
+                            getSearchEntityExclusionKey(excludedBubbleTarget),
+                        ]),
+                    );
+                    renderGenericExtensionStack(rootRow);
+                    connectGenericExtensionSearchEndpoints(
+                        rootRow,
+                        {
+                            appendResult: true,
+                            insertBeforeResultRowIndex: resultRowIndex,
+                        },
+                    ).catch((error) => {
+                        console.error("cinenerdle2.excludeConnectionNode", error);
+                        alert(error.message);
+                    });
+                });
+            }
 
             const entityTitle = document.createElement("div");
             entityTitle.textContent = getSearchEntityLabel(entity);
@@ -2842,7 +3062,7 @@ function createGenericExtensionSearchBar(rootRow) {
             entityBubble.appendChild(entityTitle);
 
             const entitySources =
-                genericExtensionSearchState.resultPathMetadataByKey[entity.key]?.sources ?? [];
+                resultRowState.metadataByKey[entity.key]?.sources ?? [];
             const sourcesRow = document.createElement("div");
             sourcesRow.style.display = "flex";
             sourcesRow.style.alignItems = "center";
@@ -2851,7 +3071,7 @@ function createGenericExtensionSearchBar(rootRow) {
 
             const connectionCount = document.createElement("div");
             connectionCount.textContent =
-                `${genericExtensionSearchState.resultPathNeighborCountsByKey[entity.key] ?? 0}`;
+                `${resultRowState.neighborCountsByKey[entity.key] ?? 0}`;
             connectionCount.style.fontSize = "11px";
             connectionCount.style.fontWeight = "700";
             connectionCount.style.color = "#94a3b8";
@@ -2861,7 +3081,7 @@ function createGenericExtensionSearchBar(rootRow) {
             entityBubble.appendChild(sourcesRow);
             resultRow.appendChild(entityBubble);
 
-            if (index < genericExtensionSearchState.resultPath.length - 1) {
+            if (index < resultRowState.path.length - 1) {
                 const arrowWrap = document.createElement("div");
                 arrowWrap.style.display = "flex";
                 arrowWrap.style.alignItems = "center";
@@ -2869,6 +3089,7 @@ function createGenericExtensionSearchBar(rootRow) {
                 arrowWrap.style.flex = "0 0 auto";
                 arrowWrap.style.alignSelf = "center";
                 arrowWrap.style.minWidth = "24px";
+                arrowWrap.style.cursor = "default";
 
                 const arrow = document.createElement("div");
                 arrow.textContent = "→";
@@ -2881,7 +3102,7 @@ function createGenericExtensionSearchBar(rootRow) {
         });
 
         wrapper.appendChild(resultRow);
-    }
+    });
 
     return wrapper;
 }
@@ -2896,6 +3117,28 @@ function createGenericExtensionBookmarksBar(rootRow) {
     wrapper.style.minWidth = getGenericExtensionTrackWidth();
     wrapper.style.boxSizing = "border-box";
     wrapper.style.overflow = "visible";
+
+    const homeLink = document.createElement("a");
+    homeLink.href = `${window.location.origin}${window.location.pathname}`;
+    homeLink.style.display = "inline-flex";
+    homeLink.style.alignItems = "center";
+    homeLink.style.justifyContent = "center";
+    homeLink.style.width = "32px";
+    homeLink.style.height = "32px";
+    homeLink.style.borderRadius = "10px";
+    homeLink.style.border = "1px solid #334155";
+    homeLink.style.backgroundColor = "#111827";
+    homeLink.style.flex = "0 0 auto";
+    homeLink.title = "Reset view";
+
+    const homeIcon = document.createElement("img");
+    homeIcon.src = CINENERDLE_ICON_URL;
+    homeIcon.alt = "Cinenerdle";
+    homeIcon.style.width = "18px";
+    homeIcon.style.height = "18px";
+    homeIcon.style.borderRadius = "4px";
+    homeLink.appendChild(homeIcon);
+    wrapper.appendChild(homeLink);
 
     const title = document.createElement("div");
     title.textContent = "Bookmarks";
@@ -3021,8 +3264,9 @@ async function ensureMovieRecordByPathNode(pathNode) {
 }
 
 async function ensureMovieRecordForCard(card) {
-    if (card?.record?.id) {
-        return (await getFilmRecordById(card.record.id)) ?? card.record;
+    const tmdbId = card?.record?.tmdbId ?? card?.record?.id;
+    if (tmdbId) {
+        return (await getFilmRecordById(tmdbId)) ?? card.record;
     }
 
     return ensureMovieRecordByPathNode(getPathNodeFromCard(card));
@@ -3044,6 +3288,8 @@ function createMovieCardRecordFromCredit(credit) {
 
     return {
         id: credit.id,
+        tmdbId: credit.id ?? null,
+        cinenerdleId: getCinenerdleMovieId(title, year),
         title,
         titleLower: normalizeTitle(title),
         year,
@@ -3051,6 +3297,87 @@ function createMovieCardRecordFromCredit(credit) {
         popularity: credit.popularity ?? 0,
         rawTmdbMovie: credit,
     };
+}
+
+async function fetchCinenerdleDailyStarterMovies() {
+    const response = await fetch(CINENERDLE_DAILY_STARTERS_URL);
+    if (!response.ok) {
+        throw new Error(`Cinenerdle daily starters lookup failed: ${response.status}`);
+    }
+
+    const payload = await response.json();
+    return Array.isArray(payload?.data) ? payload.data : [];
+}
+
+function createCinenerdleStarterRow(starterMovies) {
+    return {
+        title: "Daily starters",
+        entityType: "movie",
+        selectedCardKey: null,
+        isRoot: false,
+        cards: starterMovies.map(createDailyStarterMovieCard),
+    };
+}
+
+function createCinenerdleRootCard(connectionCount = null) {
+    return {
+        key: "cinenerdle",
+        kind: "cinenerdle",
+        name: "cinenerdle",
+        subtitle: "Daily starters",
+        imageUrl: CINENERDLE_ICON_URL,
+        connectionCount,
+        sources: [{ iconUrl: CINENERDLE_ICON_URL, label: "Cinenerdle" }],
+        status: null,
+        record: null,
+        childRow: null,
+    };
+}
+
+function createDailyStarterMovieCard(starterMovie) {
+    const parsedMovie = parseMoviePathLabel(starterMovie?.title ?? "");
+
+    return {
+        key: getMovieCardKey(parsedMovie.name, parsedMovie.year, starterMovie?.id),
+        kind: "movie",
+        name: parsedMovie.name,
+        year: parsedMovie.year,
+        subtitle: parsedMovie.year || "Movie",
+        subtitleDetail: (starterMovie?.genres ?? []).slice(0, 2).join(" • "),
+        imageUrl: starterMovie?.posterUrl ?? null,
+        connectionCount:
+            Math.max(
+                new Set(
+                    [
+                        ...(starterMovie?.cast ?? []),
+                        ...(starterMovie?.directors ?? []),
+                        ...(starterMovie?.writers ?? []),
+                        ...(starterMovie?.composers ?? []),
+                    ]
+                        .map((personName) => normalizeName(personName))
+                        .filter(Boolean),
+                ).size,
+                1,
+            ),
+        sources: [{ iconUrl: CINENERDLE_ICON_URL, label: "Cinenerdle daily starter" }],
+        status: null,
+        record: {
+            id: null,
+            tmdbId: null,
+            cinenerdleId: starterMovie?.id ?? getCinenerdleMovieId(parsedMovie.name, parsedMovie.year),
+            title: parsedMovie.name,
+            year: parsedMovie.year,
+            titleLower: normalizeTitle(parsedMovie.name),
+            titleYear: getFilmKey(parsedMovie.name, parsedMovie.year),
+            rawCinenerdleDailyStarter: starterMovie,
+        },
+        childRow: null,
+    };
+}
+
+async function buildCinenerdleStarterRow() {
+    const starterMovies = await fetchCinenerdleDailyStarterMovies();
+    return createCinenerdleStarterRow(starterMovies);
 }
 
 function createPersonRootCard(personRecord, requestedName) {
@@ -3081,6 +3408,7 @@ function createMovieRootCard(movieRecord, requestedName, connectionCount = null)
         name: movieTitle,
         year: movieYear,
         subtitle: movieYear || "Movie",
+        subtitleDetail: "",
         imageUrl: getMoviePosterUrl(movieRecord),
         popularity: movieRecord?.popularity,
         voteAverage: movieRecord?.rawTmdbMovie?.vote_average,
@@ -3102,13 +3430,22 @@ function createMovieAssociationCard(personRecord, credit, filmRecord = null, con
         getMovieKeyFromCredit(credit),
         filmRecord,
     );
+    const subtitlePrefix =
+        credit.creditType === "cast"
+            ? `${year || "Movie"} • Cast as`
+            : `${year || "Movie"} • ${credit.job || credit.department || "Crew"}`;
+    const subtitleDetail =
+        credit.creditType === "cast"
+            ? credit.character ?? ""
+            : "";
 
     return {
         key: getMovieCardKey(title, year, credit.id),
         kind: "movie",
         name: title,
         year,
-        subtitle: getTmdbCreditCategoryText(credit),
+        subtitle: subtitlePrefix,
+        subtitleDetail,
         imageUrl: getPosterUrl(credit.poster_path),
         popularity: credit.popularity,
         voteAverage: credit.vote_average,
@@ -3292,6 +3629,7 @@ function createStackCardFooter(card) {
             voteCount: card.voteCount,
             sources: card.sources,
             status: card.status,
+            preserveEmptyBottomRow: card.kind === "movie",
         });
     }
 
@@ -3317,24 +3655,30 @@ function applyStackCardSelectionStyle(cardElement, isSelected, isLocked = false)
 
 function createGenericExtensionCardElement(
     card,
-    { isSelected = false, isLocked = false, onSelect = null } = {},
+    { isSelected = false, isLocked = false, isAncestorSelected = false, onSelect = null } = {},
 ) {
     const cardElement = createPosterCard({
         imageUrl: card.imageUrl,
-        title: card.kind === "movie" ? formatMoviePathLabel(card.name, card.year) : card.name,
+        title: card.name,
         subtitle: card.subtitle,
+        subtitleDetail: card.subtitleDetail,
         footer: createStackCardFooter(card),
     });
 
     applyStackCardSelectionStyle(cardElement, isSelected, isLocked);
+    const imageFrame = cardElement.querySelector('[data-cinenerdle2-card-image-frame="true"]');
+    if (imageFrame instanceof HTMLElement) {
+        imageFrame.style.opacity = isAncestorSelected ? "0.25" : "1";
+    }
     cardElement.style.cursor = onSelect ? "pointer" : isLocked ? "default" : "pointer";
 
     const titleElement = cardElement.querySelector('[data-cinenerdle2-card-title="true"]');
     if (titleElement instanceof HTMLElement) {
         titleElement.style.cursor = "pointer";
-        titleElement.style.textDecoration = "underline";
-        titleElement.style.textDecorationColor = "rgba(148, 163, 184, 0.55)";
-        titleElement.style.textUnderlineOffset = "3px";
+        titleElement.style.textDecorationLine = "underline";
+        titleElement.style.textDecorationColor = "rgba(148, 163, 184, 0.45)";
+        titleElement.style.textDecorationThickness = "1px";
+        titleElement.style.textUnderlineOffset = "2px";
         bindGenericExtensionCardTitleTooltip(titleElement, card);
         titleElement.addEventListener("click", (event) => {
             event.preventDefault();
@@ -3352,6 +3696,7 @@ function createGenericExtensionCardElement(
 
 function createGenericExtensionRowElement(row, rootRow) {
     const sectionRow = createRowSection();
+    const ancestorSelectedCards = collectAncestorSelectedCardKeys(rootRow, row);
     sectionRow.body.style.display = "flex";
     sectionRow.body.style.alignItems = "flex-start";
     sectionRow.body.style.gap = "14px";
@@ -3367,6 +3712,8 @@ function createGenericExtensionRowElement(row, rootRow) {
             createGenericExtensionCardElement(card, {
                 isSelected: row.selectedCardKey === card.key,
                 isLocked: row.isRoot,
+                isAncestorSelected: ancestorSelectedCards.some((ancestorCard) =>
+                    matchesPathNode(card, getPathNodeFromCard(ancestorCard))),
                 onSelect:
                     row.isRoot
                         ? null
@@ -3522,6 +3869,10 @@ async function buildPersonRowForMovieCard(card) {
 }
 
 async function buildChildRowForCard(card) {
+    if (card.kind === "cinenerdle") {
+        return buildCinenerdleStarterRow();
+    }
+
     if (card.kind === "person") {
         return buildMovieRowForPersonCard(card);
     }
@@ -3537,6 +3888,8 @@ async function selectGenericExtensionCard(rootRow, row, card, historyMode = "pus
     if (!row || !card) {
         return;
     }
+
+    resetGenericExtensionSearchState();
 
     if (row.selectedCardKey === card.key) {
         row.selectedCardKey = null;
@@ -3557,6 +3910,19 @@ async function selectGenericExtensionCard(rootRow, row, card, historyMode = "pus
 }
 
 async function createRootRowFromPathNode(pathNode) {
+    if (pathNode.kind === "cinenerdle") {
+        const starterMovies = await fetchCinenerdleDailyStarterMovies();
+        const rootCard = createCinenerdleRootCard(Math.max(starterMovies.length, 1));
+        rootCard.childRow = createCinenerdleStarterRow(starterMovies);
+        return {
+            title: "Cinenerdle",
+            entityType: "cinenerdle",
+            selectedCardKey: rootCard.key,
+            isRoot: true,
+            cards: [rootCard],
+        };
+    }
+
     if (pathNode.kind === "person") {
         const personRecord = await ensurePersonRecordByName(pathNode.name);
         const rootCard = createPersonRootCard(personRecord, pathNode.name);
@@ -3590,6 +3956,10 @@ async function createRootRowFromPathNode(pathNode) {
 }
 
 async function createRootRowFromSegment(segment) {
+    if (normalizeTitle(segment) === "cinenerdle") {
+        return createRootRowFromPathNode(createPathNode("cinenerdle", "cinenerdle"));
+    }
+
     const prefersMovie = /\(\d{4}\)$/.test(segment);
     const attempts = prefersMovie
         ? [
@@ -3931,7 +4301,16 @@ function buildMovieDatabaseTooltip(filmTitleAndYear, filmRecords, domFilmSnapsho
     const combinedEntry = {
         title: filmTitleAndYear.title,
         year: filmTitleAndYear.year,
-        ids: Array.from(new Set(matchingFilmRecords.map((record) => record?.id).filter(Boolean))),
+        ids: {
+            tmdb: Array.from(
+                new Set(
+                    matchingFilmRecords
+                        .map((record) => record?.tmdbId ?? record?.id)
+                        .filter(Boolean),
+                ),
+            ),
+            cinenerdle: getCinenerdleMovieId(filmTitleAndYear.title, filmTitleAndYear.year) || null,
+        },
         popularity:
             matchingFilmRecords.find((record) => typeof record?.popularity === "number")?.popularity ??
             null,
@@ -3957,14 +4336,23 @@ function buildMovieDatabaseTooltip(filmTitleAndYear, filmRecords, domFilmSnapsho
 function buildPersonDatabaseTooltip(personName, personRecord = null) {
     const combinedEntry = {
         name: personName,
-        id: personRecord?.id ?? null,
+        ids: {
+            tmdb: personRecord?.tmdbId ?? personRecord?.id ?? null,
+            cinenerdle: getCinenerdlePersonId(personName) || null,
+        },
         popularity: personRecord?.rawTmdbPerson?.popularity ?? null,
         tmdbPerson: !!personRecord?.rawTmdbPerson,
         tmdbSearch: !!personRecord?.rawTmdbPersonSearchResponse,
         tmdbCredits: !!personRecord?.rawTmdbMovieCreditsResponse,
         cinenerdleDom: (personRecord?.domConnections?.length ?? 0) > 0,
-        movieConnectionKeys: personRecord?.movieConnectionKeys ?? [],
-        domConnections: personRecord?.domConnections ?? [],
+        movieConnectionKeys:
+            Array.isArray(personRecord?.movieConnectionKeys)
+                ? personRecord.movieConnectionKeys.length
+                : null,
+        domConnections:
+            Array.isArray(personRecord?.domConnections)
+                ? personRecord.domConnections.length
+                : null,
         savedAt: personRecord?.savedAt ?? null,
     };
 
@@ -4045,6 +4433,19 @@ function bindGenericExtensionCardTitleTooltip(titleElement, card) {
     }
 
     const updateTooltip = async () => {
+        if (card.kind === "cinenerdle") {
+            return JSON.stringify(
+                {
+                    name: "cinenerdle",
+                    kind: "cinenerdle",
+                    source: CINENERDLE_DAILY_STARTERS_URL,
+                    connectionCount: card.connectionCount ?? null,
+                },
+                null,
+                2,
+            );
+        }
+
         if (card.kind === "movie") {
             const filmRecords = await getFilmRecordsByTitle(card.name);
             return buildMovieDatabaseTooltip(
@@ -4179,12 +4580,17 @@ function main() {
         return;
     }
 
+    console.log(
+        "cinenerdle2.tmdbApiKey",
+        localStorage.getItem(TMDB_API_KEY_STORAGE_KEY)?.trim() ?? null,
+    );
+
     if (isGenericExtensionEntryPage() && !getGenericExtensionEntryUrl()) {
         const currentUrl = new URL(window.location.href);
         currentUrl.searchParams.delete("generic_extension");
         const baseHref = `${currentUrl.origin}${currentUrl.pathname}${currentUrl.search}`;
         const separator = baseHref.includes("?") ? "&" : "?";
-        window.location.replace(`${baseHref}${separator}generic_extension=Brad+Pitt`);
+        window.location.replace(`${baseHref}${separator}generic_extension=cinenerdle`);
         return;
     }
 
