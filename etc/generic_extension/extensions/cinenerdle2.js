@@ -33,6 +33,7 @@ const genericExtensionSearchState = {
     resultPathNeighborCountsByKey: {},
     resultRows: [],
     excludedConnectionNodeKeys: [],
+    excludedConnectionEdgeKeys: [],
     searching: false,
     shouldFocusInput: false,
     selectionStart: null,
@@ -2120,44 +2121,59 @@ async function searchLocalEntities(query, limit = 8) {
         getAllFilmRecords(),
     ]);
     const suggestions = [];
-    const seenKeys = new Set();
-
-    peopleRecords.forEach((personRecord) => {
-        const personName = personRecord?.name ?? "";
-        const normalizedName = normalizeName(personName);
-        if (!normalizedName.includes(normalizedQuery)) {
+    const seenEntityKeys = new Set();
+    const seenSemanticKeys = new Set();
+    const addSuggestion = (entity, normalizedLabel) => {
+        if (!entity || !normalizedLabel.includes(normalizedQuery)) {
             return;
         }
 
-        const entity = createPersonSearchEntity(personRecord);
-        if (seenKeys.has(entity.key)) {
+        const semanticKey = getSearchEntityExclusionKey(entity);
+        if (seenEntityKeys.has(entity.key) || seenSemanticKeys.has(semanticKey)) {
             return;
         }
 
         suggestions.push({
             ...entity,
-            score: normalizedName.startsWith(normalizedQuery) ? 0 : 1,
+            score: normalizedLabel.startsWith(normalizedQuery) ? 0 : 1,
         });
-        seenKeys.add(entity.key);
+        seenEntityKeys.add(entity.key);
+        seenSemanticKeys.add(semanticKey);
+    };
+
+    peopleRecords.forEach((personRecord) => {
+        const entity = createPersonSearchEntity(personRecord);
+        addSuggestion(entity, normalizeName(entity.name));
     });
 
     filmRecords.forEach((filmRecord) => {
-        const movieTitle = filmRecord?.title ?? "";
-        const normalizedMovieTitle = normalizeTitle(movieTitle);
-        if (!normalizedMovieTitle.includes(normalizedQuery)) {
-            return;
-        }
-
         const entity = createMovieSearchEntity(filmRecord);
-        if (seenKeys.has(entity.key)) {
-            return;
-        }
+        addSuggestion(entity, normalizeTitle(entity.name));
+    });
 
-        suggestions.push({
-            ...entity,
-            score: normalizedMovieTitle.startsWith(normalizedQuery) ? 0 : 1,
+    filmRecords.forEach((filmRecord) => {
+        const credits = filmRecord?.rawTmdbMovieCreditsResponse ?? {};
+        const tmdbPeople = [
+            ...(credits.cast ?? []).map((credit) => ({ ...credit, creditType: "cast" })),
+            ...(credits.crew ?? []).map((credit) => ({ ...credit, creditType: "crew" })),
+        ];
+        tmdbPeople.forEach((credit) => {
+            const entity = createPersonSearchEntityFromCredit(credit);
+            addSuggestion(entity, normalizeName(entity.name));
         });
-        seenKeys.add(entity.key);
+
+        Object.values(filmRecord?.domSnapshot?.peopleByRole ?? {})
+            .flat()
+            .forEach((personName) => {
+                const entity = {
+                    kind: "person",
+                    id: "",
+                    name: personName,
+                    key: getPersonCardKey(personName),
+                    label: personName,
+                };
+                addSuggestion(entity, normalizeName(entity.name));
+            });
     });
 
     return suggestions
@@ -2346,12 +2362,25 @@ function getSearchEntityExclusionKey(entity) {
     return `person:${normalizeName(entity.name ?? "")}`;
 }
 
-async function findLocalConnectionPath(startEntity, endEntity, timeoutMs = 5000, excludedNodeKeys = []) {
+function getSearchEdgeExclusionKey(leftEntity, rightEntity) {
+    const leftKey = getSearchEntityExclusionKey(leftEntity);
+    const rightKey = getSearchEntityExclusionKey(rightEntity);
+    return [leftKey, rightKey].sort().join("||");
+}
+
+async function findLocalConnectionPath(
+    startEntity,
+    endEntity,
+    timeoutMs = 5000,
+    excludedNodeKeys = [],
+    excludedEdgeKeys = [],
+) {
     if (!startEntity || !endEntity) {
         return { path: null, timedOut: false, nodesRead: 0 };
     }
 
     const excludedNodeKeySet = new Set(excludedNodeKeys);
+    const excludedEdgeKeySet = new Set(excludedEdgeKeys);
     if (
         excludedNodeKeySet.has(getSearchEntityExclusionKey(startEntity)) ||
         excludedNodeKeySet.has(getSearchEntityExclusionKey(endEntity))
@@ -2397,7 +2426,8 @@ async function findLocalConnectionPath(startEntity, endEntity, timeoutMs = 5000,
                 if (
                     !neighbor?.key ||
                     ownParents.has(neighbor.key) ||
-                    excludedNodeKeySet.has(getSearchEntityExclusionKey(neighbor))
+                    excludedNodeKeySet.has(getSearchEntityExclusionKey(neighbor)) ||
+                    excludedEdgeKeySet.has(getSearchEdgeExclusionKey(entity, neighbor))
                 ) {
                     continue;
                 }
@@ -2499,7 +2529,42 @@ function resetGenericExtensionSearchState() {
     genericExtensionSearchState.resultPathNeighborCountsByKey = {};
     genericExtensionSearchState.resultRows = [];
     genericExtensionSearchState.excludedConnectionNodeKeys = [];
+    genericExtensionSearchState.excludedConnectionEdgeKeys = [];
     genericExtensionSearchState.searching = false;
+}
+
+function syncGenericExtensionSearchExclusionsFromResultRows() {
+    const excludedNodeKeys = new Set();
+    const excludedEdgeKeys = new Set();
+
+    genericExtensionSearchState.resultRows.forEach((resultRowState) => {
+        const path = resultRowState?.path ?? [];
+        (resultRowState?.dimmedNodeIndexes ?? []).forEach((index) => {
+            const entity = path[index];
+            if (entity) {
+                excludedNodeKeys.add(getSearchEntityExclusionKey(entity));
+            }
+        });
+        (resultRowState?.dimmedEdgeKeys ?? []).forEach((edgeKey) => {
+            if (edgeKey) {
+                excludedEdgeKeys.add(edgeKey);
+            }
+        });
+    });
+
+    genericExtensionSearchState.excludedConnectionNodeKeys = Array.from(excludedNodeKeys);
+    genericExtensionSearchState.excludedConnectionEdgeKeys = Array.from(excludedEdgeKeys);
+}
+
+function insertGenericExtensionSearchResultRow(resultRowState, insertBeforeResultRowIndex = null) {
+    const insertionIndex = Number.isInteger(insertBeforeResultRowIndex)
+        ? Math.max(0, Math.min(insertBeforeResultRowIndex, genericExtensionSearchState.resultRows.length))
+        : 0;
+    genericExtensionSearchState.resultRows = [
+        ...genericExtensionSearchState.resultRows.slice(0, insertionIndex),
+        resultRowState,
+        ...genericExtensionSearchState.resultRows.slice(insertionIndex),
+    ];
 }
 
 async function updateGenericExtensionSearchSuggestions(query) {
@@ -2510,6 +2575,7 @@ async function updateGenericExtensionSearchSuggestions(query) {
     genericExtensionSearchState.resultSummary = "";
     genericExtensionSearchState.resultRows = [];
     genericExtensionSearchState.excludedConnectionNodeKeys = [];
+    genericExtensionSearchState.excludedConnectionEdgeKeys = [];
 
     if (!query.trim()) {
         genericExtensionSearchState.suggestions = [];
@@ -2533,11 +2599,13 @@ async function selectGenericExtensionSearchSuggestion(rootRow, suggestion) {
     genericExtensionSearchState.resultSummary = "";
     genericExtensionSearchState.resultRows = [];
     genericExtensionSearchState.excludedConnectionNodeKeys = [];
+    genericExtensionSearchState.excludedConnectionEdgeKeys = [];
     await connectGenericExtensionSearchEndpoints(rootRow);
 }
 
 function createAutocompleteField(rootRow, placeholder) {
     let highlightedIndex = 0;
+    let liveRefreshTimerId = null;
 
     function refreshSuggestionsForCurrentQuery() {
         if (!genericExtensionSearchState.query.trim()) {
@@ -2553,6 +2621,29 @@ function createAutocompleteField(rootRow, placeholder) {
                 console.error("cinenerdle2.refreshSuggestionsForCurrentQuery", error);
                 alert(error.message);
             });
+    }
+
+    function startLiveSuggestionRefresh() {
+        if (liveRefreshTimerId !== null) {
+            return;
+        }
+
+        liveRefreshTimerId = window.setInterval(() => {
+            if (document.activeElement !== input || !genericExtensionSearchState.query.trim()) {
+                return;
+            }
+
+            refreshSuggestionsForCurrentQuery();
+        }, 750);
+    }
+
+    function stopLiveSuggestionRefresh() {
+        if (liveRefreshTimerId === null) {
+            return;
+        }
+
+        window.clearInterval(liveRefreshTimerId);
+        liveRefreshTimerId = null;
     }
 
     const fieldWrap = document.createElement("div");
@@ -2618,6 +2709,7 @@ function createAutocompleteField(rootRow, placeholder) {
             );
     });
     input.addEventListener("focus", () => {
+        startLiveSuggestionRefresh();
         refreshSuggestionsForCurrentQuery();
     });
     input.addEventListener("pointerdown", () => {
@@ -2740,6 +2832,7 @@ function createAutocompleteField(rootRow, placeholder) {
     }
 
     input.addEventListener("blur", () => {
+        stopLiveSuggestionRefresh();
         window.setTimeout(() => {
             renderSuggestions();
         }, 0);
@@ -2751,6 +2844,7 @@ function createAutocompleteField(rootRow, placeholder) {
 }
 
 function loadGenericExtensionPath(pathNodes) {
+    resetGenericExtensionSearchState();
     const nextUrl = `${window.location.origin}${window.location.pathname}?generic_extension=${serializeGenericExtensionPath(pathNodes)}`;
     window.history.pushState({}, "", nextUrl);
     maybeShowGenericExtensionEntry("replace").catch((error) => {
@@ -2834,6 +2928,7 @@ async function connectGenericExtensionSearchEndpoints(
             targetSelection,
             5000,
             genericExtensionSearchState.excludedConnectionNodeKeys,
+            genericExtensionSearchState.excludedConnectionEdgeKeys,
         );
         const elapsedSeconds = ((performance.now() - startedAt) / 1000).toFixed(1);
         if (result.path?.length) {
@@ -2845,21 +2940,16 @@ async function connectGenericExtensionSearchEndpoints(
             genericExtensionSearchState.resultSummary =
                 `Found path with ${result.path.length} nodes after reading ${result.nodesRead} nodes in ${elapsedSeconds} seconds.`;
             const newResultRowState = {
+                kind: "path",
                 path: result.path,
                 metadataByKey: connectionPathRenderState.metadataByKey,
                 neighborCountsByKey: connectionPathRenderState.neighborCountsByKey,
                 summary: genericExtensionSearchState.resultSummary,
                 dimmedNodeIndexes: [],
+                dimmedEdgeKeys: [],
             };
             if (appendResult) {
-                const insertionIndex = Number.isInteger(insertBeforeResultRowIndex)
-                    ? Math.max(0, Math.min(insertBeforeResultRowIndex, genericExtensionSearchState.resultRows.length))
-                    : 0;
-                genericExtensionSearchState.resultRows = [
-                    ...genericExtensionSearchState.resultRows.slice(0, insertionIndex),
-                    newResultRowState,
-                    ...genericExtensionSearchState.resultRows.slice(insertionIndex),
-                ];
+                insertGenericExtensionSearchResultRow(newResultRowState, insertBeforeResultRowIndex);
             } else {
                 genericExtensionSearchState.resultRows = [newResultRowState];
             }
@@ -2867,9 +2957,29 @@ async function connectGenericExtensionSearchEndpoints(
         } else if (result.timedOut) {
             genericExtensionSearchState.status =
                 `No connection found in ${elapsedSeconds} seconds after reading ${result.nodesRead} nodes. Searched locally only, no remote lookups.`;
+            if (appendResult) {
+                insertGenericExtensionSearchResultRow(
+                    {
+                        kind: "message",
+                        summary: genericExtensionSearchState.status,
+                    },
+                    insertBeforeResultRowIndex,
+                );
+                genericExtensionSearchState.status = "";
+            }
         } else {
             genericExtensionSearchState.status =
                 `No connection found in ${elapsedSeconds} seconds after reading ${result.nodesRead} nodes. Searched locally only, no remote lookups.`;
+            if (appendResult) {
+                insertGenericExtensionSearchResultRow(
+                    {
+                        kind: "message",
+                        summary: genericExtensionSearchState.status,
+                    },
+                    insertBeforeResultRowIndex,
+                );
+                genericExtensionSearchState.status = "";
+            }
         }
     } catch (error) {
         console.error("cinenerdle2.connectGenericExtensionSearchEndpoints", error);
@@ -2975,6 +3085,23 @@ function createGenericExtensionSearchBar(rootRow) {
     }
 
     genericExtensionSearchState.resultRows.forEach((resultRowState, resultRowIndex) => {
+        if (resultRowState.kind === "message") {
+            const messageRow = document.createElement("div");
+            messageRow.style.display = "flex";
+            messageRow.style.alignItems = "center";
+            messageRow.style.gap = "8px";
+            messageRow.style.padding = "10px 12px";
+            messageRow.style.border = "1px solid #243041";
+            messageRow.style.borderRadius = "14px";
+            messageRow.style.backgroundColor = "#111827";
+            messageRow.style.color = "#94a3b8";
+            messageRow.style.fontSize = "12px";
+            messageRow.textContent = resultRowState.summary ?? "";
+            applyHorizontalScrollableRowStyle(messageRow, "4px");
+            wrapper.appendChild(messageRow);
+            return;
+        }
+
         const resultRow = document.createElement("div");
         resultRow.tabIndex = 0;
         resultRow.style.display = "flex";
@@ -3002,7 +3129,6 @@ function createGenericExtensionSearchBar(rootRow) {
 
         resultRowState.path.forEach((entity, index) => {
             const isEndpoint = index === 0 || index === resultRowState.path.length - 1;
-            const excludedBubbleTarget = entity;
             const entityBubble = document.createElement("div");
             entityBubble.style.display = "flex";
             entityBubble.style.flexDirection = "column";
@@ -3029,16 +3155,21 @@ function createGenericExtensionSearchBar(rootRow) {
                 entityBubble.addEventListener("click", (event) => {
                     event.preventDefault();
                     event.stopPropagation();
+                    const dimmedNodeIndexes = new Set(resultRowState.dimmedNodeIndexes ?? []);
+                    if (dimmedNodeIndexes.has(index)) {
+                        dimmedNodeIndexes.delete(index);
+                        resultRowState.dimmedNodeIndexes = Array.from(dimmedNodeIndexes);
+                        genericExtensionSearchState.resultRows =
+                            genericExtensionSearchState.resultRows.slice(resultRowIndex);
+                        syncGenericExtensionSearchExclusionsFromResultRows();
+                        renderGenericExtensionStack(rootRow);
+                        return;
+                    }
+
                     entityBubble.style.opacity = "0.25";
-                    resultRowState.dimmedNodeIndexes = Array.from(
-                        new Set([...(resultRowState.dimmedNodeIndexes ?? []), index]),
-                    );
-                    genericExtensionSearchState.excludedConnectionNodeKeys = Array.from(
-                        new Set([
-                            ...genericExtensionSearchState.excludedConnectionNodeKeys,
-                            getSearchEntityExclusionKey(excludedBubbleTarget),
-                        ]),
-                    );
+                    dimmedNodeIndexes.add(index);
+                    resultRowState.dimmedNodeIndexes = Array.from(dimmedNodeIndexes);
+                    syncGenericExtensionSearchExclusionsFromResultRows();
                     renderGenericExtensionStack(rootRow);
                     connectGenericExtensionSearchEndpoints(
                         rootRow,
@@ -3082,6 +3213,7 @@ function createGenericExtensionSearchBar(rootRow) {
             resultRow.appendChild(entityBubble);
 
             if (index < resultRowState.path.length - 1) {
+                const edgeExclusionKey = getSearchEdgeExclusionKey(entity, resultRowState.path[index + 1]);
                 const arrowWrap = document.createElement("div");
                 arrowWrap.style.display = "flex";
                 arrowWrap.style.alignItems = "center";
@@ -3089,7 +3221,11 @@ function createGenericExtensionSearchBar(rootRow) {
                 arrowWrap.style.flex = "0 0 auto";
                 arrowWrap.style.alignSelf = "center";
                 arrowWrap.style.minWidth = "24px";
-                arrowWrap.style.cursor = "default";
+                arrowWrap.style.borderRadius = "999px";
+                arrowWrap.style.transition = "opacity 120ms ease, background-color 120ms ease, transform 120ms ease";
+                arrowWrap.style.opacity =
+                    (resultRowState.dimmedEdgeKeys ?? []).includes(edgeExclusionKey) ? "0.25" : "1";
+                arrowWrap.style.cursor = "pointer";
 
                 const arrow = document.createElement("div");
                 arrow.textContent = "→";
@@ -3097,6 +3233,44 @@ function createGenericExtensionSearchBar(rootRow) {
                 arrow.style.fontSize = "18px";
                 arrow.style.lineHeight = "1";
                 arrowWrap.appendChild(arrow);
+                arrowWrap.addEventListener("mouseenter", () => {
+                    arrowWrap.style.backgroundColor = "rgba(148, 163, 184, 0.12)";
+                    arrowWrap.style.transform = "scale(1.05)";
+                });
+                arrowWrap.addEventListener("mouseleave", () => {
+                    arrowWrap.style.backgroundColor = "transparent";
+                    arrowWrap.style.transform = "none";
+                });
+                arrowWrap.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const dimmedEdgeKeys = new Set(resultRowState.dimmedEdgeKeys ?? []);
+                    if (dimmedEdgeKeys.has(edgeExclusionKey)) {
+                        dimmedEdgeKeys.delete(edgeExclusionKey);
+                        resultRowState.dimmedEdgeKeys = Array.from(dimmedEdgeKeys);
+                        genericExtensionSearchState.resultRows =
+                            genericExtensionSearchState.resultRows.slice(resultRowIndex);
+                        syncGenericExtensionSearchExclusionsFromResultRows();
+                        renderGenericExtensionStack(rootRow);
+                        return;
+                    }
+
+                    arrowWrap.style.opacity = "0.25";
+                    dimmedEdgeKeys.add(edgeExclusionKey);
+                    resultRowState.dimmedEdgeKeys = Array.from(dimmedEdgeKeys);
+                    syncGenericExtensionSearchExclusionsFromResultRows();
+                    renderGenericExtensionStack(rootRow);
+                    connectGenericExtensionSearchEndpoints(
+                        rootRow,
+                        {
+                            appendResult: true,
+                            insertBeforeResultRowIndex: resultRowIndex,
+                        },
+                    ).catch((error) => {
+                        console.error("cinenerdle2.excludeConnectionEdge", error);
+                        alert(error.message);
+                    });
+                });
                 resultRow.appendChild(arrowWrap);
             }
         });
@@ -3509,16 +3683,14 @@ function updateMovieCardPresentationFromRecord(card, movieRecord) {
 
 function createPersonAssociationCard(credit, movieRecord, cachedPersonRecord = null, connectionCount = null) {
     const personName = cachedPersonRecord?.name ?? credit?.name?.trim() ?? "Unknown";
+    const isCastCredit = credit?.creditType === "cast";
 
     return {
         key: getPersonCardKey(personName, cachedPersonRecord?.id ?? credit?.id),
         kind: "person",
         name: personName,
-        subtitle: [
-            getTmdbCreditCategoryText(credit),
-        ]
-            .filter(Boolean)
-            .join(" • "),
+        subtitle: isCastCredit ? "Cast as" : getTmdbCreditCategoryText(credit),
+        subtitleDetail: isCastCredit ? credit?.character ?? "" : "",
         imageUrl:
             getPersonProfileImageUrl(cachedPersonRecord) ??
             getPosterUrl(credit?.profile_path, "w300_and_h450_face"),
@@ -3694,13 +3866,42 @@ function createGenericExtensionCardElement(
     return cardElement;
 }
 
-function createGenericExtensionRowElement(row, rootRow) {
+function createGenericExtensionGenerationBadge(generationNumber) {
+    const generationBadge = document.createElement("div");
+    generationBadge.textContent = `Gen ${generationNumber}`;
+    generationBadge.style.display = "inline-flex";
+    generationBadge.style.alignItems = "center";
+    generationBadge.style.justifyContent = "center";
+    generationBadge.style.alignSelf = "center";
+    generationBadge.style.flex = "0 0 auto";
+    generationBadge.style.minWidth = "0";
+    generationBadge.style.padding = "2px 5px";
+    generationBadge.style.marginLeft = "0";
+    generationBadge.style.borderRadius = "999px";
+    generationBadge.style.border = "1px solid #334155";
+    generationBadge.style.background =
+        "linear-gradient(180deg, rgba(15, 23, 42, 0.92) 0%, rgba(30, 41, 59, 0.92) 100%)";
+    generationBadge.style.color = "#e2e8f0";
+    generationBadge.style.boxShadow = "inset 0 1px 0 rgba(255, 255, 255, 0.04)";
+    generationBadge.style.fontSize = "9px";
+    generationBadge.style.fontWeight = "700";
+    generationBadge.style.letterSpacing = "0.02em";
+    generationBadge.style.whiteSpace = "nowrap";
+    return generationBadge;
+}
+
+function createGenericExtensionRowElement(row, rootRow, generationNumber) {
     const sectionRow = createRowSection();
     const ancestorSelectedCards = collectAncestorSelectedCardKeys(rootRow, row);
+    sectionRow.section.style.marginLeft = "-8px";
     sectionRow.body.style.display = "flex";
     sectionRow.body.style.alignItems = "flex-start";
-    sectionRow.body.style.gap = "14px";
+    sectionRow.body.style.gap = "8px";
+    sectionRow.body.style.flex = "1 1 auto";
+    sectionRow.body.style.minWidth = "0";
+    sectionRow.body.style.overflow = "visible";
     applyHorizontalScrollableRowStyle(sectionRow.body, "8px");
+    sectionRow.body.appendChild(createGenericExtensionGenerationBadge(generationNumber));
 
     if ((row.cards ?? []).length === 0) {
         sectionRow.body.appendChild(createChip("No associated items found"));
@@ -3777,11 +3978,13 @@ function renderGenericExtensionStack(rootRow) {
     appRoot.appendChild(createGenericExtensionBookmarksBar(rootRow));
     appRoot.appendChild(createGenericExtensionSearchBar(rootRow));
 
-    getVisibleGenericExtensionRows(rootRow)
+    const visibleRows = getVisibleGenericExtensionRows(rootRow);
+    visibleRows
         .slice()
         .reverse()
         .forEach((row) => {
-            appRoot.appendChild(createGenericExtensionRowElement(row, rootRow));
+            const generationNumber = visibleRows.indexOf(row);
+            appRoot.appendChild(createGenericExtensionRowElement(row, rootRow, generationNumber));
         });
 
     document.body.replaceChildren(appRoot);
