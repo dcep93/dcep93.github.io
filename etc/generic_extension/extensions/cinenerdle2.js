@@ -993,6 +993,7 @@ function createCardTitle(text, secondaryText = "") {
   const wrapper = document.createElement("div");
 
   const title = document.createElement("div");
+  title.dataset.cinenerdle2CardTitle = "true";
   title.textContent = text;
   title.style.fontSize = "15px";
   title.style.fontWeight = "700";
@@ -2427,11 +2428,6 @@ function createGenericExtensionSearchBar(rootRow) {
   wrapper.style.width = getGenericExtensionTrackWidth();
   wrapper.style.maxWidth = getGenericExtensionTrackWidth();
   wrapper.style.minWidth = getGenericExtensionTrackWidth();
-  wrapper.style.padding = "14px 16px";
-  wrapper.style.border = "1px solid #243041";
-  wrapper.style.borderRadius = "18px";
-  wrapper.style.background = "rgba(15, 23, 42, 0.82)";
-  wrapper.style.boxShadow = "0 10px 30px rgba(0, 0, 0, 0.18)";
   wrapper.style.boxSizing = "border-box";
   wrapper.style.overflow = "visible";
   wrapper.style.position = "relative";
@@ -2563,11 +2559,6 @@ function createGenericExtensionBookmarksBar(rootRow) {
   wrapper.style.width = getGenericExtensionTrackWidth();
   wrapper.style.maxWidth = getGenericExtensionTrackWidth();
   wrapper.style.minWidth = getGenericExtensionTrackWidth();
-  wrapper.style.padding = "14px 16px";
-  wrapper.style.border = "1px solid #243041";
-  wrapper.style.borderRadius = "18px";
-  wrapper.style.background = "rgba(15, 23, 42, 0.82)";
-  wrapper.style.boxShadow = "0 10px 30px rgba(0, 0, 0, 0.18)";
   wrapper.style.boxSizing = "border-box";
   wrapper.style.overflow = "visible";
 
@@ -2603,13 +2594,16 @@ function createGenericExtensionBookmarksBar(rootRow) {
     bookmarkSelect.appendChild(emptyOption);
     bookmarkSelect.disabled = true;
   } else {
+    const placeholderOption = document.createElement("option");
+    placeholderOption.textContent = "Select a bookmark";
+    placeholderOption.value = "";
+    placeholderOption.selected = true;
+    bookmarkSelect.appendChild(placeholderOption);
+
     bookmarks.forEach((bookmark, index) => {
       const option = document.createElement("option");
       option.value = bookmark.path;
       option.textContent = bookmark.name;
-      if (index === 0) {
-        option.selected = true;
-      }
       bookmarkSelect.appendChild(option);
     });
   }
@@ -2909,6 +2903,19 @@ function createGenericExtensionCardElement(
 
   applyStackCardSelectionStyle(cardElement, isSelected, isLocked);
   cardElement.style.cursor = onSelect ? "pointer" : isLocked ? "default" : "pointer";
+
+  const titleElement = cardElement.querySelector('[data-cinenerdle2-card-title="true"]');
+  if (titleElement instanceof HTMLElement) {
+    titleElement.style.cursor = "pointer";
+    titleElement.style.textDecoration = "underline";
+    titleElement.style.textDecorationColor = "rgba(148, 163, 184, 0.55)";
+    titleElement.style.textUnderlineOffset = "3px";
+    titleElement.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      loadGenericExtensionPath([getPathNodeFromCard(card)]);
+    });
+  }
 
   if (onSelect) {
     cardElement.addEventListener("click", onSelect);
@@ -3520,6 +3527,13 @@ function handlePractice() {
 function main() {
   if (!document.body) {
     return;
+  }
+
+  if (
+    window.location.pathname.endsWith("/cinenerdle2.html") &&
+    !getGenericExtensionEntryUrl()
+  ) {
+    alert("default");
   }
 
   maybeShowGenericExtensionEntry()
