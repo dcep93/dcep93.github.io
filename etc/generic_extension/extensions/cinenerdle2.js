@@ -11,6 +11,7 @@ const TMDB_ICON_URL =
   "https://www.themoviedb.org/assets/2/favicon-32x32-543a21832c8931d3494a68881f6afcafc58e96c5d324345377f3197a37b367b5.png";
 const GENERIC_EXTENSION_BOOKMARKS_STORAGE_KEY =
   "cinenerdle2.genericExtensionBookmarks";
+const GENERIC_EXTENSION_PAGE_PADDING_PX = 24;
 
 const practiceModeClickBound = new WeakSet();
 let movieTitleClickDelegateBound = false;
@@ -280,6 +281,35 @@ async function clearIndexedDb() {
   } finally {
     database.close();
   }
+}
+
+function formatByteCount(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "0 B";
+  }
+
+  const units = ["B", "KB", "MB", "GB"];
+  let unitIndex = 0;
+  let value = bytes;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  const decimals = unitIndex === 0 ? 0 : value >= 10 ? 1 : 2;
+  return `${value.toFixed(decimals)} ${units[unitIndex]}`;
+}
+
+async function estimateIndexedDbUsageBytes() {
+  const [peopleRecords, filmRecords] = await Promise.all([
+    getAllPersonRecords(),
+    getAllFilmRecords(),
+  ]);
+  return new Blob([JSON.stringify({ peopleRecords, filmRecords })]).size;
+}
+
+function getGenericExtensionTrackWidth() {
+  return `calc(100vw - ${GENERIC_EXTENSION_PAGE_PADDING_PX * 2}px)`;
 }
 
 function getFilmTitleAndYear(cardElement) {
@@ -2106,9 +2136,9 @@ function createBookmarkActionButton(label, onClick, tone = "neutral") {
 function applyHorizontalScrollableRowStyle(element, paddingBottom = "8px") {
   element.style.display = "flex";
   element.style.flexWrap = "nowrap";
-  element.style.width = "100vw";
-  element.style.maxWidth = "100vw";
-  element.style.minWidth = "100vw";
+  element.style.width = getGenericExtensionTrackWidth();
+  element.style.maxWidth = getGenericExtensionTrackWidth();
+  element.style.minWidth = getGenericExtensionTrackWidth();
   element.style.overflowX = "auto";
   element.style.overflowY = "visible";
   element.style.paddingBottom = paddingBottom;
@@ -2394,8 +2424,9 @@ function createGenericExtensionSearchBar(rootRow) {
   wrapper.style.display = "flex";
   wrapper.style.flexDirection = "column";
   wrapper.style.gap = "12px";
-  wrapper.style.width = "100%";
-  wrapper.style.maxWidth = "100%";
+  wrapper.style.width = getGenericExtensionTrackWidth();
+  wrapper.style.maxWidth = getGenericExtensionTrackWidth();
+  wrapper.style.minWidth = getGenericExtensionTrackWidth();
   wrapper.style.padding = "14px 16px";
   wrapper.style.border = "1px solid #243041";
   wrapper.style.borderRadius = "18px";
@@ -2453,6 +2484,30 @@ function createGenericExtensionSearchBar(rootRow) {
       },
     ),
   );
+  actions.appendChild(
+    createBookmarkActionButton(
+      "Clear DB",
+      async () => {
+        try {
+          const estimatedBytes = await estimateIndexedDbUsageBytes();
+          const shouldClearDb = window.confirm(
+            `Clear the DB and reclaim about ${formatByteCount(estimatedBytes)} of local cache?`,
+          );
+          if (!shouldClearDb) {
+            return;
+          }
+
+          await clearIndexedDb();
+          resetGenericExtensionSearchState();
+          renderGenericExtensionStack(rootRow);
+        } catch (error) {
+          console.error("cinenerdle2.clearIndexedDbButton", error);
+          alert(`Failed to clear cinenerdle2 cache: ${error.message}`);
+        }
+      },
+      "danger",
+    ),
+  );
   topRow.appendChild(actions);
   wrapper.appendChild(topRow);
 
@@ -2505,8 +2560,9 @@ function createGenericExtensionBookmarksBar(rootRow) {
   wrapper.style.display = "flex";
   wrapper.style.alignItems = "center";
   wrapper.style.gap = "12px";
-  wrapper.style.width = "100%";
-  wrapper.style.maxWidth = "100%";
+  wrapper.style.width = getGenericExtensionTrackWidth();
+  wrapper.style.maxWidth = getGenericExtensionTrackWidth();
+  wrapper.style.minWidth = getGenericExtensionTrackWidth();
   wrapper.style.padding = "14px 16px";
   wrapper.style.border = "1px solid #243041";
   wrapper.style.borderRadius = "18px";
@@ -2926,7 +2982,7 @@ function renderGenericExtensionStack(rootRow) {
   appRoot.style.display = "flex";
   appRoot.style.flexDirection = "column";
   appRoot.style.gap = "20px";
-  appRoot.style.padding = "24px";
+  appRoot.style.padding = `${GENERIC_EXTENSION_PAGE_PADDING_PX}px`;
   appRoot.style.boxSizing = "border-box";
 
   appRoot.appendChild(createGenericExtensionBookmarksBar(rootRow));
