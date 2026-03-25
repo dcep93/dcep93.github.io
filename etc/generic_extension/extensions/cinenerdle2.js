@@ -3,7 +3,7 @@ const PERSON_BOUND_ATTR = "data-cinenerdle2-person-bound";
 const MOVIE_BOUND_ATTR = "data-cinenerdle2-movie-bound";
 const PERSON_NAME_PATTERN = /^[\p{L}\p{M}0-9.'’ -]+$/u;
 const INDEXED_DB_NAME = "cinenerdle2";
-const INDEXED_DB_VERSION = 6;
+const INDEXED_DB_VERSION = 7;
 const PEOPLE_STORE_NAME = "people";
 const FILMS_STORE_NAME = "films";
 const CINENERDLE_ICON_URL = "https://www.cinenerdle2.app/icon.png";
@@ -19,12 +19,15 @@ let latestQueryResponseText = "No query response yet.";
 let practiceModeClearInFlight = false;
 let genericExtensionPopstateBound = false;
 let genericExtensionRootRow = null;
+let genericExtensionTooltipElement = null;
 const genericExtensionSearchState = {
     query: "",
     suggestions: [],
     targetSelection: null,
     status: "",
     resultPath: null,
+    resultPathMetadataByKey: {},
+    resultPathNeighborCountsByKey: {},
     searching: false,
     shouldFocusInput: false,
     selectionStart: null,
@@ -248,6 +251,10 @@ function openIndexedDb() {
                 });
                 filmsStore.createIndex("titleYear", "titleYear", { unique: false });
                 filmsStore.createIndex("titleLower", "titleLower", { unique: false });
+                filmsStore.createIndex("personConnectionKeys", "personConnectionKeys", {
+                    unique: false,
+                    multiEntry: true,
+                });
             } else {
                 const filmsStore = request.transaction.objectStore(FILMS_STORE_NAME);
                 if (!filmsStore.indexNames.contains("titleYear")) {
@@ -255,6 +262,12 @@ function openIndexedDb() {
                 }
                 if (!filmsStore.indexNames.contains("titleLower")) {
                     filmsStore.createIndex("titleLower", "titleLower", { unique: false });
+                }
+                if (!filmsStore.indexNames.contains("personConnectionKeys")) {
+                    filmsStore.createIndex("personConnectionKeys", "personConnectionKeys", {
+                        unique: false,
+                        multiEntry: true,
+                    });
                 }
             }
         };
@@ -557,6 +570,27 @@ async function getFilmRecordsByIds(ids) {
     }
 }
 
+async function getFilmRecordsByPersonConnectionKey(personName) {
+    if (!personName) {
+        return [];
+    }
+
+    const database = await openIndexedDb();
+
+    try {
+        const transaction = database.transaction(FILMS_STORE_NAME, "readonly");
+        const store = transaction.objectStore(FILMS_STORE_NAME);
+        const index = store.index("personConnectionKeys");
+        const filmRecords = await indexedDbRequestToPromise(
+            index.getAll(normalizeName(personName)),
+        );
+        await transactionDonePromise(transaction);
+        return filmRecords ?? [];
+    } finally {
+        database.close();
+    }
+}
+
 async function getAllPersonRecords() {
     const database = await openIndexedDb();
 
@@ -648,6 +682,28 @@ function withDerivedPersonFields(personRecord) {
     };
 }
 
+function withDerivedFilmFields(filmRecord, extraPersonNames = []) {
+    const credits = filmRecord?.rawTmdbMovieCreditsResponse ?? {};
+    const existingPersonKeys = (filmRecord?.personConnectionKeys ?? []).filter(Boolean);
+    const tmdbPersonKeys = [...(credits.cast ?? []), ...(credits.crew ?? [])]
+        .map((credit) => normalizeName(credit?.name ?? ""))
+        .filter(Boolean);
+    const domPersonKeys = Object.values(filmRecord?.domSnapshot?.peopleByRole ?? {})
+        .flat()
+        .map((personName) => normalizeName(personName))
+        .filter(Boolean);
+    const extraPersonKeys = extraPersonNames
+        .map((personName) => normalizeName(personName))
+        .filter(Boolean);
+
+    return {
+        ...filmRecord,
+        personConnectionKeys: Array.from(
+            new Set([...existingPersonKeys, ...tmdbPersonKeys, ...domPersonKeys, ...extraPersonKeys]),
+        ),
+    };
+}
+
 function buildFilmRecord(existingFilmRecord, tmdbFilm, domFilmSnapshot) {
     const tmdbYear = tmdbFilm.release_date?.slice(0, 4) ?? "";
     const title =
@@ -686,7 +742,7 @@ function mergeDomConnection(existingConnections, connection) {
     return alreadyExists ? connections : [...connections, connection];
 }
 
-async function saveFilmRecordsFromCredits(creditsPayload, domFilmSnapshot) {
+async function saveFilmRecordsFromCredits(creditsPayload, domFilmSnapshot, connectedPersonName = "") {
     const database = await openIndexedDb();
 
     try {
@@ -704,10 +760,13 @@ async function saveFilmRecordsFromCredits(creditsPayload, domFilmSnapshot) {
 
             await indexedDbRequestToPromise(
                 store.put(
-                    buildFilmRecord(
-                        existingFilmRecord ?? null,
-                        tmdbFilm,
-                        matchesDomFilm ? domFilmSnapshot : null,
+                    withDerivedFilmFields(
+                        buildFilmRecord(
+                            existingFilmRecord ?? null,
+                            tmdbFilm,
+                            matchesDomFilm ? domFilmSnapshot : null,
+                        ),
+                        connectedPersonName ? [connectedPersonName] : [],
                     ),
                 ),
             );
@@ -741,7 +800,7 @@ async function syncDomSnapshotToCachedRecords(domFilmSnapshot) {
 
         for (const filmRecord of matchingFilmRecords) {
             await indexedDbRequestToPromise(
-                filmsStore.put({
+                filmsStore.put(withDerivedFilmFields({
                     ...filmRecord,
                     title: domFilmSnapshot.title,
                     titleLower: domFilmSnapshot.titleLower,
@@ -751,7 +810,7 @@ async function syncDomSnapshotToCachedRecords(domFilmSnapshot) {
                         ...filmRecord.domSnapshot,
                         ...domFilmSnapshot,
                     },
-                }),
+                })),
             );
         }
 
@@ -854,7 +913,7 @@ async function fetchAndCachePerson(personName, domFilmSnapshot) {
     }
 
     try {
-        await saveFilmRecordsFromCredits(creditsPayload, domFilmSnapshot);
+        await saveFilmRecordsFromCredits(creditsPayload, domFilmSnapshot, person.name);
     } catch (error) {
         alert(`Failed to save TMDb film response: ${error.message}`);
         throw error;
@@ -923,10 +982,10 @@ async function fetchAndCacheMovie(movieName, domFilmSnapshot = null, preferredYe
         const existingFilmRecord = await indexedDbRequestToPromise(store.get(movie.id));
 
         await indexedDbRequestToPromise(
-            store.put({
+            store.put(withDerivedFilmFields({
                 ...buildFilmRecord(existingFilmRecord ?? null, movie, domFilmSnapshot),
                 rawTmdbMovieSearchResponse: searchPayload,
-            }),
+            })),
         );
         await transactionDonePromise(transaction);
     } catch (error) {
@@ -973,9 +1032,9 @@ async function fetchAndCacheMovieCredits(movieRecord) {
             rawTmdbMovieCreditsResponse: creditsPayload,
             tmdbCreditsSavedAt: new Date().toISOString(),
         };
-        await indexedDbRequestToPromise(store.put(updatedFilmRecord));
+        await indexedDbRequestToPromise(store.put(withDerivedFilmFields(updatedFilmRecord)));
         await transactionDonePromise(transaction);
-        return updatedFilmRecord;
+        return withDerivedFilmFields(updatedFilmRecord);
     } finally {
         database.close();
     }
@@ -1021,7 +1080,7 @@ function createPosterCard({ imageUrl, title, subtitle, footer = null }) {
     card.style.border = "1px solid #243041";
     card.style.borderRadius = "14px";
     card.style.backgroundColor = "#111827";
-    card.style.boxShadow = "0 8px 24px rgba(0, 0, 0, 0.35)";
+    card.style.boxShadow = "none";
     card.style.height = "100%";
     card.style.boxSizing = "border-box";
 
@@ -1206,6 +1265,7 @@ function createMetricRow(metrics) {
 }
 
 function createMovieMetaBlock({
+    connectionCount = null,
     popularity,
     voteAverage,
     voteCount,
@@ -1226,8 +1286,29 @@ function createMovieMetaBlock({
     topRow.style.justifyContent = "space-between";
     topRow.style.gap = "8px";
 
-    if (sources.length > 0) {
-        topRow.appendChild(createSourceBadge(sources));
+    if (typeof connectionCount === "number" || sources.length > 0) {
+        const sourcesRow = document.createElement("div");
+        sourcesRow.style.display = "flex";
+        sourcesRow.style.alignItems = "center";
+        sourcesRow.style.gap = "8px";
+        sourcesRow.style.flexWrap = "nowrap";
+        sourcesRow.style.minWidth = "0";
+
+        if (typeof connectionCount === "number") {
+            const connectionCountText = document.createElement("div");
+            connectionCountText.textContent = `${connectionCount}`;
+            connectionCountText.style.fontSize = "11px";
+            connectionCountText.style.fontWeight = "700";
+            connectionCountText.style.color = sharedTextColor;
+            connectionCountText.style.whiteSpace = "nowrap";
+            sourcesRow.appendChild(connectionCountText);
+        }
+
+        if (sources.length > 0) {
+            sourcesRow.appendChild(createSourceBadge(sources));
+        }
+
+        topRow.appendChild(sourcesRow);
     }
 
     if (typeof popularity === "number") {
@@ -1270,6 +1351,51 @@ function createMovieMetaBlock({
     }
 
     return block;
+}
+
+function getMovieConnectionCountFromRecord(movieRecord) {
+    if (!movieRecord) {
+        return 1;
+    }
+
+    return Math.max(movieRecord.personConnectionKeys?.length ?? 0, 1);
+}
+
+function getPersonConnectionCountFromRecord(personRecord) {
+    if (!personRecord) {
+        return 1;
+    }
+
+    const uniqueMovies = new Set();
+    getUniqueSortedTmdbMovieCredits(personRecord).forEach((credit) => {
+        uniqueMovies.add(getMovieCardKey(getMovieTitleFromCredit(credit), getMovieYearFromCredit(credit), credit.id));
+    });
+
+    (personRecord.domConnections ?? []).forEach((connection) => {
+        uniqueMovies.add(getMovieCardKey(connection.title, connection.year));
+    });
+
+    return Math.max(uniqueMovies.size, 1);
+}
+
+function getCardConnectionCount(card) {
+    if (!card) {
+        return null;
+    }
+
+    if (typeof card.connectionCount === "number") {
+        return Math.max(card.connectionCount, 1);
+    }
+
+    if (card.kind === "movie") {
+        return getMovieConnectionCountFromRecord(card.record);
+    }
+
+    if (card.kind === "person") {
+        return getPersonConnectionCountFromRecord(card.record);
+    }
+
+    return null;
 }
 
 function createPersonImage(personRecord) {
@@ -1704,6 +1830,17 @@ function openGenericExtensionPage(kind, name, year = "") {
     return window.open(getGenericExtensionUrl(kind, name, year), "_blank");
 }
 
+function setCinenerdleFavicon() {
+    let faviconLink = document.querySelector('link[rel="icon"]');
+    if (!(faviconLink instanceof HTMLLinkElement)) {
+        faviconLink = document.createElement("link");
+        faviconLink.rel = "icon";
+        document.head.appendChild(faviconLink);
+    }
+
+    faviconLink.href = CINENERDLE_ICON_URL;
+}
+
 function getMovieRecordYear(movieRecord) {
     return (
         movieRecord?.year ??
@@ -1996,6 +2133,82 @@ async function getLocalNeighborsForEntity(entity, cache) {
     return neighbors;
 }
 
+async function getConnectionPathEntityMetadata(entity) {
+    if (!entity) {
+        return { sources: [] };
+    }
+
+    if (entity.kind === "movie") {
+        const movieRecord =
+            (entity.id ? await getFilmRecordById(entity.id) : null) ??
+            (entity.name ? await getFilmRecordByTitleAndYear(entity.name, entity.year) : null);
+        return {
+            sources: [
+                hasFetchedTmdbMovie(movieRecord)
+                    ? { iconUrl: TMDB_ICON_URL, label: "TMDb" }
+                    : {
+                        iconUrl: TMDB_ICON_URL,
+                        label: "TMDb reference only",
+                        filter: "grayscale(1)",
+                        opacity: "0.9",
+                    },
+                movieRecord?.domSnapshot
+                    ? { iconUrl: CINENERDLE_ICON_URL, label: "Cinenerdle" }
+                    : {
+                        iconUrl: CINENERDLE_ICON_URL,
+                        label: "Not loaded from Cinenerdle",
+                        filter: "grayscale(1)",
+                        opacity: "0.9",
+                    },
+            ],
+        };
+    }
+
+    const personRecord =
+        (entity.id ? await getPersonRecordById(entity.id) : null) ??
+        (entity.name ? await getPersonRecordByName(entity.name) : null);
+    return {
+        sources: [
+            hasFetchedTmdbPerson(personRecord)
+                ? { iconUrl: TMDB_ICON_URL, label: "TMDb" }
+                : {
+                    iconUrl: TMDB_ICON_URL,
+                    label: "TMDb reference only",
+                    filter: "grayscale(1)",
+                    opacity: "0.9",
+                },
+            personRecord?.domConnections?.length
+                ? { iconUrl: CINENERDLE_ICON_URL, label: "Cinenerdle" }
+                : {
+                    iconUrl: CINENERDLE_ICON_URL,
+                    label: "Not loaded from Cinenerdle",
+                    filter: "grayscale(1)",
+                    opacity: "0.9",
+                },
+        ],
+    };
+}
+
+async function buildConnectionPathRenderState(path) {
+    const neighborCache = new Map();
+    const metadataEntries = await Promise.all(
+        (path ?? []).map(async (entity) => {
+            const [metadata, neighbors] = await Promise.all([
+                getConnectionPathEntityMetadata(entity),
+                getLocalNeighborsForEntity(entity, neighborCache),
+            ]);
+            return [entity.key, metadata, neighbors.length];
+        }),
+    );
+    const metadataByKey = {};
+    const neighborCountsByKey = {};
+    metadataEntries.forEach(([key, metadata, neighborCount]) => {
+        metadataByKey[key] = metadata;
+        neighborCountsByKey[key] = Math.max(neighborCount, 1);
+    });
+    return { metadataByKey, neighborCountsByKey };
+}
+
 function reconstructBidirectionalPath(meetingKey, startParents, endParents, entityByKey) {
     const startKeys = [];
     let currentKey = meetingKey;
@@ -2151,13 +2364,12 @@ function resetGenericExtensionSearchState() {
     genericExtensionSearchState.targetSelection = null;
     genericExtensionSearchState.status = "";
     genericExtensionSearchState.resultPath = null;
+    genericExtensionSearchState.resultPathMetadataByKey = {};
+    genericExtensionSearchState.resultPathNeighborCountsByKey = {};
     genericExtensionSearchState.searching = false;
-    genericExtensionSearchState.shouldFocusInput = false;
-    genericExtensionSearchState.selectionStart = null;
-    genericExtensionSearchState.selectionEnd = null;
 }
 
-async function updateGenericExtensionSearchSuggestions(rootRow, query) {
+async function updateGenericExtensionSearchSuggestions(query) {
     genericExtensionSearchState.query = query;
     genericExtensionSearchState.targetSelection = null;
     genericExtensionSearchState.resultPath = null;
@@ -2165,7 +2377,6 @@ async function updateGenericExtensionSearchSuggestions(rootRow, query) {
 
     if (!query.trim()) {
         genericExtensionSearchState.suggestions = [];
-        renderGenericExtensionStack(rootRow);
         return;
     }
 
@@ -2175,53 +2386,66 @@ async function updateGenericExtensionSearchSuggestions(rootRow, query) {
     }
 
     genericExtensionSearchState.suggestions = suggestions;
-    renderGenericExtensionStack(rootRow);
 }
 
-function selectGenericExtensionSearchSuggestion(rootRow, suggestion) {
+async function selectGenericExtensionSearchSuggestion(rootRow, suggestion) {
     genericExtensionSearchState.targetSelection = suggestion;
     genericExtensionSearchState.query = suggestion.label;
     genericExtensionSearchState.suggestions = [];
     genericExtensionSearchState.resultPath = null;
     genericExtensionSearchState.status = "";
-    genericExtensionSearchState.shouldFocusInput = false;
-    genericExtensionSearchState.selectionStart = null;
-    genericExtensionSearchState.selectionEnd = null;
-    renderGenericExtensionStack(rootRow);
-}
-
-function getSearchEntityIcon(kind) {
-    return kind === "movie" ? "🎬" : "👤";
+    await connectGenericExtensionSearchEndpoints(rootRow);
 }
 
 function createAutocompleteField(rootRow, placeholder) {
+    let highlightedIndex = 0;
+
+    function refreshSuggestionsForCurrentQuery() {
+        if (!genericExtensionSearchState.query.trim()) {
+            renderSuggestions();
+            return;
+        }
+
+        updateGenericExtensionSearchSuggestions(genericExtensionSearchState.query)
+            .then(() => {
+                renderSuggestions();
+            })
+            .catch((error) => {
+                console.error("cinenerdle2.refreshSuggestionsForCurrentQuery", error);
+                alert(error.message);
+            });
+    }
+
     const fieldWrap = document.createElement("div");
     fieldWrap.style.position = "relative";
     fieldWrap.style.zIndex = "5";
     fieldWrap.style.display = "flex";
-    fieldWrap.style.flexDirection = "column";
-    fieldWrap.style.gap = "8px";
-    fieldWrap.style.minWidth = "260px";
-    fieldWrap.style.flex = "0 0 320px";
+    fieldWrap.style.minWidth = "320px";
+    fieldWrap.style.flex = "1 1 520px";
+    fieldWrap.style.maxWidth = "100%";
+    fieldWrap.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+    });
+    fieldWrap.addEventListener("click", (event) => {
+        event.stopPropagation();
+    });
 
     const inputShell = document.createElement("div");
     inputShell.style.display = "flex";
     inputShell.style.alignItems = "center";
     inputShell.style.gap = "10px";
+    inputShell.style.width = "100%";
     inputShell.style.padding = "0 12px";
     inputShell.style.borderRadius = "12px";
     inputShell.style.border = "1px solid #334155";
     inputShell.style.backgroundColor = "#0f172a";
-
-    const inputIcon = document.createElement("div");
-    inputIcon.textContent = genericExtensionSearchState.targetSelection
-        ? getSearchEntityIcon(genericExtensionSearchState.targetSelection.kind)
-        : "";
-    inputIcon.style.flex = "0 0 auto";
-    inputIcon.style.fontSize = "16px";
-    inputIcon.style.width = "18px";
-    inputIcon.style.textAlign = "center";
-    inputShell.appendChild(inputIcon);
+    inputShell.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+    });
+    inputShell.addEventListener("click", (event) => {
+        event.stopPropagation();
+        input.focus();
+    });
 
     const input = document.createElement("input");
     input.type = "text";
@@ -2237,72 +2461,152 @@ function createAutocompleteField(rootRow, placeholder) {
     input.style.backgroundColor = "transparent";
     input.style.color = "#f8fafc";
     input.style.fontSize = "14px";
+    input.autocomplete = "off";
+    input.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+    });
     input.addEventListener("input", (event) => {
-        genericExtensionSearchState.shouldFocusInput = true;
-        genericExtensionSearchState.selectionStart = event.target.selectionStart;
-        genericExtensionSearchState.selectionEnd = event.target.selectionEnd;
-        updateGenericExtensionSearchSuggestions(rootRow, event.target.value).catch(
+        highlightedIndex = 0;
+        updateGenericExtensionSearchSuggestions(event.target.value)
+            .then(() => {
+                renderSuggestions();
+            })
+            .catch(
             (error) => {
                 console.error("cinenerdle2.updateGenericExtensionSearchSuggestions", error);
                 alert(error.message);
             },
-        );
+            );
+    });
+    input.addEventListener("focus", () => {
+        refreshSuggestionsForCurrentQuery();
+    });
+    input.addEventListener("pointerdown", () => {
+        refreshSuggestionsForCurrentQuery();
+    });
+    input.addEventListener("click", (event) => {
+        event.stopPropagation();
+        refreshSuggestionsForCurrentQuery();
+    });
+    input.addEventListener("keydown", (event) => {
+        const suggestions = genericExtensionSearchState.suggestions;
+        if (event.key === "ArrowDown") {
+            if (!suggestions.length) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            highlightedIndex = Math.min(highlightedIndex + 1, suggestions.length - 1);
+            renderSuggestions();
+            return;
+        }
+
+        if (event.key === "ArrowUp") {
+            if (!suggestions.length) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            highlightedIndex = Math.max(highlightedIndex - 1, 0);
+            renderSuggestions();
+            return;
+        }
+
+        if (event.key !== "Enter") {
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        const highlightedSuggestion = suggestions[highlightedIndex] ?? suggestions[0];
+        if (!highlightedSuggestion) {
+            return;
+        }
+
+        selectGenericExtensionSearchSuggestion(rootRow, highlightedSuggestion).catch((error) => {
+            console.error("cinenerdle2.selectGenericExtensionSearchSuggestion.enter", error);
+            alert(error.message);
+        });
     });
     inputShell.appendChild(input);
     fieldWrap.appendChild(inputShell);
 
-    const suggestions = genericExtensionSearchState.suggestions;
-    if (suggestions.length > 0) {
-        const suggestionsWrap = document.createElement("div");
-        suggestionsWrap.style.position = "absolute";
-        suggestionsWrap.style.top = "calc(100% + 6px)";
-        suggestionsWrap.style.left = "0";
-        suggestionsWrap.style.right = "0";
-        suggestionsWrap.style.zIndex = "20";
-        suggestionsWrap.style.display = "flex";
-        suggestionsWrap.style.flexDirection = "column";
-        suggestionsWrap.style.gap = "6px";
-        suggestionsWrap.style.maxHeight = "180px";
-        suggestionsWrap.style.overflowY = "auto";
-        suggestionsWrap.style.padding = "8px";
-        suggestionsWrap.style.border = "1px solid #243041";
-        suggestionsWrap.style.borderRadius = "14px";
-        suggestionsWrap.style.backgroundColor = "#0f172a";
-        suggestionsWrap.style.boxShadow = "0 18px 40px rgba(0, 0, 0, 0.35)";
+    const suggestionsWrap = document.createElement("div");
+    suggestionsWrap.style.position = "absolute";
+    suggestionsWrap.style.top = "calc(100% + 6px)";
+    suggestionsWrap.style.left = "0";
+    suggestionsWrap.style.right = "0";
+    suggestionsWrap.style.zIndex = "20";
+    suggestionsWrap.style.display = "none";
+    suggestionsWrap.style.flexDirection = "column";
+    suggestionsWrap.style.gap = "6px";
+    suggestionsWrap.style.maxHeight = "180px";
+    suggestionsWrap.style.overflowY = "auto";
+    suggestionsWrap.style.padding = "8px";
+    suggestionsWrap.style.border = "1px solid #243041";
+    suggestionsWrap.style.borderRadius = "14px";
+    suggestionsWrap.style.backgroundColor = "#0f172a";
+    suggestionsWrap.style.boxShadow = "0 18px 40px rgba(0, 0, 0, 0.35)";
+    fieldWrap.appendChild(suggestionsWrap);
 
-        suggestions.forEach((suggestion) => {
+    function clampHighlightedIndex() {
+        const suggestions = genericExtensionSearchState.suggestions;
+        if (!suggestions.length) {
+            highlightedIndex = -1;
+            return;
+        }
+
+        if (highlightedIndex < 0 || highlightedIndex >= suggestions.length) {
+            highlightedIndex = 0;
+        }
+    }
+
+    function renderSuggestions() {
+        suggestionsWrap.replaceChildren();
+        const suggestions = genericExtensionSearchState.suggestions;
+        clampHighlightedIndex();
+        suggestionsWrap.style.display =
+            document.activeElement === input && suggestions.length > 0 ? "flex" : "none";
+        suggestions.forEach((suggestion, index) => {
             const suggestionButton = document.createElement("button");
             suggestionButton.type = "button";
             suggestionButton.style.textAlign = "left";
             suggestionButton.style.padding = "8px 10px";
             suggestionButton.style.borderRadius = "10px";
             suggestionButton.style.border = "1px solid #243041";
-            suggestionButton.style.backgroundColor = "#111827";
+            suggestionButton.style.backgroundColor = index === highlightedIndex ? "#1e293b" : "#111827";
             suggestionButton.style.color = "#e2e8f0";
             suggestionButton.style.cursor = "pointer";
-
-            const suggestionContent = document.createElement("div");
-            suggestionContent.style.display = "flex";
-            suggestionContent.style.alignItems = "center";
-            suggestionContent.style.gap = "8px";
-
-            const suggestionIcon = document.createElement("div");
-            suggestionIcon.textContent = getSearchEntityIcon(suggestion.kind);
-            suggestionContent.appendChild(suggestionIcon);
-
-            const suggestionLabel = document.createElement("div");
-            suggestionLabel.textContent = suggestion.label;
-            suggestionContent.appendChild(suggestionLabel);
-
-            suggestionButton.appendChild(suggestionContent);
-            suggestionButton.addEventListener("click", () => {
-                selectGenericExtensionSearchSuggestion(rootRow, suggestion);
+            suggestionButton.textContent = suggestion.label;
+            const handleSuggestionSelect = (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                selectGenericExtensionSearchSuggestion(rootRow, suggestion).catch((error) => {
+                    console.error("cinenerdle2.selectGenericExtensionSearchSuggestion", error);
+                    alert(error.message);
+                });
+            };
+            suggestionButton.addEventListener("mouseenter", () => {
+                highlightedIndex = index;
+                renderSuggestions();
             });
+            suggestionButton.addEventListener("pointerdown", handleSuggestionSelect);
+            suggestionButton.addEventListener("mousedown", handleSuggestionSelect);
+            suggestionButton.addEventListener("click", handleSuggestionSelect);
             suggestionsWrap.appendChild(suggestionButton);
         });
-
-        fieldWrap.appendChild(suggestionsWrap);
     }
+
+    input.addEventListener("blur", () => {
+        window.setTimeout(() => {
+            renderSuggestions();
+        }, 0);
+    });
+
+    renderSuggestions();
 
     return fieldWrap;
 }
@@ -2368,6 +2672,8 @@ async function connectGenericExtensionSearchEndpoints(rootRow) {
 
     genericExtensionSearchState.searching = true;
     genericExtensionSearchState.resultPath = null;
+    genericExtensionSearchState.resultPathMetadataByKey = {};
+    genericExtensionSearchState.resultPathNeighborCountsByKey = {};
     genericExtensionSearchState.status = "Searching...";
     renderGenericExtensionStack(rootRow);
 
@@ -2377,6 +2683,10 @@ async function connectGenericExtensionSearchEndpoints(rootRow) {
         const elapsedSeconds = ((performance.now() - startedAt) / 1000).toFixed(1);
         if (result.path?.length) {
             genericExtensionSearchState.resultPath = result.path;
+            const connectionPathRenderState = await buildConnectionPathRenderState(result.path);
+            genericExtensionSearchState.resultPathMetadataByKey = connectionPathRenderState.metadataByKey;
+            genericExtensionSearchState.resultPathNeighborCountsByKey =
+                connectionPathRenderState.neighborCountsByKey;
             genericExtensionSearchState.status =
                 `Found path with ${result.path.length} nodes after reading ${result.nodesRead} nodes in ${elapsedSeconds} seconds.`;
         } else if (result.timedOut) {
@@ -2416,6 +2726,7 @@ function createGenericExtensionSearchBar(rootRow) {
     topRow.style.flexWrap = "nowrap";
     topRow.style.width = "100%";
     topRow.style.maxWidth = "100%";
+    topRow.style.minWidth = "0";
     topRow.style.boxSizing = "border-box";
     topRow.style.overflow = "visible";
 
@@ -2425,7 +2736,7 @@ function createGenericExtensionSearchBar(rootRow) {
     sourceChip.style.flex = "0 0 280px";
     sourceChip.style.minHeight = "46px";
     sourceChip.style.padding = "0 16px";
-    sourceChip.style.border = "1px solid #334155";
+    sourceChip.style.border = sourceSelection ? "1px solid #fbbf24" : "1px solid #334155";
     sourceChip.style.borderRadius = "14px";
     sourceChip.style.backgroundColor = "#111827";
     sourceChip.style.color = sourceSelection ? "#e2e8f0" : "#64748b";
@@ -2444,17 +2755,7 @@ function createGenericExtensionSearchBar(rootRow) {
     actions.style.gap = "8px";
     actions.style.flexWrap = "nowrap";
     actions.style.flex = "0 0 auto";
-    actions.appendChild(
-        createBookmarkActionButton(
-            genericExtensionSearchState.searching ? "Searching..." : "Connect",
-            () => {
-                connectGenericExtensionSearchEndpoints(rootRow).catch((error) => {
-                    console.error("cinenerdle2.connectButton", error);
-                    alert(error.message);
-                });
-            },
-        ),
-    );
+    actions.style.marginLeft = "auto";
     actions.appendChild(
         createBookmarkActionButton(
             "Clear DB",
@@ -2483,43 +2784,102 @@ function createGenericExtensionSearchBar(rootRow) {
     wrapper.appendChild(topRow);
 
     if (genericExtensionSearchState.status) {
+        const statusRow = document.createElement("div");
+        statusRow.style.display = "flex";
+        statusRow.style.alignItems = "center";
+        statusRow.style.gap = "10px";
+        statusRow.style.flexWrap = "wrap";
+
+        if (genericExtensionSearchState.resultPath?.length) {
+            statusRow.appendChild(
+                createBookmarkActionButton("Load Path", () => {
+                    const currentPathNodes = collectSelectedPathNodes(rootRow);
+                    const appendedPathNodes = genericExtensionSearchState.resultPath
+                        .slice(1)
+                        .map(getSearchEntityPathNode);
+                    loadGenericExtensionPath(
+                        [...currentPathNodes, ...appendedPathNodes],
+                    );
+                }),
+            );
+        }
+
         const status = document.createElement("div");
         status.textContent = genericExtensionSearchState.status;
         status.style.fontSize = "12px";
         status.style.color = "#94a3b8";
-        wrapper.appendChild(status);
+        statusRow.appendChild(status);
+
+        wrapper.appendChild(statusRow);
     }
 
     if (genericExtensionSearchState.resultPath?.length) {
         const resultRow = document.createElement("div");
         resultRow.style.display = "flex";
-        resultRow.style.alignItems = "center";
+        resultRow.style.alignItems = "stretch";
         resultRow.style.gap = "8px";
         resultRow.style.flexWrap = "nowrap";
         applyHorizontalScrollableRowStyle(resultRow, "4px");
 
         genericExtensionSearchState.resultPath.forEach((entity, index) => {
-            resultRow.appendChild(createChip(getSearchEntityLabel(entity)));
+            const entityBubble = document.createElement("div");
+            entityBubble.style.display = "flex";
+            entityBubble.style.flexDirection = "column";
+            entityBubble.style.alignItems = "flex-start";
+            entityBubble.style.gap = "6px";
+            entityBubble.style.padding = "8px 10px";
+            entityBubble.style.borderRadius = "14px";
+            entityBubble.style.border = "1px solid #243041";
+            entityBubble.style.backgroundColor = "#111827";
+            entityBubble.style.flex = "0 0 auto";
+
+            const entityTitle = document.createElement("div");
+            entityTitle.textContent = getSearchEntityLabel(entity);
+            entityTitle.style.fontSize = "12px";
+            entityTitle.style.fontWeight = "600";
+            entityTitle.style.color = "#e2e8f0";
+            entityTitle.style.whiteSpace = "nowrap";
+            entityBubble.appendChild(entityTitle);
+
+            const entitySources =
+                genericExtensionSearchState.resultPathMetadataByKey[entity.key]?.sources ?? [];
+            const sourcesRow = document.createElement("div");
+            sourcesRow.style.display = "flex";
+            sourcesRow.style.alignItems = "center";
+            sourcesRow.style.gap = "8px";
+            sourcesRow.style.flexWrap = "nowrap";
+
+            const connectionCount = document.createElement("div");
+            connectionCount.textContent =
+                `${genericExtensionSearchState.resultPathNeighborCountsByKey[entity.key] ?? 0}`;
+            connectionCount.style.fontSize = "11px";
+            connectionCount.style.fontWeight = "700";
+            connectionCount.style.color = "#94a3b8";
+            connectionCount.style.whiteSpace = "nowrap";
+            sourcesRow.appendChild(connectionCount);
+            sourcesRow.appendChild(createSourceBadge(entitySources));
+            entityBubble.appendChild(sourcesRow);
+            resultRow.appendChild(entityBubble);
+
             if (index < genericExtensionSearchState.resultPath.length - 1) {
+                const arrowWrap = document.createElement("div");
+                arrowWrap.style.display = "flex";
+                arrowWrap.style.alignItems = "center";
+                arrowWrap.style.justifyContent = "center";
+                arrowWrap.style.flex = "0 0 auto";
+                arrowWrap.style.alignSelf = "center";
+                arrowWrap.style.minWidth = "24px";
+
                 const arrow = document.createElement("div");
-                arrow.textContent = "->";
-                arrow.style.color = "#64748b";
-                arrow.style.fontSize = "12px";
-                resultRow.appendChild(arrow);
+                arrow.textContent = "→";
+                arrow.style.color = "#94a3b8";
+                arrow.style.fontSize = "18px";
+                arrow.style.lineHeight = "1";
+                arrowWrap.appendChild(arrow);
+                resultRow.appendChild(arrowWrap);
             }
         });
 
-        resultRow.appendChild(
-            createBookmarkActionButton("Load Path", () => {
-                const currentPathNodes = collectSelectedPathNodes(rootRow);
-                const appendedPathNodes = genericExtensionSearchState.resultPath
-                    .slice(1)
-                    .map(getSearchEntityPathNode);
-                loadGenericExtensionPath(
-                    [...currentPathNodes, ...appendedPathNodes],
-                );
-            }),
-        );
         wrapper.appendChild(resultRow);
     }
 
@@ -2695,7 +3055,6 @@ function createMovieCardRecordFromCredit(credit) {
 
 function createPersonRootCard(personRecord, requestedName) {
     const personName = personRecord?.name ?? requestedName;
-    const cinenerdleConnectionsCount = personRecord?.domConnections?.length ?? 0;
 
     return {
         key: getPersonCardKey(personName, personRecord?.id),
@@ -2703,27 +3062,18 @@ function createPersonRootCard(personRecord, requestedName) {
         name: personName,
         subtitle: "Person",
         imageUrl: getPersonProfileImageUrl(personRecord),
-        metrics: [
-            `TMDb ID: ${personRecord?.id ?? "unknown"}`,
-            `Cinenerdle links: ${cinenerdleConnectionsCount}`,
-        ],
+        popularity: personRecord?.rawTmdbPerson?.popularity,
+        connectionCount: getPersonConnectionCountFromRecord(personRecord),
+        sources: getPersonSources(personRecord, null, personName),
+        status: null,
         record: personRecord,
         childRow: null,
     };
 }
 
-function createMovieRootCard(movieRecord, requestedName) {
+function createMovieRootCard(movieRecord, requestedName, connectionCount = null) {
     const movieTitle = movieRecord?.title ?? requestedName;
     const movieYear = getMovieRecordYear(movieRecord);
-    const sources = [];
-
-    if (movieRecord?.rawTmdbMovie || movieRecord?.rawTmdbMovieSearchResponse) {
-        sources.push({ iconUrl: TMDB_ICON_URL, label: "TMDb" });
-    }
-
-    if (movieRecord?.domSnapshot) {
-        sources.push({ iconUrl: CINENERDLE_ICON_URL, label: "Cinenerdle" });
-    }
 
     return {
         key: getMovieCardKey(movieTitle, movieYear, movieRecord?.id),
@@ -2735,14 +3085,15 @@ function createMovieRootCard(movieRecord, requestedName) {
         popularity: movieRecord?.popularity,
         voteAverage: movieRecord?.rawTmdbMovie?.vote_average,
         voteCount: movieRecord?.rawTmdbMovie?.vote_count,
-        sources,
+        connectionCount,
+        sources: getMovieSources(movieRecord),
         status: null,
         record: movieRecord,
         childRow: null,
     };
 }
 
-function createMovieAssociationCard(personRecord, credit, filmRecord = null) {
+function createMovieAssociationCard(personRecord, credit, filmRecord = null, connectionCount = null) {
     const title = getMovieTitleFromCredit(credit);
     const year = getMovieYearFromCredit(credit);
     const movieRecord = filmRecord ?? createMovieCardRecordFromCredit(credit);
@@ -2762,32 +3113,65 @@ function createMovieAssociationCard(personRecord, credit, filmRecord = null) {
         popularity: credit.popularity,
         voteAverage: credit.vote_average,
         voteCount: credit.vote_count,
-        sources: association.sources,
+        connectionCount,
+        sources: [
+            ...getMovieSources(movieRecord, association.sources.some((source) => source.iconUrl === CINENERDLE_ICON_URL)),
+            ...association.sources.filter((source) => source.iconUrl === CINENERDLE_ICON_URL),
+        ],
         status: association.status,
         record: movieRecord,
         childRow: null,
     };
 }
 
-function createPersonAssociationCard(credit, movieRecord, cachedPersonRecord = null) {
-    const personName = cachedPersonRecord?.name ?? credit?.name?.trim() ?? "Unknown";
-    const cinenerdleRole = getCinenerdleRoleFromSnapshot(movieRecord?.domSnapshot, personName);
-    const missingFromCinenerdle = !!movieRecord?.domSnapshot && !!credit && !cinenerdleRole;
-    const sources = [{ iconUrl: TMDB_ICON_URL, label: "TMDb" }];
+function hasFetchedTmdbMovie(movieRecord) {
+    return !!(
+        movieRecord?.rawTmdbMovieSearchResponse ||
+        movieRecord?.rawTmdbMovieCreditsResponse
+    );
+}
 
-    if (cinenerdleRole) {
-        sources.push({
-            iconUrl: CINENERDLE_ICON_URL,
-            label: cinenerdleRole,
-        });
-    } else if (movieRecord?.domSnapshot) {
-        sources.push({
-            iconUrl: CINENERDLE_ICON_URL,
-            label: "Cinenerdle loaded for parent, not associated here",
-            filter: "grayscale(1)",
-            opacity: "0.9",
-        });
+function getMovieSources(movieRecord, forceCinenerdle = false) {
+    const sources = [];
+
+    if (movieRecord?.rawTmdbMovie || movieRecord?.rawTmdbMovieSearchResponse || movieRecord?.rawTmdbMovieCreditsResponse) {
+        sources.push(
+            hasFetchedTmdbMovie(movieRecord)
+                ? { iconUrl: TMDB_ICON_URL, label: "TMDb" }
+                : {
+                    iconUrl: TMDB_ICON_URL,
+                    label: "TMDb reference only",
+                    filter: "grayscale(1)",
+                    opacity: "0.9",
+                },
+        );
     }
+
+    if (forceCinenerdle || movieRecord?.domSnapshot) {
+        sources.push({ iconUrl: CINENERDLE_ICON_URL, label: "Cinenerdle" });
+    }
+
+    return sources;
+}
+
+function updateMovieCardPresentationFromRecord(card, movieRecord) {
+    if (!card || !movieRecord) {
+        return;
+    }
+
+    card.record = movieRecord;
+    card.year = getMovieRecordYear(movieRecord) || card.year;
+    card.imageUrl = getMoviePosterUrl(movieRecord) ?? card.imageUrl;
+    card.popularity = movieRecord?.popularity ?? card.popularity;
+    card.voteAverage = movieRecord?.rawTmdbMovie?.vote_average ?? card.voteAverage;
+    card.voteCount = movieRecord?.rawTmdbMovie?.vote_count ?? card.voteCount;
+    card.connectionCount = getMovieConnectionCountFromRecord(movieRecord);
+    const hasCinenerdleSource = (card.sources ?? []).some((source) => source.iconUrl === CINENERDLE_ICON_URL);
+    card.sources = getMovieSources(movieRecord, hasCinenerdleSource);
+}
+
+function createPersonAssociationCard(credit, movieRecord, cachedPersonRecord = null, connectionCount = null) {
+    const personName = cachedPersonRecord?.name ?? credit?.name?.trim() ?? "Unknown";
 
     return {
         key: getPersonCardKey(personName, cachedPersonRecord?.id ?? credit?.id),
@@ -2802,11 +3186,72 @@ function createPersonAssociationCard(credit, movieRecord, cachedPersonRecord = n
             getPersonProfileImageUrl(cachedPersonRecord) ??
             getPosterUrl(credit?.profile_path, "w300_and_h450_face"),
         popularity: credit?.popularity,
-        sources,
+        connectionCount,
+        sources: getPersonSources(cachedPersonRecord, movieRecord, personName),
         status: null,
         record: cachedPersonRecord ?? null,
         childRow: null,
     };
+}
+
+function hasFetchedTmdbPerson(personRecord) {
+    return !!(
+        personRecord?.rawTmdbPerson ||
+        personRecord?.rawTmdbPersonSearchResponse ||
+        personRecord?.rawTmdbMovieCreditsResponse
+    );
+}
+
+function getPersonSources(personRecord, movieRecord = null, personName = "") {
+    const cinenerdleRole = getCinenerdleRoleFromSnapshot(movieRecord?.domSnapshot, personName);
+    const sources = [];
+
+    if (personRecord || personName) {
+        sources.push(
+            hasFetchedTmdbPerson(personRecord)
+                ? { iconUrl: TMDB_ICON_URL, label: "TMDb" }
+                : {
+                    iconUrl: TMDB_ICON_URL,
+                    label: "TMDb reference only",
+                    filter: "grayscale(1)",
+                    opacity: "0.9",
+                },
+        );
+    }
+
+    if (cinenerdleRole) {
+        sources.push({
+            iconUrl: CINENERDLE_ICON_URL,
+            label: cinenerdleRole,
+        });
+    } else if ((personRecord?.domConnections?.length ?? 0) > 0) {
+        sources.push({
+            iconUrl: CINENERDLE_ICON_URL,
+            label: "Cinenerdle",
+        });
+    } else if (movieRecord?.domSnapshot) {
+        sources.push({
+            iconUrl: CINENERDLE_ICON_URL,
+            label: "Cinenerdle loaded for parent, not associated here",
+            filter: "grayscale(1)",
+            opacity: "0.9",
+        });
+    }
+
+    return sources;
+}
+
+function updatePersonCardPresentationFromRecord(card, personRecord, movieRecord = null) {
+    if (!card || !personRecord) {
+        return;
+    }
+
+    card.record = personRecord;
+    card.name = personRecord?.name ?? card.name;
+    card.imageUrl = getPersonProfileImageUrl(personRecord) ?? card.imageUrl;
+    card.popularity = personRecord?.rawTmdbPerson?.popularity ?? card.popularity;
+    card.connectionCount = getPersonConnectionCountFromRecord(personRecord);
+    card.sources = getPersonSources(personRecord, movieRecord, card.name);
 }
 
 function createCinenerdleOnlyPersonCard(personName, role) {
@@ -2841,6 +3286,7 @@ function createStackCardFooter(card) {
         card.status?.text
     ) {
         return createMovieMetaBlock({
+            connectionCount: getCardConnectionCount(card),
             popularity: card.popularity,
             voteAverage: card.voteAverage,
             voteCount: card.voteCount,
@@ -2858,14 +3304,14 @@ function applyStackCardSelectionStyle(cardElement, isSelected, isLocked = false)
     cardElement.style.borderStyle = "solid";
     cardElement.style.borderColor = isSelected ? "#fbbf24" : "#243041";
     cardElement.style.boxShadow = isSelected
-        ? "0 0 0 2px rgba(251, 191, 36, 0.35), 0 18px 40px rgba(251, 191, 36, 0.32)"
-        : "0 8px 24px rgba(0, 0, 0, 0.35)";
+        ? "0 0 0 2px rgba(251, 191, 36, 0.35)"
+        : "none";
     cardElement.style.transform = "";
     cardElement.style.outline = "none";
     if (isLocked) {
         cardElement.style.boxShadow = isSelected
-            ? "0 0 0 3px rgba(251, 191, 36, 0.5), 0 18px 40px rgba(251, 191, 36, 0.32)"
-            : "0 0 0 2px rgba(251, 191, 36, 0.35), 0 8px 24px rgba(0, 0, 0, 0.35)";
+            ? "0 0 0 3px rgba(251, 191, 36, 0.5)"
+            : "0 0 0 2px rgba(251, 191, 36, 0.35)";
     }
 }
 
@@ -2875,7 +3321,7 @@ function createGenericExtensionCardElement(
 ) {
     const cardElement = createPosterCard({
         imageUrl: card.imageUrl,
-        title: card.name,
+        title: card.kind === "movie" ? formatMoviePathLabel(card.name, card.year) : card.name,
         subtitle: card.subtitle,
         footer: createStackCardFooter(card),
     });
@@ -2889,6 +3335,7 @@ function createGenericExtensionCardElement(
         titleElement.style.textDecoration = "underline";
         titleElement.style.textDecorationColor = "rgba(148, 163, 184, 0.55)";
         titleElement.style.textUnderlineOffset = "3px";
+        bindGenericExtensionCardTitleTooltip(titleElement, card);
         titleElement.addEventListener("click", (event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -2967,6 +3414,7 @@ function renderGenericExtensionStack(rootRow) {
     document.body.style.fontFamily =
         'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
     document.title = `${getCurrentGenericExtensionTitle(rootRow)} | cinenerdle2`;
+    setCinenerdleFavicon();
 
     const appRoot = document.createElement("div");
     appRoot.style.display = "flex";
@@ -2995,10 +3443,18 @@ function renderGenericExtensionStack(rootRow) {
 
 async function buildMovieRowForPersonCard(card) {
     const personRecord = await ensurePersonRecordByName(card.name);
-    card.record = personRecord;
+    updatePersonCardPresentationFromRecord(card, personRecord);
 
     const movieCredits = getUniqueSortedTmdbMovieCredits(personRecord);
     const filmRecordsById = await getFilmRecordsByIds(movieCredits.map((credit) => credit.id));
+    const connectionCountsByMovieKey = new Map(
+        await Promise.all(
+            movieCredits.map(async (credit) => {
+                const matchingPeople = await getPersonRecordsByMovieKey(getMovieKeyFromCredit(credit));
+                return [getMovieKeyFromCredit(credit), Math.max(matchingPeople.length, 1)];
+            }),
+        ),
+    );
 
     return {
         title: "Movies",
@@ -3006,22 +3462,41 @@ async function buildMovieRowForPersonCard(card) {
         selectedCardKey: null,
         isRoot: false,
         cards: movieCredits.map((credit) =>
-            createMovieAssociationCard(personRecord, credit, filmRecordsById.get(credit.id) ?? null),
+            createMovieAssociationCard(
+                personRecord,
+                credit,
+                filmRecordsById.get(credit.id) ?? null,
+                connectionCountsByMovieKey.get(getMovieKeyFromCredit(credit)) ?? 1,
+            ),
         ),
     };
 }
 
 async function buildPersonRowForMovieCard(card) {
     const movieRecord = await ensureMovieCreditsRecord(await ensureMovieRecordForCard(card));
-    card.record = movieRecord;
+    updateMovieCardPresentationFromRecord(card, movieRecord);
 
     const tmdbCredits = getAssociatedPeopleFromMovieCredits(movieRecord);
     const cachedPersonRecords = await Promise.all(
         tmdbCredits.map((credit) => getPersonRecordByName(credit.name ?? "")),
     );
+    const connectionCountsByPersonName = new Map(
+        await Promise.all(
+            tmdbCredits.map(async (credit) => {
+                const personName = credit.name ?? "";
+                const matchingFilms = await getFilmRecordsByPersonConnectionKey(personName);
+                return [normalizeName(personName), Math.max(matchingFilms.length, 1)];
+            }),
+        ),
+    );
 
     const cards = tmdbCredits.map((credit, index) =>
-        createPersonAssociationCard(credit, movieRecord, cachedPersonRecords[index] ?? null),
+        createPersonAssociationCard(
+            credit,
+            movieRecord,
+            cachedPersonRecords[index] ?? null,
+            connectionCountsByPersonName.get(normalizeName(credit.name ?? "")) ?? 1,
+        ),
     );
 
     const seenPersonNames = new Set(cards.map((personCard) => normalizeName(personCard.name)));
@@ -3096,7 +3571,12 @@ async function createRootRowFromPathNode(pathNode) {
 
     if (pathNode.kind === "movie") {
         const movieRecord = await ensureMovieRecordByPathNode(pathNode);
-        const rootCard = createMovieRootCard(movieRecord, pathNode.name);
+        const rootConnectionCount = Math.max(
+            movieRecord?.personConnectionKeys?.length ?? 0,
+            (await getPersonRecordsByMovieKey(getFilmKey(pathNode.name, pathNode.year))).length,
+            1,
+        );
+        const rootCard = createMovieRootCard(movieRecord, pathNode.name, rootConnectionCount);
         return {
             title: "Movie",
             entityType: "movie",
@@ -3472,6 +3952,130 @@ function buildMovieDatabaseTooltip(filmTitleAndYear, filmRecords, domFilmSnapsho
     };
 
     return JSON.stringify(combinedEntry, null, 2);
+}
+
+function buildPersonDatabaseTooltip(personName, personRecord = null) {
+    const combinedEntry = {
+        name: personName,
+        id: personRecord?.id ?? null,
+        popularity: personRecord?.rawTmdbPerson?.popularity ?? null,
+        tmdbPerson: !!personRecord?.rawTmdbPerson,
+        tmdbSearch: !!personRecord?.rawTmdbPersonSearchResponse,
+        tmdbCredits: !!personRecord?.rawTmdbMovieCreditsResponse,
+        cinenerdleDom: (personRecord?.domConnections?.length ?? 0) > 0,
+        movieConnectionKeys: personRecord?.movieConnectionKeys ?? [],
+        domConnections: personRecord?.domConnections ?? [],
+        savedAt: personRecord?.savedAt ?? null,
+    };
+
+    return JSON.stringify(combinedEntry, null, 2);
+}
+
+function getGenericExtensionTooltipElement() {
+    if (genericExtensionTooltipElement?.isConnected) {
+        return genericExtensionTooltipElement;
+    }
+
+    const tooltip = document.createElement("div");
+    tooltip.style.position = "fixed";
+    tooltip.style.zIndex = "9999";
+    tooltip.style.display = "none";
+    tooltip.style.maxWidth = "min(520px, calc(100vw - 24px))";
+    tooltip.style.maxHeight = "min(60vh, 520px)";
+    tooltip.style.overflow = "auto";
+    tooltip.style.padding = "12px 14px";
+    tooltip.style.border = "1px solid #334155";
+    tooltip.style.borderRadius = "14px";
+    tooltip.style.background = "rgba(15, 23, 42, 0.98)";
+    tooltip.style.boxShadow = "0 20px 48px rgba(0, 0, 0, 0.45)";
+    tooltip.style.backdropFilter = "blur(10px)";
+    tooltip.style.pointerEvents = "none";
+    tooltip.style.whiteSpace = "pre-wrap";
+    tooltip.style.fontFamily =
+        'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace';
+    tooltip.style.fontSize = "12px";
+    tooltip.style.lineHeight = "1.45";
+    tooltip.style.color = "#e2e8f0";
+    document.body.appendChild(tooltip);
+    genericExtensionTooltipElement = tooltip;
+    return tooltip;
+}
+
+function positionGenericExtensionTooltip(anchorElement) {
+    const tooltip = getGenericExtensionTooltipElement();
+    const anchorRect = anchorElement.getBoundingClientRect();
+    const tooltipRect = tooltip.getBoundingClientRect();
+    const viewportPadding = 12;
+    let left = anchorRect.left;
+    let top = anchorRect.bottom + 8;
+
+    if (left + tooltipRect.width > window.innerWidth - viewportPadding) {
+        left = window.innerWidth - tooltipRect.width - viewportPadding;
+    }
+    if (left < viewportPadding) {
+        left = viewportPadding;
+    }
+
+    if (top + tooltipRect.height > window.innerHeight - viewportPadding) {
+        top = anchorRect.top - tooltipRect.height - 8;
+    }
+    if (top < viewportPadding) {
+        top = viewportPadding;
+    }
+
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+}
+
+function showGenericExtensionTooltip(anchorElement, text) {
+    const tooltip = getGenericExtensionTooltipElement();
+    tooltip.textContent = text;
+    tooltip.style.display = "block";
+    positionGenericExtensionTooltip(anchorElement);
+}
+
+function hideGenericExtensionTooltip() {
+    const tooltip = getGenericExtensionTooltipElement();
+    tooltip.style.display = "none";
+}
+
+function bindGenericExtensionCardTitleTooltip(titleElement, card) {
+    if (!(titleElement instanceof HTMLElement) || !card) {
+        return;
+    }
+
+    const updateTooltip = async () => {
+        if (card.kind === "movie") {
+            const filmRecords = await getFilmRecordsByTitle(card.name);
+            return buildMovieDatabaseTooltip(
+                { title: card.name, year: card.year ?? "" },
+                card.record ? [card.record, ...filmRecords] : filmRecords,
+                card.record?.domSnapshot ?? null,
+            );
+        }
+
+        const personRecord =
+            card.record ??
+            await getPersonRecordByName(card.name);
+        return buildPersonDatabaseTooltip(card.name, personRecord);
+    };
+
+    titleElement.addEventListener("mouseenter", () => {
+        updateTooltip().then((tooltipText) => {
+            showGenericExtensionTooltip(titleElement, tooltipText);
+        }).catch((error) => {
+            console.error("cinenerdle2.bindGenericExtensionCardTitleTooltip", error);
+        });
+    });
+    titleElement.addEventListener("focus", () => {
+        updateTooltip().then((tooltipText) => {
+            showGenericExtensionTooltip(titleElement, tooltipText);
+        }).catch((error) => {
+            console.error("cinenerdle2.bindGenericExtensionCardTitleTooltip", error);
+        });
+    });
+    titleElement.addEventListener("mouseleave", hideGenericExtensionTooltip);
+    titleElement.addEventListener("blur", hideGenericExtensionTooltip);
 }
 
 function bindMovieTitleElement(titleElement) {
