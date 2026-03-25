@@ -1140,10 +1140,10 @@ function createCardTitle(text) {
 
 function createPosterCard({ imageUrl, title, subtitle, subtitleDetail = "", footer = null }) {
     const card = document.createElement("div");
-    card.style.flex = "0 0 176px";
-    card.style.width = "176px";
-    card.style.minWidth = "176px";
-    card.style.maxWidth = "176px";
+    card.style.flex = "0 0 194px";
+    card.style.width = "194px";
+    card.style.minWidth = "194px";
+    card.style.maxWidth = "194px";
     card.style.display = "flex";
     card.style.flexDirection = "column";
     card.style.padding = "10px";
@@ -3671,10 +3671,10 @@ function createMovieAssociationCard(personRecord, credit, filmRecord = null, con
         voteAverage: credit.vote_average,
         voteCount: credit.vote_count,
         connectionCount,
-        sources: [
-            ...getMovieSources(movieRecord, association.sources.some((source) => source.iconUrl === CINENERDLE_ICON_URL)),
+        sources: dedupeSourcesByIcon([
             ...association.sources.filter((source) => source.iconUrl === CINENERDLE_ICON_URL),
-        ],
+            ...getMovieSources(movieRecord, association.sources.some((source) => source.iconUrl === CINENERDLE_ICON_URL)),
+        ]),
         status: association.status,
         record: movieRecord,
         childRow: null,
@@ -3711,6 +3711,30 @@ function getMovieSources(movieRecord, forceCinenerdle = false) {
     return sources;
 }
 
+function dedupeSourcesByIcon(sources) {
+    const seenIconUrls = new Set();
+    const dedupedSources = (sources ?? []).filter((source) => {
+        const iconUrl = source?.iconUrl ?? "";
+        if (!iconUrl || seenIconUrls.has(iconUrl)) {
+            return false;
+        }
+
+        seenIconUrls.add(iconUrl);
+        return true;
+    });
+
+    const sourceOrder = new Map([
+        [TMDB_ICON_URL, 0],
+        [CINENERDLE_ICON_URL, 1],
+    ]);
+
+    return dedupedSources.sort(
+        (left, right) =>
+            (sourceOrder.get(left?.iconUrl ?? "") ?? Number.MAX_SAFE_INTEGER) -
+            (sourceOrder.get(right?.iconUrl ?? "") ?? Number.MAX_SAFE_INTEGER),
+    );
+}
+
 function updateMovieCardPresentationFromRecord(card, movieRecord) {
     if (!card || !movieRecord) {
         return;
@@ -3745,6 +3769,7 @@ function createPersonAssociationCard(credit, movieRecord, cachedPersonRecord = n
         sources: getPersonSources(cachedPersonRecord, movieRecord, personName),
         status: null,
         record: cachedPersonRecord ?? null,
+        parentMovieRecord: movieRecord ?? null,
         childRow: null,
     };
 }
@@ -4080,7 +4105,7 @@ function renderGenericExtensionStack(rootRow) {
 
 async function buildMovieRowForPersonCard(card) {
     const personRecord = await ensurePersonRecordByName(card.name);
-    updatePersonCardPresentationFromRecord(card, personRecord);
+    updatePersonCardPresentationFromRecord(card, personRecord, card.parentMovieRecord ?? null);
 
     const movieCredits = getUniqueSortedTmdbMovieCredits(personRecord);
     const filmRecordsById = await getFilmRecordsByIds(movieCredits.map((credit) => credit.id));
