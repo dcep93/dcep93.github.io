@@ -3506,11 +3506,10 @@ function bindMovieTitleClickDelegate() {
 
 function handlePractice() {
   const practiceModeEl = findPracticeModeEl();
-  if (!practiceModeEl) {
-    return;
+  if (practiceModeEl) {
+    bindPracticeModeClick(practiceModeEl);
   }
 
-  bindPracticeModeClick(practiceModeEl);
   bindMovieTitleClickDelegate();
   getVisibleCastContainers().forEach(upgradeContainerPeople);
   getVisibleMovieTitleElements().forEach(bindMovieTitleElement);
