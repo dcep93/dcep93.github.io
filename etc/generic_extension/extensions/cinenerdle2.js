@@ -1725,7 +1725,8 @@ function serializeGenericExtensionPath(pathNodes) {
 }
 
 function buildGenericExtensionUrlFromPath(pathNodes) {
-  return `https://www.cinenerdle2.app/icon.png?generic_extension=${serializeGenericExtensionPath(pathNodes)}`;
+  const entryOrigin = window.location.origin || "https://dcep93.github.io";
+  return `${entryOrigin}/etc/generic_extension/extensions/cinenerdle2.html?generic_extension=${serializeGenericExtensionPath(pathNodes)}`;
 }
 
 function getGenericExtensionUrl(kind, name, year = "") {
@@ -3270,23 +3271,28 @@ async function handlePersonClick(personName, sourceElement, targetWindow = null)
   openGenericExtensionPage("person", personName);
 }
 
-async function handleMovieClick(movieTitle, sourceElement, targetWindow = null) {
+async function handleMovieClick(movieTitle, movieYear = "", sourceElement, targetWindow = null) {
   const domFilmSnapshot = parseDomFilmSnapshotFromElement(sourceElement);
+  const resolvedMovieYear = movieYear || domFilmSnapshot?.year || "";
   const existingMovieRecord =
+    (await getFilmRecordByTitleAndYear(movieTitle, resolvedMovieYear)) ??
     (await getFilmRecordsByTitle(movieTitle)).find(
-      (record) => normalizeTitle(record.title) === normalizeTitle(movieTitle),
-    ) ?? null;
+      (record) =>
+        normalizeTitle(record.title) === normalizeTitle(movieTitle) &&
+        (!resolvedMovieYear || record.year === resolvedMovieYear),
+    ) ??
+    null;
 
   if (existingMovieRecord) {
     await syncDomSnapshotToCachedRecords(domFilmSnapshot);
   } else {
-    await fetchAndCacheMovie(movieTitle, domFilmSnapshot, domFilmSnapshot?.year ?? "");
+    await fetchAndCacheMovie(movieTitle, domFilmSnapshot, resolvedMovieYear);
   }
 
   const targetUrl = getGenericExtensionUrl(
     "movie",
     movieTitle,
-    existingMovieRecord?.year ?? domFilmSnapshot?.year ?? "",
+    existingMovieRecord?.year ?? resolvedMovieYear,
   );
   if (targetWindow) {
     targetWindow.location.href = targetUrl;
@@ -3296,7 +3302,7 @@ async function handleMovieClick(movieTitle, sourceElement, targetWindow = null) 
   openGenericExtensionPage(
     "movie",
     movieTitle,
-    existingMovieRecord?.year ?? domFilmSnapshot?.year ?? "",
+    existingMovieRecord?.year ?? resolvedMovieYear,
   );
 }
 
@@ -3440,6 +3446,53 @@ function findMovieTitleElement(startElement) {
   return null;
 }
 
+function buildMovieDatabaseTooltip(filmTitleAndYear, filmRecords, domFilmSnapshot = null) {
+  const matchingFilmRecords = (filmRecords ?? []).filter(
+    (record) =>
+      normalizeTitle(record?.title ?? "") === normalizeTitle(filmTitleAndYear.title) &&
+      (!filmTitleAndYear.year || record?.year === filmTitleAndYear.year),
+  );
+
+  const mergedPeopleByRole = {};
+  matchingFilmRecords.forEach((record) => {
+    Object.entries(record?.domSnapshot?.peopleByRole ?? {}).forEach(([role, people]) => {
+      mergedPeopleByRole[role] = Array.from(
+        new Set([...(mergedPeopleByRole[role] ?? []), ...people]),
+      );
+    });
+  });
+  Object.entries(domFilmSnapshot?.peopleByRole ?? {}).forEach(([role, people]) => {
+    mergedPeopleByRole[role] = Array.from(
+      new Set([...(mergedPeopleByRole[role] ?? []), ...people]),
+    );
+  });
+
+  const combinedEntry = {
+    title: filmTitleAndYear.title,
+    year: filmTitleAndYear.year,
+    ids: Array.from(new Set(matchingFilmRecords.map((record) => record?.id).filter(Boolean))),
+    popularity:
+      matchingFilmRecords.find((record) => typeof record?.popularity === "number")?.popularity ??
+      null,
+    tmdbMovie: matchingFilmRecords.some((record) => !!record?.rawTmdbMovie),
+    tmdbSearch: matchingFilmRecords.some((record) => !!record?.rawTmdbMovieSearchResponse),
+    tmdbCredits: matchingFilmRecords.some((record) => !!record?.rawTmdbMovieCreditsResponse),
+    cinenerdleDom:
+      matchingFilmRecords.some((record) => !!record?.domSnapshot) || !!domFilmSnapshot,
+    peopleByRole: mergedPeopleByRole,
+    tmdbSavedAt:
+      matchingFilmRecords.find((record) => record?.tmdbSavedAt)?.tmdbSavedAt ?? null,
+    tmdbCreditsSavedAt:
+      matchingFilmRecords.find((record) => record?.tmdbCreditsSavedAt)?.tmdbCreditsSavedAt ?? null,
+    domSavedAt:
+      matchingFilmRecords.find((record) => record?.domSnapshot?.domSavedAt)?.domSnapshot?.domSavedAt ??
+      domFilmSnapshot?.domSavedAt ??
+      null,
+  };
+
+  return JSON.stringify(combinedEntry, null, 2);
+}
+
 function bindMovieTitleElement(titleElement) {
   if (titleElement.getAttribute(MOVIE_BOUND_ATTR) === "true") {
     return;
@@ -3450,20 +3503,28 @@ function bindMovieTitleElement(titleElement) {
   if (!filmTitleAndYear) {
     return;
   }
+  const domFilmSnapshot = parseDomFilmSnapshotFromElement(titleElement);
 
   titleElement.setAttribute(MOVIE_BOUND_ATTR, "true");
   applyLoadedStyle(titleElement, false);
+  titleElement.title = buildMovieDatabaseTooltip(filmTitleAndYear, [], domFilmSnapshot);
 
   getFilmRecordsByTitle(filmTitleAndYear.title)
-    .then((filmRecords) =>
+    .then((filmRecords) => {
+      titleElement.title = buildMovieDatabaseTooltip(
+        filmTitleAndYear,
+        filmRecords,
+        domFilmSnapshot,
+      );
       applyLoadedStyle(
         titleElement,
         filmRecords.some(
           (record) =>
-            normalizeTitle(record.title) === normalizeTitle(filmTitleAndYear.title),
+            normalizeTitle(record.title) === normalizeTitle(filmTitleAndYear.title) &&
+            (!filmTitleAndYear.year || record.year === filmTitleAndYear.year),
         ),
-      ),
-    )
+      );
+    })
     .catch((error) =>
       console.error("cinenerdle2.getFilmRecordsByTitle", filmTitleAndYear.title, error),
     );
@@ -3492,7 +3553,12 @@ function bindMovieTitleClickDelegate() {
       event.stopPropagation();
 
       const targetWindow = window.open("about:blank", "_blank");
-      handleMovieClick(filmTitleAndYear.title, titleElement, targetWindow).catch((error) => {
+      handleMovieClick(
+        filmTitleAndYear.title,
+        filmTitleAndYear.year,
+        titleElement,
+        targetWindow,
+      ).catch((error) => {
         console.error("cinenerdle2.handleMovieClick", error);
         targetWindow?.close();
         alert(error.message);
