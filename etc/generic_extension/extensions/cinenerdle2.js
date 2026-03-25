@@ -22,6 +22,7 @@ let practiceModeClearInFlight = false;
 let genericExtensionPopstateBound = false;
 let genericExtensionRootRow = null;
 let genericExtensionTooltipElement = null;
+let genericExtensionTooltipScrollBound = false;
 const genericExtensionSearchState = {
     query: "",
     suggestions: [],
@@ -447,7 +448,35 @@ function isAllowedBfsTmdbCredit(credit) {
         return false;
     }
 
+    if (
+        credit.creditType === "cast" &&
+        typeof credit.character === "string" &&
+        credit.character.toLowerCase().includes("(uncredited)")
+    ) {
+        return false;
+    }
+
     return credit.creditType === "cast" || credit.job === "Director";
+}
+
+function movieRecordHasAllowedBfsConnectionToPerson(movieRecord, personName) {
+    if (!movieRecord || !personName) {
+        return false;
+    }
+
+    if (getCinenerdleRoleFromSnapshot(movieRecord.domSnapshot, personName)) {
+        return true;
+    }
+
+    const credits = movieRecord.rawTmdbMovieCreditsResponse ?? {};
+    return [
+        ...(credits.cast ?? []).map((credit) => ({ ...credit, creditType: "cast" })),
+        ...(credits.crew ?? []).map((credit) => ({ ...credit, creditType: "crew" })),
+    ].some(
+        (credit) =>
+            normalizeName(credit?.name ?? "") === normalizeName(personName) &&
+            isAllowedBfsTmdbCredit(credit),
+    );
 }
 
 function getDomConnectionForMovie(personRecord, movieKey) {
@@ -464,7 +493,7 @@ function getCinenerdleRoleFromSnapshot(domSnapshot, personName) {
     }
 
     return (
-        Object.entries(domSnapshot.peopleByRole ?? {}).find(([, people]) =>
+        Object.entries(getFilteredPeopleByRole(domSnapshot)).find(([, people]) =>
             people.some(
                 (candidateName) => normalizeName(candidateName) === normalizeName(personName),
             ),
@@ -492,6 +521,48 @@ function getTmdbCreditCategoryText(credit) {
     return "Crew";
 }
 
+function isValidCinenerdleRole(role) {
+    const normalizedRole = normalizeName(role ?? "");
+    if (!normalizedRole) {
+        return false;
+    }
+
+    if (
+        [
+            "exit game",
+            "practice mode",
+            "play again",
+            "share",
+            "copy link",
+            "next movie",
+            "back",
+            "menu",
+        ].includes(normalizedRole)
+    ) {
+        return false;
+    }
+
+    return /[a-z]/i.test(role ?? "");
+}
+
+function getFilteredPeopleByRole(domSnapshot) {
+    const filteredPeopleByRole = {};
+    Object.entries(domSnapshot?.peopleByRole ?? {}).forEach(([role, people]) => {
+        if (!isValidCinenerdleRole(role)) {
+            return;
+        }
+
+        const filteredPeople = (people ?? []).filter(Boolean);
+        if (filteredPeople.length === 0) {
+            return;
+        }
+
+        filteredPeopleByRole[role] = filteredPeople;
+    });
+
+    return filteredPeopleByRole;
+}
+
 function parseDomFilmSnapshotFromElement(element) {
     const cardElement = getNearestFilmCard(element);
     if (!cardElement) {
@@ -517,7 +588,7 @@ function parseDomFilmSnapshotFromElement(element) {
         const role = getText(children[0]);
         const people = splitPeopleText(getText(children[1]));
 
-        if (!role || people.length === 0) {
+        if (!isValidCinenerdleRole(role) || people.length === 0) {
             return;
         }
 
@@ -724,7 +795,7 @@ function withDerivedFilmFields(filmRecord, extraPersonNames = []) {
     const tmdbPersonKeys = [...(credits.cast ?? []), ...(credits.crew ?? [])]
         .map((credit) => normalizeName(credit?.name ?? ""))
         .filter(Boolean);
-    const domPersonKeys = Object.values(filmRecord?.domSnapshot?.peopleByRole ?? {})
+    const domPersonKeys = Object.values(getFilteredPeopleByRole(filmRecord?.domSnapshot))
         .flat()
         .map((personName) => normalizeName(personName))
         .filter(Boolean);
@@ -867,7 +938,7 @@ async function syncDomSnapshotToCachedRecords(domFilmSnapshot) {
             );
         }
 
-        for (const [role, people] of Object.entries(domFilmSnapshot.peopleByRole)) {
+        for (const [role, people] of Object.entries(getFilteredPeopleByRole(domFilmSnapshot))) {
             for (const personName of people) {
                 const personRecord = await indexedDbRequestToPromise(
                     peopleIndex.get(normalizeName(personName)),
@@ -1140,10 +1211,10 @@ function createCardTitle(text) {
 
 function createPosterCard({ imageUrl, title, subtitle, subtitleDetail = "", footer = null }) {
     const card = document.createElement("div");
-    card.style.flex = "0 0 194px";
-    card.style.width = "194px";
-    card.style.minWidth = "194px";
-    card.style.maxWidth = "194px";
+    card.style.flex = "0 0 184px";
+    card.style.width = "184px";
+    card.style.minWidth = "184px";
+    card.style.maxWidth = "184px";
     card.style.display = "flex";
     card.style.flexDirection = "column";
     card.style.padding = "0";
@@ -1322,6 +1393,18 @@ function clampNumber(value, min, max) {
     return Math.min(max, Math.max(min, value));
 }
 
+function formatHeatMetricValue(label, value) {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+        return value;
+    }
+
+    if (label === "Popularity" || label === "Rating") {
+        return Number(value.toFixed(2));
+    }
+
+    return value;
+}
+
 function createHeatMetricChip(label, value, maxValue) {
     const normalizedValue =
         typeof value === "number" && Number.isFinite(value)
@@ -1330,9 +1413,10 @@ function createHeatMetricChip(label, value, maxValue) {
     const hue = 210 - normalizedValue * 210;
     const bgLightness = 20 + normalizedValue * 12;
     const borderLightness = 34 + normalizedValue * 18;
+    const displayValue = formatHeatMetricValue(label, value);
 
     const chip = document.createElement("div");
-    chip.textContent = `${label} ${value}`;
+    chip.textContent = `${label} ${displayValue}`;
     chip.style.padding = "3px 6px";
     chip.style.borderRadius = "999px";
     chip.style.fontSize = "9px";
@@ -1399,7 +1483,7 @@ function createMovieMetaBlock({
         if (typeof connectionCount === "number") {
             const connectionCountText = document.createElement("div");
             connectionCountText.textContent = `${connectionCount}`;
-            connectionCountText.style.fontSize = "11px";
+            connectionCountText.style.fontSize = "9px";
             connectionCountText.style.fontWeight = "700";
             connectionCountText.style.color = sharedTextColor;
             connectionCountText.style.whiteSpace = "nowrap";
@@ -1635,7 +1719,7 @@ function createAssociatedPeopleCards(
             seenNames.add(normalizedPersonName);
         });
 
-    Object.entries(filmRecord?.domSnapshot?.peopleByRole ?? {}).forEach(([role, people]) => {
+    Object.entries(getFilteredPeopleByRole(filmRecord?.domSnapshot)).forEach(([role, people]) => {
         people.forEach((personName) => {
             const normalizedPersonName = normalizeName(personName);
             if (
@@ -1749,7 +1833,7 @@ function createAssociatedPeopleCardsFromMovieCredits(
         seenNames.add(normalizedPersonName);
     });
 
-    Object.entries(filmRecord?.domSnapshot?.peopleByRole ?? {}).forEach(([role, people]) => {
+    Object.entries(getFilteredPeopleByRole(filmRecord?.domSnapshot)).forEach(([role, people]) => {
         people.forEach((personName) => {
             const normalizedPersonName = normalizeName(personName);
             if (
@@ -1783,7 +1867,7 @@ function createAssociatedPeopleCardsFromMovieCredits(
 }
 
 function createMoviePeopleCards(movieRecord) {
-    const peopleByRole = movieRecord?.domSnapshot?.peopleByRole ?? {};
+    const peopleByRole = getFilteredPeopleByRole(movieRecord?.domSnapshot);
     return Object.entries(peopleByRole).flatMap(([role, people]) =>
         people.map((personName) =>
             createPosterCard({
@@ -2214,7 +2298,7 @@ async function searchLocalEntities(query, limit = 8) {
             addSuggestion(entity, normalizeName(entity.name));
         });
 
-        Object.values(filmRecord?.domSnapshot?.peopleByRole ?? {})
+        Object.values(getFilteredPeopleByRole(filmRecord?.domSnapshot))
             .flat()
             .forEach((personName) => {
                 const entity = {
@@ -2260,22 +2344,27 @@ async function getLocalNeighborsForEntity(entity, cache) {
         const personRecord =
             (entity.id ? await getPersonRecordById(entity.id) : null) ??
             (entity.name ? await getPersonRecordByName(entity.name) : null);
+        const indexedFilmRecords = entity.name
+            ? (await getFilmRecordsByPersonConnectionKey(entity.name)).filter((filmRecord) =>
+                movieRecordHasAllowedBfsConnectionToPerson(filmRecord, entity.name))
+            : [];
 
-        if (personRecord) {
-            neighbors = createNeighborEntityMap([
-                ...getUniqueSortedTmdbMovieCredits(personRecord)
+        neighbors = createNeighborEntityMap([
+            ...indexedFilmRecords.map((filmRecord) => createMovieSearchEntity(filmRecord)),
+            ...(personRecord
+                ? getUniqueSortedTmdbMovieCredits(personRecord)
                     .filter(isAllowedBfsTmdbCredit)
-                    .map((credit) => createMovieSearchEntityFromCredit(credit)),
-                ...(personRecord.domConnections ?? []).map((connection) => ({
-                    kind: "movie",
-                    id: "",
-                    name: connection.title,
-                    year: connection.year,
-                    key: getMovieCardKey(connection.title, connection.year),
-                    label: formatMoviePathLabel(connection.title, connection.year),
-                })),
-            ]);
-        }
+                    .map((credit) => createMovieSearchEntityFromCredit(credit))
+                : []),
+            ...((personRecord?.domConnections ?? []).map((connection) => ({
+                kind: "movie",
+                id: "",
+                name: connection.title,
+                year: connection.year,
+                key: getMovieCardKey(connection.title, connection.year),
+                label: formatMoviePathLabel(connection.title, connection.year),
+            }))),
+        ]);
     } else if (entity.kind === "movie") {
         const movieRecord =
             (entity.id ? await getFilmRecordById(entity.id) : null) ??
@@ -2289,7 +2378,7 @@ async function getLocalNeighborsForEntity(entity, cache) {
             ].filter(isAllowedBfsTmdbCredit);
             const tmdbPeople = creditPeople
                 .map((credit) => createPersonSearchEntityFromCredit(credit));
-            const cinenerdlePeople = Object.values(movieRecord?.domSnapshot?.peopleByRole ?? {})
+            const cinenerdlePeople = Object.values(getFilteredPeopleByRole(movieRecord?.domSnapshot))
                 .flat()
                 .map((personName) => ({
                     kind: "person",
@@ -3873,7 +3962,7 @@ async function getMergedMovieAssociationRecord(movieRecord) {
 
     const mergedPeopleByRole = {};
     matchingFilmRecords.forEach((record) => {
-        Object.entries(record?.domSnapshot?.peopleByRole ?? {}).forEach(([role, people]) => {
+        Object.entries(getFilteredPeopleByRole(record?.domSnapshot)).forEach(([role, people]) => {
             mergedPeopleByRole[role] = Array.from(
                 new Set([...(mergedPeopleByRole[role] ?? []), ...people]),
             );
@@ -3953,6 +4042,9 @@ function createGenericExtensionCardElement(
         subtitleDetail: card.subtitleDetail,
         footer: createStackCardFooter(card),
     });
+    if (isSelected) {
+        cardElement.dataset.cinenerdle2SelectedCard = "true";
+    }
 
     applyStackCardSelectionStyle(cardElement, isSelected, isLocked);
     const imageFrame = cardElement.querySelector('[data-cinenerdle2-card-image-frame="true"]');
@@ -3981,6 +4073,44 @@ function createGenericExtensionCardElement(
     }
 
     return cardElement;
+}
+
+function scrollSelectedGenericExtensionCardsIntoView(appRoot) {
+    if (!(appRoot instanceof HTMLElement)) {
+        return;
+    }
+
+    window.requestAnimationFrame(() => {
+        const selectedCards = appRoot.querySelectorAll('[data-cinenerdle2-selected-card="true"]');
+        selectedCards.forEach((cardElement) => {
+            if (!(cardElement instanceof HTMLElement)) {
+                return;
+            }
+
+            let scrollContainer = cardElement.parentElement;
+            while (scrollContainer instanceof HTMLElement) {
+                if (scrollContainer.scrollWidth > scrollContainer.clientWidth) {
+                    break;
+                }
+                scrollContainer = scrollContainer.parentElement;
+            }
+
+            if (!(scrollContainer instanceof HTMLElement)) {
+                return;
+            }
+
+            const cardLeft = cardElement.offsetLeft;
+            const cardRight = cardLeft + cardElement.offsetWidth;
+            const visibleLeft = scrollContainer.scrollLeft;
+            const visibleRight = visibleLeft + scrollContainer.clientWidth;
+
+            if (cardLeft < visibleLeft) {
+                scrollContainer.scrollLeft = cardLeft;
+            } else if (cardRight > visibleRight) {
+                scrollContainer.scrollLeft = cardRight - scrollContainer.clientWidth;
+            }
+        });
+    });
 }
 
 function createGenericExtensionGenerationBadge(generationNumber) {
@@ -4107,6 +4237,7 @@ function renderGenericExtensionStack(rootRow) {
 
     document.body.replaceChildren(appRoot);
     restoreGenericExtensionSearchInputFocus();
+    scrollSelectedGenericExtensionCardsIntoView(appRoot);
 }
 
 async function buildMovieRowForPersonCard(card) {
@@ -4169,7 +4300,7 @@ async function buildPersonRowForMovieCard(card) {
     );
 
     const seenPersonNames = new Set(cards.map((personCard) => normalizeName(personCard.name)));
-    Object.entries(mergedMovieRecord?.domSnapshot?.peopleByRole ?? {}).forEach(([role, people]) => {
+    Object.entries(getFilteredPeopleByRole(mergedMovieRecord?.domSnapshot)).forEach(([role, people]) => {
         people.forEach((personName) => {
             const normalizedPersonName = normalizeName(personName);
             if (seenPersonNames.has(normalizedPersonName)) {
@@ -4608,13 +4739,13 @@ function buildMovieDatabaseTooltip(filmTitleAndYear, filmRecords, domFilmSnapsho
 
     const mergedPeopleByRole = {};
     matchingFilmRecords.forEach((record) => {
-        Object.entries(record?.domSnapshot?.peopleByRole ?? {}).forEach(([role, people]) => {
+        Object.entries(getFilteredPeopleByRole(record?.domSnapshot)).forEach(([role, people]) => {
             mergedPeopleByRole[role] = Array.from(
                 new Set([...(mergedPeopleByRole[role] ?? []), ...people]),
             );
         });
     });
-    Object.entries(domFilmSnapshot?.peopleByRole ?? {}).forEach(([role, people]) => {
+    Object.entries(getFilteredPeopleByRole(domFilmSnapshot)).forEach(([role, people]) => {
         mergedPeopleByRole[role] = Array.from(
             new Set([...(mergedPeopleByRole[role] ?? []), ...people]),
         );
@@ -4706,7 +4837,11 @@ function getGenericExtensionTooltipElement() {
     tooltip.style.fontSize = "12px";
     tooltip.style.lineHeight = "1.45";
     tooltip.style.color = "#e2e8f0";
-    window.addEventListener("scroll", hideGenericExtensionTooltip, { passive: true });
+    if (!genericExtensionTooltipScrollBound) {
+        window.addEventListener("scroll", hideGenericExtensionTooltip, { passive: true });
+        document.addEventListener("scroll", hideGenericExtensionTooltip, { passive: true, capture: true });
+        genericExtensionTooltipScrollBound = true;
+    }
     document.body.appendChild(tooltip);
     genericExtensionTooltipElement = tooltip;
     return tooltip;
