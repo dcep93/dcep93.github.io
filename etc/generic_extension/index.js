@@ -31,7 +31,7 @@ function execute() {
       jss: ["colonist.js"],
     },
     {
-      p: /https:\/\/www\.cinenerdle2\.app\/battle/,
+      p: /https:\/\/www\.cinenerdle2\.app\/.*/,
       jss: ["cinenerdle2.js"],
     },
   ];
