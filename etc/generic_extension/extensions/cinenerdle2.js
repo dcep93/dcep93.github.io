@@ -397,6 +397,18 @@ function getCinenerdlePersonId(name) {
     return normalizeName(name);
 }
 
+function getValidTmdbEntityId(candidateId) {
+    if (typeof candidateId === "number" && Number.isFinite(candidateId)) {
+        return candidateId;
+    }
+
+    if (typeof candidateId === "string" && /^\d+$/.test(candidateId)) {
+        return candidateId;
+    }
+
+    return null;
+}
+
 function getTmdbMovieCredits(personRecord) {
     const credits = personRecord?.rawTmdbMovieCreditsResponse ?? {};
     return [
@@ -812,6 +824,21 @@ async function syncDomSnapshotToCachedRecords(domFilmSnapshot) {
     const matchingFilmRecords = (await getFilmRecordsByTitle(domFilmSnapshot.title)).filter(
         (record) => record.year === domFilmSnapshot.year,
     );
+    const filmRecordsToUpdate = matchingFilmRecords.length > 0
+        ? matchingFilmRecords
+        : [
+            withDerivedFilmFields({
+                id: getCinenerdleMovieId(domFilmSnapshot.title, domFilmSnapshot.year),
+                tmdbId: null,
+                cinenerdleId: getCinenerdleMovieId(domFilmSnapshot.title, domFilmSnapshot.year),
+                title: domFilmSnapshot.title,
+                titleLower: domFilmSnapshot.titleLower,
+                year: domFilmSnapshot.year,
+                titleYear: domFilmSnapshot.titleYear,
+                popularity: 0,
+                domSnapshot: domFilmSnapshot,
+            }),
+        ];
 
     const database = await openIndexedDb();
 
@@ -824,7 +851,7 @@ async function syncDomSnapshotToCachedRecords(domFilmSnapshot) {
         const peopleStore = transaction.objectStore(PEOPLE_STORE_NAME);
         const peopleIndex = peopleStore.index("nameLower");
 
-        for (const filmRecord of matchingFilmRecords) {
+        for (const filmRecord of filmRecordsToUpdate) {
             await indexedDbRequestToPromise(
                 filmsStore.put(withDerivedFilmFields({
                     ...filmRecord,
@@ -1025,14 +1052,28 @@ async function fetchAndCacheMovie(movieName, domFilmSnapshot = null, preferredYe
 }
 
 async function fetchAndCacheMovieCredits(movieRecord) {
-    const tmdbId = movieRecord?.tmdbId ?? movieRecord?.id;
+    let resolvedMovieRecord = movieRecord ?? null;
+    let tmdbId = getValidTmdbEntityId(resolvedMovieRecord?.tmdbId ?? resolvedMovieRecord?.id);
+    if (!tmdbId && resolvedMovieRecord?.title) {
+        await fetchAndCacheMovie(
+            resolvedMovieRecord.title,
+            resolvedMovieRecord.domSnapshot ?? null,
+            resolvedMovieRecord.year ?? "",
+        );
+        resolvedMovieRecord =
+            (await getFilmRecordByTitleAndYear(
+                resolvedMovieRecord.title,
+                resolvedMovieRecord.year ?? "",
+            )) ?? resolvedMovieRecord;
+        tmdbId = getValidTmdbEntityId(resolvedMovieRecord?.tmdbId ?? resolvedMovieRecord?.id);
+    }
     if (!tmdbId) {
-        return movieRecord ?? null;
+        return resolvedMovieRecord ?? movieRecord ?? null;
     }
 
     const apiKey = getTmdbApiKey();
     if (!apiKey) {
-        return movieRecord;
+        return resolvedMovieRecord ?? movieRecord;
     }
 
     const creditsUrl = new URL(
@@ -1055,7 +1096,7 @@ async function fetchAndCacheMovieCredits(movieRecord) {
         const store = transaction.objectStore(FILMS_STORE_NAME);
         const existingFilmRecord = await indexedDbRequestToPromise(store.get(tmdbId));
         const updatedFilmRecord = {
-            ...(existingFilmRecord ?? movieRecord),
+            ...(existingFilmRecord ?? resolvedMovieRecord ?? movieRecord),
             id: tmdbId,
             tmdbId,
             rawTmdbMovieCreditsResponse: creditsPayload,
@@ -1884,7 +1925,12 @@ function serializeGenericExtensionPath(pathNodes) {
 
 function buildGenericExtensionUrlFromPath(pathNodes) {
     const entryOrigin = window.location.origin || "https://dcep93.github.io";
-    return `${entryOrigin}/etc/generic_extension/extensions/cinenerdle2.html?generic_extension=${serializeGenericExtensionPath(pathNodes)}`;
+    const serializedPath = serializeGenericExtensionPath(pathNodes);
+    if (entryOrigin === "https://www.cinenerdle2.app") {
+        return `${entryOrigin}/icon.png?generic_extension=${serializedPath}`;
+    }
+
+    return `${entryOrigin}/etc/generic_extension/extensions/cinenerdle2.html?generic_extension=${serializedPath}`;
 }
 
 function getGenericExtensionUrl(kind, name, year = "") {
@@ -3438,7 +3484,7 @@ async function ensureMovieRecordByPathNode(pathNode) {
 }
 
 async function ensureMovieRecordForCard(card) {
-    const tmdbId = card?.record?.tmdbId ?? card?.record?.id;
+    const tmdbId = getValidTmdbEntityId(card?.record?.tmdbId ?? card?.record?.id);
     if (tmdbId) {
         return (await getFilmRecordById(tmdbId)) ?? card.record;
     }
@@ -3782,6 +3828,46 @@ function createCinenerdleOnlyPersonCard(personName, role) {
     };
 }
 
+async function getMergedMovieAssociationRecord(movieRecord) {
+    if (!movieRecord?.title) {
+        return movieRecord;
+    }
+
+    const matchingFilmRecords = (await getFilmRecordsByTitle(movieRecord.title)).filter(
+        (record) => record.year === movieRecord.year,
+    );
+    if (matchingFilmRecords.length === 0) {
+        return movieRecord;
+    }
+
+    const mergedPeopleByRole = {};
+    matchingFilmRecords.forEach((record) => {
+        Object.entries(record?.domSnapshot?.peopleByRole ?? {}).forEach(([role, people]) => {
+            mergedPeopleByRole[role] = Array.from(
+                new Set([...(mergedPeopleByRole[role] ?? []), ...people]),
+            );
+        });
+    });
+
+    const mergedMovieRecord = {
+        ...movieRecord,
+        domSnapshot: Object.keys(mergedPeopleByRole).length > 0
+            ? {
+                ...(matchingFilmRecords.find((record) => record?.domSnapshot)?.domSnapshot ?? {}),
+                ...(movieRecord?.domSnapshot ?? {}),
+                peopleByRole: mergedPeopleByRole,
+            }
+            : movieRecord?.domSnapshot,
+        personConnectionKeys: Array.from(
+            new Set(
+                matchingFilmRecords.flatMap((record) => record?.personConnectionKeys ?? []),
+            ),
+        ),
+    };
+
+    return withDerivedFilmFields(mergedMovieRecord);
+}
+
 function createStackCardFooter(card) {
     if (card.metrics?.length) {
         return createMetricRow(card.metrics);
@@ -4024,9 +4110,10 @@ async function buildMovieRowForPersonCard(card) {
 
 async function buildPersonRowForMovieCard(card) {
     const movieRecord = await ensureMovieCreditsRecord(await ensureMovieRecordForCard(card));
-    updateMovieCardPresentationFromRecord(card, movieRecord);
+    const mergedMovieRecord = await getMergedMovieAssociationRecord(movieRecord);
+    updateMovieCardPresentationFromRecord(card, mergedMovieRecord);
 
-    const tmdbCredits = getAssociatedPeopleFromMovieCredits(movieRecord);
+    const tmdbCredits = getAssociatedPeopleFromMovieCredits(mergedMovieRecord);
     const cachedPersonRecords = await Promise.all(
         tmdbCredits.map((credit) => getPersonRecordByName(credit.name ?? "")),
     );
@@ -4043,14 +4130,14 @@ async function buildPersonRowForMovieCard(card) {
     const cards = tmdbCredits.map((credit, index) =>
         createPersonAssociationCard(
             credit,
-            movieRecord,
+            mergedMovieRecord,
             cachedPersonRecords[index] ?? null,
             connectionCountsByPersonName.get(normalizeName(credit.name ?? "")) ?? 1,
         ),
     );
 
     const seenPersonNames = new Set(cards.map((personCard) => normalizeName(personCard.name)));
-    Object.entries(movieRecord?.domSnapshot?.peopleByRole ?? {}).forEach(([role, people]) => {
+    Object.entries(mergedMovieRecord?.domSnapshot?.peopleByRole ?? {}).forEach(([role, people]) => {
         people.forEach((personName) => {
             const normalizedPersonName = normalizeName(personName);
             if (seenPersonNames.has(normalizedPersonName)) {
