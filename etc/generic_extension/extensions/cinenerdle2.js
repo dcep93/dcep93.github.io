@@ -4060,6 +4060,7 @@ function renderGenericExtensionStack(rootRow) {
     appRoot.style.padding = `${GENERIC_EXTENSION_PAGE_PADDING_PX}px`;
     appRoot.style.boxSizing = "border-box";
     appRoot.style.background = "transparent";
+    appRoot.addEventListener("scroll", hideGenericExtensionTooltip, { passive: true });
 
     appRoot.appendChild(createGenericExtensionBookmarksBar(rootRow));
     appRoot.appendChild(createGenericExtensionSearchBar(rootRow));
@@ -4674,6 +4675,7 @@ function getGenericExtensionTooltipElement() {
     tooltip.style.fontSize = "12px";
     tooltip.style.lineHeight = "1.45";
     tooltip.style.color = "#e2e8f0";
+    window.addEventListener("scroll", hideGenericExtensionTooltip, { passive: true });
     document.body.appendChild(tooltip);
     genericExtensionTooltipElement = tooltip;
     return tooltip;
