@@ -76,12 +76,16 @@ function getText(element) {
     return element?.textContent?.replace(/\s+/g, " ").trim() ?? "";
 }
 
+function stripDiacritics(text) {
+    return text.normalize("NFD").replace(/\p{Diacritic}+/gu, "");
+}
+
 function normalizeName(name) {
-    return name.trim().toLocaleLowerCase();
+    return stripDiacritics(name.trim()).toLocaleLowerCase();
 }
 
 function normalizeTitle(title) {
-    return title.trim().toLocaleLowerCase();
+    return stripDiacritics(title.trim()).toLocaleLowerCase();
 }
 
 function getFilmKey(title, year) {
@@ -1234,6 +1238,11 @@ async function prefetchBestMovieForPersonRecord(personRecord) {
             continue;
         }
 
+        console.log(
+            "fetching(parent, child)",
+            personRecord?.name ?? "",
+            `${getMovieTitleFromCredit(credit)}${getMovieYearFromCredit(credit) ? ` (${getMovieYearFromCredit(credit)})` : ""}`,
+        );
         await fetchAndCacheMovie(
             getMovieTitleFromCredit(credit),
             null,
@@ -1257,6 +1266,11 @@ async function prefetchBestPersonForMovieRecord(movieRecord) {
             continue;
         }
 
+        console.log(
+            "fetching(parent, child)",
+            formatMovieDisplayTitle(movieRecord?.title ?? "", movieRecord?.year),
+            credit.name ?? "",
+        );
         await fetchAndCachePerson(credit.name ?? "", movieRecord?.domSnapshot ?? null, {
             prefetchBestConnection: false,
         });
