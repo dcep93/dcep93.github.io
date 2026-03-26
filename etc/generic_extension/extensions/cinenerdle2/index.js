@@ -92,6 +92,10 @@ function getFilmKey(title, year) {
     return `${normalizeTitle(title)}::${year ?? ""}`;
 }
 
+function formatMovieDisplayTitle(title, year = "") {
+    return year ? `${title} (${year})` : title;
+}
+
 function escapeHtml(text) {
     return text
         .replaceAll("&", "&amp;")
@@ -1266,11 +1270,6 @@ async function prefetchBestPersonForMovieRecord(movieRecord) {
             continue;
         }
 
-        console.log(
-            "fetching(parent, child)",
-            formatMovieDisplayTitle(movieRecord?.title ?? "", movieRecord?.year),
-            credit.name ?? "",
-        );
         await fetchAndCachePerson(credit.name ?? "", movieRecord?.domSnapshot ?? null, {
             prefetchBestConnection: false,
         });
@@ -3755,7 +3754,7 @@ async function ensureMovieCreditsRecord(movieRecord) {
 
     return movieRecord.rawTmdbMovieCreditsResponse
         ? movieRecord
-        : fetchAndCacheMovieCredits(movieRecord);
+        : fetchAndCacheMovieCredits(movieRecord, { prefetchBestConnection: true });
 }
 
 function createMovieCardRecordFromCredit(credit) {
@@ -4341,7 +4340,7 @@ function createGenericExtensionRowElement(row, rootRow, generationNumber) {
     if (generationNumber === 0) {
         const generationZeroCard = getSelectedCard(row) ?? row.cards?.[0] ?? null;
         if (generationZeroCard) {
-            sectionRow.section.appendChild(createGenerationZeroInfoPanel(generationZeroCard));
+            sectionRow.body.appendChild(createGenerationZeroInfoPanel(generationZeroCard));
         }
     }
 
@@ -5337,9 +5336,6 @@ function handlePractice() {
         bindPracticeModeClick(practiceModeEl);
     }
 
-    bindMovieTitleClickDelegate();
-    getVisibleCastContainers().forEach(upgradeContainerPeople);
-    getVisibleMovieTitleElements().forEach(bindMovieTitleElement);
     getVisibleMovieTitleElements()
         .map((titleElement) => parseDomFilmSnapshotFromElement(titleElement))
         .filter(Boolean)
