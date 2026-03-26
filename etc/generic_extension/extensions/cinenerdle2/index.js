@@ -23,6 +23,7 @@ let genericExtensionPopstateBound = false;
 let genericExtensionRootRow = null;
 let genericExtensionTooltipElement = null;
 let genericExtensionTooltipScrollBound = false;
+const genericExtensionAlertedMessages = new Set();
 const genericExtensionSearchState = {
     query: "",
     suggestions: [],
@@ -40,6 +41,18 @@ const genericExtensionSearchState = {
     selectionStart: null,
     selectionEnd: null,
 };
+
+const nativeAlert = window.alert.bind(window);
+
+function alert(message) {
+    const normalizedMessage = String(message ?? "").trim();
+    if (!normalizedMessage || genericExtensionAlertedMessages.has(normalizedMessage)) {
+        return;
+    }
+
+    genericExtensionAlertedMessages.add(normalizedMessage);
+    nativeAlert(normalizedMessage);
+}
 
 function isVisible(element) {
     if (!(element instanceof HTMLElement)) {
@@ -969,7 +982,11 @@ async function syncDomSnapshotToCachedRecords(domFilmSnapshot) {
     }
 }
 
-async function fetchAndCachePerson(personName, domFilmSnapshot) {
+async function fetchAndCachePerson(
+    personName,
+    domFilmSnapshot,
+    { prefetchBestConnection = true, suppressNotFoundAlert = false } = {},
+) {
     const apiKey = getTmdbApiKey();
     if (!apiKey) {
         return null;
@@ -992,7 +1009,9 @@ async function fetchAndCachePerson(personName, domFilmSnapshot) {
         ) ?? searchPayload.results?.[0];
 
     if (!person) {
-        alert(`No TMDb person found for ${personName}`);
+        if (!suppressNotFoundAlert) {
+            alert(`No TMDb person found for ${personName}`);
+        }
         return null;
     }
 
@@ -1043,7 +1062,12 @@ async function fetchAndCachePerson(personName, domFilmSnapshot) {
         throw error;
     }
 
-    return personRecord;
+    const storedPersonRecord = (await getPersonRecordById(person.id)) ?? withDerivedPersonFields(personRecord);
+    if (prefetchBestConnection) {
+        await prefetchBestMovieForPersonRecord(storedPersonRecord);
+    }
+
+    return storedPersonRecord;
 }
 
 function chooseBestMovieSearchResult(results, movieName, preferredYear = "") {
@@ -1067,10 +1091,15 @@ function chooseBestMovieSearchResult(results, movieName, preferredYear = "") {
         }
     }
 
-    return exactTitleMatches[0] ?? results?.[0] ?? null;
+    return exactTitleMatches[0] ?? null;
 }
 
-async function fetchAndCacheMovie(movieName, domFilmSnapshot = null, preferredYear = "") {
+async function fetchAndCacheMovie(
+    movieName,
+    domFilmSnapshot = null,
+    preferredYear = "",
+    { fetchCredits = true, prefetchBestConnection = true, suppressNotFoundAlert = false } = {},
+) {
     const apiKey = getTmdbApiKey();
     if (!apiKey) {
         return null;
@@ -1094,7 +1123,9 @@ async function fetchAndCacheMovie(movieName, domFilmSnapshot = null, preferredYe
     );
 
     if (!movie) {
-        alert(`No TMDb movie found for ${movieName}`);
+        if (!suppressNotFoundAlert) {
+            alert(`No TMDb movie found for ${movieName}`);
+        }
         return null;
     }
 
@@ -1119,10 +1150,17 @@ async function fetchAndCacheMovie(movieName, domFilmSnapshot = null, preferredYe
         database.close();
     }
 
-    return movie;
+    const storedMovieRecord = (await getFilmRecordById(movie.id)) ?? withDerivedFilmFields(
+        buildFilmRecord(null, movie, domFilmSnapshot),
+    );
+    if (!fetchCredits) {
+        return storedMovieRecord;
+    }
+
+    return fetchAndCacheMovieCredits(storedMovieRecord, { prefetchBestConnection });
 }
 
-async function fetchAndCacheMovieCredits(movieRecord) {
+async function fetchAndCacheMovieCredits(movieRecord, { prefetchBestConnection = false } = {}) {
     let resolvedMovieRecord = movieRecord ?? null;
     let tmdbId = getValidTmdbEntityId(resolvedMovieRecord?.tmdbId ?? resolvedMovieRecord?.id);
     if (!tmdbId && resolvedMovieRecord?.title) {
@@ -1130,6 +1168,7 @@ async function fetchAndCacheMovieCredits(movieRecord) {
             resolvedMovieRecord.title,
             resolvedMovieRecord.domSnapshot ?? null,
             resolvedMovieRecord.year ?? "",
+            { fetchCredits: false, prefetchBestConnection: false },
         );
         resolvedMovieRecord =
             (await getFilmRecordByTitleAndYear(
@@ -1175,9 +1214,53 @@ async function fetchAndCacheMovieCredits(movieRecord) {
         };
         await indexedDbRequestToPromise(store.put(withDerivedFilmFields(updatedFilmRecord)));
         await transactionDonePromise(transaction);
-        return withDerivedFilmFields(updatedFilmRecord);
+        const storedMovieRecord = withDerivedFilmFields(updatedFilmRecord);
+        if (prefetchBestConnection) {
+            await prefetchBestPersonForMovieRecord(storedMovieRecord);
+        }
+
+        return storedMovieRecord;
     } finally {
         database.close();
+    }
+}
+
+async function prefetchBestMovieForPersonRecord(personRecord) {
+    const candidateCredits = getUniqueSortedTmdbMovieCredits(personRecord).filter(isAllowedBfsTmdbCredit);
+
+    for (const credit of candidateCredits) {
+        const existingMovieRecord = await getFilmRecordById(credit.id);
+        if (hasFetchedTmdbMovie(existingMovieRecord)) {
+            continue;
+        }
+
+        await fetchAndCacheMovie(
+            getMovieTitleFromCredit(credit),
+            null,
+            getMovieYearFromCredit(credit),
+            { fetchCredits: true, prefetchBestConnection: false },
+        );
+        return;
+    }
+}
+
+async function prefetchBestPersonForMovieRecord(movieRecord) {
+    const candidateCredits = getAssociatedPeopleFromMovieCredits(movieRecord)
+        .filter(isAllowedBfsTmdbCredit)
+        .sort((left, right) => (right.popularity ?? 0) - (left.popularity ?? 0));
+
+    for (const credit of candidateCredits) {
+        const existingPersonRecord =
+            (credit?.id ? await getPersonRecordById(credit.id) : null) ??
+            (credit?.name ? await getPersonRecordByName(credit.name) : null);
+        if (hasFetchedTmdbPerson(existingPersonRecord)) {
+            continue;
+        }
+
+        await fetchAndCachePerson(credit.name ?? "", movieRecord?.domSnapshot ?? null, {
+            prefetchBestConnection: false,
+        });
+        return;
     }
 }
 
@@ -2895,6 +2978,14 @@ function createAutocompleteField(rootRow, placeholder) {
 
         const highlightedSuggestion = suggestions[highlightedIndex] ?? suggestions[0];
         if (!highlightedSuggestion) {
+            if (!genericExtensionSearchState.query.trim()) {
+                return;
+            }
+
+            loadGenericExtensionRootSegment(genericExtensionSearchState.query, "push").catch((error) => {
+                console.error("cinenerdle2.loadGenericExtensionRootSegment.enter", error);
+                alert(error.message);
+            });
             return;
         }
 
@@ -3587,6 +3678,22 @@ async function ensurePersonRecordByName(personName) {
     return personRecord;
 }
 
+async function resolvePersonRecord(personName, { allowApi = true, suppressNotFoundAlert = false } = {}) {
+    const localPersonRecord = await getPersonRecordByName(personName);
+    if (localPersonRecord) {
+        return localPersonRecord;
+    }
+
+    if (!allowApi) {
+        return null;
+    }
+
+    return fetchAndCachePerson(personName, null, {
+        prefetchBestConnection: true,
+        suppressNotFoundAlert,
+    });
+}
+
 async function getFilmRecordByTitleAndYear(title, year = "") {
     return (
         (await getFilmRecordsByTitle(title)).find(
@@ -3597,14 +3704,25 @@ async function getFilmRecordByTitleAndYear(title, year = "") {
     );
 }
 
-async function ensureMovieRecordByPathNode(pathNode) {
-    let movieRecord = await getFilmRecordByTitleAndYear(pathNode.name, pathNode.year);
-
-    if (!movieRecord) {
-        movieRecord = await fetchAndCacheMovie(pathNode.name, null, pathNode.year);
+async function resolveMovieRecord(pathNode, { allowApi = true, suppressNotFoundAlert = false } = {}) {
+    const localMovieRecord = await getFilmRecordByTitleAndYear(pathNode.name, pathNode.year);
+    if (localMovieRecord) {
+        return localMovieRecord;
     }
 
-    return movieRecord;
+    if (!allowApi) {
+        return null;
+    }
+
+    return fetchAndCacheMovie(pathNode.name, null, pathNode.year, {
+        fetchCredits: true,
+        prefetchBestConnection: true,
+        suppressNotFoundAlert,
+    });
+}
+
+async function ensureMovieRecordByPathNode(pathNode) {
+    return resolveMovieRecord(pathNode);
 }
 
 async function ensureMovieRecordForCard(card) {
@@ -4089,7 +4207,6 @@ function createGenericExtensionCardElement(
         titleElement.style.textDecorationColor = "rgba(148, 163, 184, 0.45)";
         titleElement.style.textDecorationThickness = "1px";
         titleElement.style.textUnderlineOffset = "2px";
-        bindGenericExtensionCardTitleTooltip(titleElement, card);
         titleElement.addEventListener("click", (event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -4169,6 +4286,9 @@ function createGenericExtensionGenerationBadge(generationNumber) {
 function createGenericExtensionRowElement(row, rootRow, generationNumber) {
     const sectionRow = createRowSection();
     const ancestorSelectedCards = collectAncestorSelectedCardKeys(rootRow, row);
+    sectionRow.section.style.display = "flex";
+    sectionRow.section.style.alignItems = "flex-start";
+    sectionRow.section.style.gap = "12px";
     sectionRow.section.style.marginLeft = "-8px";
     sectionRow.body.style.display = "flex";
     sectionRow.body.style.alignItems = "flex-start";
@@ -4203,6 +4323,13 @@ function createGenericExtensionRowElement(row, rootRow, generationNumber) {
             }),
         );
     });
+
+    if (generationNumber === 0) {
+        const generationZeroCard = getSelectedCard(row) ?? row.cards?.[0] ?? null;
+        if (generationZeroCard) {
+            sectionRow.section.appendChild(createGenerationZeroInfoPanel(generationZeroCard));
+        }
+    }
 
     return sectionRow.section;
 }
@@ -4391,7 +4518,7 @@ async function selectGenericExtensionCard(rootRow, row, card, historyMode = "pus
     renderGenericExtensionStack(rootRow);
 }
 
-async function createRootRowFromPathNode(pathNode) {
+async function createRootRowFromPathNode(pathNode, { suppressNotFoundAlert = false } = {}) {
     if (pathNode.kind === "cinenerdle") {
         const starterMovies = await fetchCinenerdleDailyStarterMovies();
         const rootCard = createCinenerdleRootCard(Math.max(starterMovies.length, 1));
@@ -4406,7 +4533,10 @@ async function createRootRowFromPathNode(pathNode) {
     }
 
     if (pathNode.kind === "person") {
-        const personRecord = await ensurePersonRecordByName(pathNode.name);
+        const personRecord = await resolvePersonRecord(pathNode.name, { suppressNotFoundAlert });
+        if (!personRecord) {
+            return null;
+        }
         const rootCard = createPersonRootCard(personRecord, pathNode.name);
         return {
             title: "Person",
@@ -4418,10 +4548,13 @@ async function createRootRowFromPathNode(pathNode) {
     }
 
     if (pathNode.kind === "movie") {
-        const movieRecord = await ensureMovieRecordByPathNode(pathNode);
+        const movieRecord = await resolveMovieRecord(pathNode, { suppressNotFoundAlert });
+        if (!movieRecord) {
+            return null;
+        }
         const rootConnectionCount = Math.max(
             movieRecord?.personConnectionKeys?.length ?? 0,
-            (await getPersonRecordsByMovieKey(getFilmKey(pathNode.name, pathNode.year))).length,
+            (await getPersonRecordsByMovieKey(getFilmKey(movieRecord.title ?? pathNode.name, movieRecord.year ?? pathNode.year))).length,
             1,
         );
         const rootCard = createMovieRootCard(movieRecord, pathNode.name, rootConnectionCount);
@@ -4443,15 +4576,23 @@ async function createRootRowFromSegment(segment) {
     }
 
     const prefersMovie = /\(\d{4}\)$/.test(segment);
+    const localMovieRecord = prefersMovie
+        ? await getFilmRecordByTitleAndYear(parseMoviePathLabel(segment).name, parseMoviePathLabel(segment).year)
+        : await getFilmRecordByTitleAndYear(segment, "");
+    const localPersonRecord = prefersMovie ? null : await getPersonRecordByName(segment);
     const attempts = prefersMovie
-        ? [
-            () => createRootRowFromPathNode(parseMoviePathLabel(segment)),
-            () => createRootRowFromPathNode(createPathNode("person", segment)),
-        ]
-        : [
-            () => createRootRowFromPathNode(createPathNode("person", segment)),
-            () => createRootRowFromPathNode(parseMoviePathLabel(segment)),
-        ];
+        ? [() => createRootRowFromPathNode(parseMoviePathLabel(segment), { suppressNotFoundAlert: true })]
+        : localMovieRecord && !localPersonRecord
+            ? [() => createRootRowFromPathNode(
+                createPathNode("movie", localMovieRecord.title, localMovieRecord.year),
+                { suppressNotFoundAlert: true },
+            )]
+            : localPersonRecord && !localMovieRecord
+                ? [() => createRootRowFromPathNode(createPathNode("person", segment), { suppressNotFoundAlert: true })]
+                : [
+                    () => createRootRowFromPathNode(parseMoviePathLabel(segment), { suppressNotFoundAlert: true }),
+                    () => createRootRowFromPathNode(createPathNode("person", segment), { suppressNotFoundAlert: true }),
+                ];
 
     for (const attempt of attempts) {
         try {
@@ -4465,6 +4606,20 @@ async function createRootRowFromSegment(segment) {
     }
 
     return null;
+}
+
+async function loadGenericExtensionRootSegment(segment, historyMode = "push") {
+    const rootRow = await createRootRowFromSegment(segment);
+    if (!rootRow) {
+        alert(`No local or TMDb item found for ${segment}`);
+        return false;
+    }
+
+    genericExtensionRootRow = rootRow;
+    await applyPathToRootRow(genericExtensionRootRow, [getPathNodeFromCard(getSelectedCard(rootRow))]);
+    renderGenericExtensionStack(genericExtensionRootRow);
+    updateGenericExtensionHistory(genericExtensionRootRow, historyMode);
+    return true;
 }
 
 async function ensureVisibleChildRow(row) {
@@ -4535,6 +4690,7 @@ async function maybeShowGenericExtensionEntry(historyMode = "replace") {
 
     const rootRow = await buildGenericExtensionRootRow(pathSegments[0]);
     if (!rootRow) {
+        alert(`No local or TMDb item found for ${pathSegments[0]}`);
         return false;
     }
 
@@ -4839,6 +4995,124 @@ function buildPersonDatabaseTooltip(personName, personRecord = null) {
     };
 
     return JSON.stringify(combinedEntry, null, 2);
+}
+
+function formatGenericExtensionInfoValue(value) {
+    if (Array.isArray(value)) {
+        return value.length ? value.join(", ") : "None";
+    }
+
+    if (value === null || value === undefined || value === "") {
+        return "None";
+    }
+
+    if (typeof value === "boolean") {
+        return value ? "Yes" : "No";
+    }
+
+    return String(value);
+}
+
+function createGenericExtensionInfoRow(label, value) {
+    const row = document.createElement("div");
+    row.style.display = "flex";
+    row.style.flexDirection = "column";
+    row.style.gap = "2px";
+
+    const labelElement = document.createElement("div");
+    labelElement.textContent = label;
+    labelElement.style.fontSize = "11px";
+    labelElement.style.fontWeight = "700";
+    labelElement.style.letterSpacing = "0.03em";
+    labelElement.style.textTransform = "uppercase";
+    labelElement.style.color = "#94a3b8";
+    row.appendChild(labelElement);
+
+    const valueElement = document.createElement("div");
+    valueElement.textContent = formatGenericExtensionInfoValue(value);
+    valueElement.style.fontSize = "12px";
+    valueElement.style.color = "#e2e8f0";
+    valueElement.style.whiteSpace = "pre-wrap";
+    row.appendChild(valueElement);
+
+    return row;
+}
+
+function createGenerationZeroInfoPanel(card) {
+    const panel = document.createElement("aside");
+    panel.style.flex = "0 0 320px";
+    panel.style.maxWidth = "320px";
+    panel.style.display = "flex";
+    panel.style.flexDirection = "column";
+    panel.style.gap = "10px";
+    panel.style.padding = "12px";
+    panel.style.border = "1px solid #243041";
+    panel.style.borderRadius = "14px";
+    panel.style.backgroundColor = "#111827";
+    panel.style.boxSizing = "border-box";
+
+    const title = document.createElement("div");
+    title.textContent = card?.name ?? "Unknown";
+    title.style.fontSize = "16px";
+    title.style.fontWeight = "700";
+    title.style.color = "#f8fafc";
+    title.style.whiteSpace = "pre-wrap";
+    panel.appendChild(title);
+
+    const sourceBadges = createSourceBadge(card?.sources ?? []);
+    if ((card?.sources ?? []).length > 0) {
+        panel.appendChild(sourceBadges);
+    }
+
+    const infoRows = [];
+    if (card?.kind === "movie") {
+        const movieRecord = card.record ?? null;
+        infoRows.push(
+            ["Kind", "Movie"],
+            ["Year", card.year ?? movieRecord?.year ?? ""],
+            ["TMDb ID", movieRecord?.tmdbId ?? movieRecord?.id ?? null],
+            ["Cinenerdle ID", movieRecord?.cinenerdleId ?? getCinenerdleMovieId(card.name, card.year ?? "")],
+            ["Popularity", typeof card.popularity === "number" ? Number(card.popularity.toFixed(2)) : null],
+            ["Votes", card.voteCount ?? null],
+            ["Rating", typeof card.voteAverage === "number" ? Number(card.voteAverage.toFixed(2)) : null],
+            ["Connections", getCardConnectionCount(card)],
+            ["TMDb Movie", !!movieRecord?.rawTmdbMovie],
+            ["TMDb Search", !!movieRecord?.rawTmdbMovieSearchResponse],
+            ["TMDb Credits", !!movieRecord?.rawTmdbMovieCreditsResponse],
+            ["Cinenerdle DOM", !!movieRecord?.domSnapshot],
+            ["TMDb Saved", movieRecord?.tmdbSavedAt ?? null],
+            ["Credits Saved", movieRecord?.tmdbCreditsSavedAt ?? null],
+            ["DOM Saved", movieRecord?.domSnapshot?.domSavedAt ?? null],
+        );
+    } else if (card?.kind === "person") {
+        const personRecord = card.record ?? null;
+        infoRows.push(
+            ["Kind", "Person"],
+            ["TMDb ID", personRecord?.tmdbId ?? personRecord?.id ?? null],
+            ["Cinenerdle ID", personRecord?.cinenerdleId ?? getCinenerdlePersonId(card.name)],
+            ["Popularity", typeof card.popularity === "number" ? Number(card.popularity.toFixed(2)) : null],
+            ["Connections", getCardConnectionCount(card)],
+            ["Role", card.subtitle ?? null],
+            ["Detail", card.subtitleDetail ?? null],
+            ["TMDb Person", !!personRecord?.rawTmdbPerson],
+            ["TMDb Search", !!personRecord?.rawTmdbPersonSearchResponse],
+            ["TMDb Credits", !!personRecord?.rawTmdbMovieCreditsResponse],
+            ["Cinenerdle DOM", (personRecord?.domConnections?.length ?? 0) > 0],
+            ["Saved", personRecord?.savedAt ?? null],
+        );
+    } else {
+        infoRows.push(
+            ["Kind", "Cinenerdle"],
+            ["Source", CINENERDLE_DAILY_STARTERS_URL],
+            ["Connections", getCardConnectionCount(card)],
+        );
+    }
+
+    infoRows.forEach(([label, value]) => {
+        panel.appendChild(createGenericExtensionInfoRow(label, value));
+    });
+
+    return panel;
 }
 
 function getGenericExtensionTooltipElement() {

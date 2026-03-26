@@ -32,7 +32,7 @@ function execute() {
     },
     {
       p: /https:\/\/www\.cinenerdle2\.app\/.*/,
-      jss: ["cinenerdle2.js"],
+      jss: ["cinenerdle2/index.js"],
     },
   ];
 
