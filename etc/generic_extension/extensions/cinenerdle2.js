@@ -3096,31 +3096,47 @@ async function connectGenericExtensionSearchEndpoints(
             }
             genericExtensionSearchState.status = "";
         } else if (result.timedOut) {
-            genericExtensionSearchState.status =
+            const noConnectionSummary =
                 `No connection found in ${elapsedSeconds} seconds after reading ${result.nodesRead} nodes. Searched locally only, no remote lookups.`;
+            const endpointResultRowState = {
+                kind: "endpoints",
+                path: [sourceSelection, targetSelection],
+                metadataByKey: {},
+                neighborCountsByKey: {},
+                summary: noConnectionSummary,
+                dimmedNodeIndexes: [],
+                dimmedEdgeKeys: [],
+            };
             if (appendResult) {
                 insertGenericExtensionSearchResultRow(
-                    {
-                        kind: "message",
-                        summary: genericExtensionSearchState.status,
-                    },
+                    endpointResultRowState,
                     insertBeforeResultRowIndex,
                 );
-                genericExtensionSearchState.status = "";
+            } else {
+                genericExtensionSearchState.resultRows = [endpointResultRowState];
             }
+            genericExtensionSearchState.status = "";
         } else {
-            genericExtensionSearchState.status =
+            const noConnectionSummary =
                 `No connection found in ${elapsedSeconds} seconds after reading ${result.nodesRead} nodes. Searched locally only, no remote lookups.`;
+            const endpointResultRowState = {
+                kind: "endpoints",
+                path: [sourceSelection, targetSelection],
+                metadataByKey: {},
+                neighborCountsByKey: {},
+                summary: noConnectionSummary,
+                dimmedNodeIndexes: [],
+                dimmedEdgeKeys: [],
+            };
             if (appendResult) {
                 insertGenericExtensionSearchResultRow(
-                    {
-                        kind: "message",
-                        summary: genericExtensionSearchState.status,
-                    },
+                    endpointResultRowState,
                     insertBeforeResultRowIndex,
                 );
-                genericExtensionSearchState.status = "";
+            } else {
+                genericExtensionSearchState.resultRows = [endpointResultRowState];
             }
+            genericExtensionSearchState.status = "";
         }
     } catch (error) {
         console.error("cinenerdle2.connectGenericExtensionSearchEndpoints", error);
@@ -3244,18 +3260,21 @@ function createGenericExtensionSearchBar(rootRow) {
         }
 
         const resultRow = document.createElement("div");
+        const isEndpointOnlyResult = resultRowState.kind === "endpoints";
         resultRow.tabIndex = 0;
         resultRow.style.display = "flex";
         resultRow.style.alignItems = "stretch";
         resultRow.style.gap = "8px";
         resultRow.style.flexWrap = "nowrap";
-        resultRow.style.cursor = "pointer";
+        resultRow.style.cursor = isEndpointOnlyResult ? "default" : "pointer";
         applyHorizontalScrollableRowStyle(resultRow, "4px");
-        resultRow.addEventListener("click", () => {
-            loadGenericExtensionPath(
-                resultRowState.path.map(getSearchEntityPathNode),
-            );
-        });
+        if (!isEndpointOnlyResult) {
+            resultRow.addEventListener("click", () => {
+                loadGenericExtensionPath(
+                    resultRowState.path.map(getSearchEntityPathNode),
+                );
+            });
+        }
         const showResultSummaryTooltip = () => {
             if (!resultRowState.summary) {
                 return;
@@ -3331,6 +3350,16 @@ function createGenericExtensionSearchBar(rootRow) {
             entityTitle.style.fontWeight = "600";
             entityTitle.style.color = "#e2e8f0";
             entityTitle.style.whiteSpace = "nowrap";
+            entityTitle.style.cursor = "pointer";
+            entityTitle.style.textDecorationLine = "underline";
+            entityTitle.style.textDecorationColor = "rgba(148, 163, 184, 0.45)";
+            entityTitle.style.textDecorationThickness = "1px";
+            entityTitle.style.textUnderlineOffset = "2px";
+            entityTitle.addEventListener("click", (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                loadGenericExtensionPath([getSearchEntityPathNode(entity)]);
+            });
             entityBubble.appendChild(entityTitle);
 
             const entitySources =
@@ -3353,7 +3382,7 @@ function createGenericExtensionSearchBar(rootRow) {
             entityBubble.appendChild(sourcesRow);
             resultRow.appendChild(entityBubble);
 
-            if (index < resultRowState.path.length - 1) {
+            if (!isEndpointOnlyResult && index < resultRowState.path.length - 1) {
                 const edgeExclusionKey = getSearchEdgeExclusionKey(entity, resultRowState.path[index + 1]);
                 const arrowWrap = document.createElement("div");
                 arrowWrap.style.display = "flex";
@@ -4203,7 +4232,7 @@ function renderGenericExtensionStack(rootRow) {
     document.body.style.height = "100%";
     document.body.style.minHeight = "100vh";
     document.body.style.background = pageBackground;
-    document.body.style.overflowY = "hidden";
+    document.body.style.overflowY = "auto";
     document.body.style.overflowX = "hidden";
     document.body.style.color = "#f8fafc";
     document.body.style.fontFamily =
@@ -4215,8 +4244,8 @@ function renderGenericExtensionStack(rootRow) {
     appRoot.style.display = "flex";
     appRoot.style.flexDirection = "column";
     appRoot.style.gap = "20px";
-    appRoot.style.height = "100vh";
-    appRoot.style.overflowY = "scroll";
+    appRoot.style.minHeight = "100vh";
+    appRoot.style.overflowY = "visible";
     appRoot.style.overflowX = "hidden";
     appRoot.style.padding = `${GENERIC_EXTENSION_PAGE_PADDING_PX}px`;
     appRoot.style.boxSizing = "border-box";
@@ -4345,19 +4374,19 @@ async function selectGenericExtensionCard(rootRow, row, card, historyMode = "pus
     resetGenericExtensionSearchState();
 
     if (row.selectedCardKey === card.key) {
+        card.childRow = null;
         row.selectedCardKey = null;
         renderGenericExtensionStack(rootRow);
         updateGenericExtensionHistory(rootRow, historyMode);
         return;
     }
 
+    card.childRow = null;
     row.selectedCardKey = card.key;
     renderGenericExtensionStack(rootRow);
     updateGenericExtensionHistory(rootRow, historyMode);
 
-    if (!card.childRow) {
-        card.childRow = await buildChildRowForCard(card);
-    }
+    card.childRow = await buildChildRowForCard(card);
 
     renderGenericExtensionStack(rootRow);
 }
