@@ -1983,6 +1983,22 @@ function createPathNode(kind, name, year = "") {
     };
 }
 
+function createPathBreak() {
+    return {
+        kind: "break",
+        name: "",
+        year: "",
+    };
+}
+
+function isPathBreak(pathNode) {
+    return pathNode?.kind === "break";
+}
+
+function toggleGenericExtensionEntityKind(kind) {
+    return kind === "person" ? "movie" : "person";
+}
+
 function getSearchEntityLabel(entity) {
     return entity.kind === "movie"
         ? formatMoviePathLabel(entity.name, entity.year)
@@ -2053,9 +2069,9 @@ function parseGenericExtensionSegments(value) {
     return value
         .split("|")
         .map((segment) => segment.trim())
-        .filter(Boolean)
-        .map((segment) => decodeURIComponent(segment.replaceAll("+", "%20")))
-        .filter(Boolean);
+        .map((segment) =>
+            segment ? decodeURIComponent(segment.replaceAll("+", "%20")) : "",
+        );
 }
 
 function buildGenericExtensionPathNodes(rootKind, segments) {
@@ -2078,12 +2094,18 @@ function buildGenericExtensionPathNodes(rootKind, segments) {
                 ? "movie"
                 : "person";
     segments.slice(1).forEach((segment) => {
+        if (!segment) {
+            pathNodes.push(createPathBreak());
+            nextKind = toggleGenericExtensionEntityKind(nextKind);
+            return;
+        }
+
         pathNodes.push(
             nextKind === "movie"
                 ? parseMoviePathLabel(segment)
                 : createPathNode("person", segment),
         );
-        nextKind = nextKind === "person" ? "movie" : "person";
+        nextKind = toggleGenericExtensionEntityKind(nextKind);
     });
 
     return pathNodes;
@@ -2094,6 +2116,10 @@ function formatMoviePathLabel(name, year = "") {
 }
 
 function getPathNodeLabel(pathNode) {
+    if (isPathBreak(pathNode)) {
+        return "";
+    }
+
     if (pathNode.kind === "movie") {
         return formatMoviePathLabel(pathNode.name, pathNode.year);
     }
@@ -2223,6 +2249,27 @@ function collectSelectedPathNodes(rootRow) {
     return pathNodes;
 }
 
+function collectSelectedPathEntries(rootRow) {
+    const pathEntries = [];
+    let currentRow = rootRow;
+
+    while (currentRow) {
+        const selectedCard = getSelectedCard(currentRow);
+        if (!selectedCard) {
+            break;
+        }
+
+        if (currentRow !== rootRow && currentRow.breakBeforeRow) {
+            pathEntries.push(createPathBreak());
+        }
+
+        pathEntries.push(getPathNodeFromCard(selectedCard));
+        currentRow = selectedCard.childRow ?? null;
+    }
+
+    return pathEntries;
+}
+
 function collectSelectedCardKeys(rootRow) {
     const selectedCardKeys = new Set();
     let currentRow = rootRow;
@@ -2270,7 +2317,7 @@ function isGenericExtensionEntryPage() {
 }
 
 function updateGenericExtensionHistory(rootRow, mode = "push") {
-    const serializedPath = serializeGenericExtensionPath(collectSelectedPathNodes(rootRow));
+    const serializedPath = serializeGenericExtensionPath(collectSelectedPathEntries(rootRow));
     const nextUrl = `${window.location.origin}${window.location.pathname}?generic_extension=${serializedPath}`;
 
     if (mode === "replace") {
@@ -2317,8 +2364,8 @@ function saveGenericExtensionBookmarks(bookmarks) {
 }
 
 function getCurrentGenericExtensionBookmarkName(rootRow) {
-    return collectSelectedPathNodes(rootRow)
-        .map((pathNode) => getPathNodeLabel(pathNode))
+    return collectSelectedPathEntries(rootRow)
+        .map((pathNode) => (isPathBreak(pathNode) ? "||" : getPathNodeLabel(pathNode)))
         .join(" -> ");
 }
 
@@ -2330,7 +2377,7 @@ function saveCurrentViewAsBookmark(rootRow) {
         return;
     }
 
-    const bookmarkPath = serializeGenericExtensionPath(collectSelectedPathNodes(rootRow));
+    const bookmarkPath = serializeGenericExtensionPath(collectSelectedPathEntries(rootRow));
     const existingBookmarks = getGenericExtensionBookmarks().filter(
         (bookmark) => bookmark.name !== bookmarkName,
     );
@@ -4583,6 +4630,55 @@ async function createRootRowFromPathNode(pathNode, { suppressNotFoundAlert = fal
     return null;
 }
 
+async function createDisconnectedRowFromPathNode(pathNode, { suppressNotFoundAlert = false } = {}) {
+    if (!pathNode || isPathBreak(pathNode)) {
+        return null;
+    }
+
+    if (pathNode.kind === "person") {
+        const personRecord = await resolvePersonRecord(pathNode.name, { suppressNotFoundAlert });
+        if (!personRecord) {
+            return null;
+        }
+
+        const personCard = createPersonRootCard(personRecord, pathNode.name);
+        return {
+            title: "Person",
+            entityType: "person",
+            selectedCardKey: personCard.key,
+            isRoot: false,
+            breakBeforeRow: true,
+            cards: [personCard],
+        };
+    }
+
+    if (pathNode.kind === "movie") {
+        const movieRecord = await resolveMovieRecord(pathNode, { suppressNotFoundAlert });
+        if (!movieRecord) {
+            return null;
+        }
+
+        const connectionCount = Math.max(
+            movieRecord?.personConnectionKeys?.length ?? 0,
+            (await getPersonRecordsByMovieKey(
+                getFilmKey(movieRecord.title ?? pathNode.name, movieRecord.year ?? pathNode.year),
+            )).length,
+            1,
+        );
+        const movieCard = createMovieRootCard(movieRecord, pathNode.name, connectionCount);
+        return {
+            title: "Movie",
+            entityType: "movie",
+            selectedCardKey: movieCard.key,
+            isRoot: false,
+            breakBeforeRow: true,
+            cards: [movieCard],
+        };
+    }
+
+    return null;
+}
+
 async function createRootRowFromSegment(segment) {
     if (normalizeTitle(segment) === "cinenerdle") {
         return createRootRowFromPathNode(createPathNode("cinenerdle", "cinenerdle"));
@@ -4651,8 +4747,34 @@ async function ensureVisibleChildRow(row) {
 async function applyPathToRootRow(rootRow, pathNodes) {
     let currentRow = rootRow;
     let currentChildRow = await ensureVisibleChildRow(currentRow);
+    let pendingBreak = false;
 
     for (let index = 1; index < pathNodes.length; index += 1) {
+        if (isPathBreak(pathNodes[index])) {
+            pendingBreak = true;
+            continue;
+        }
+
+        if (pendingBreak) {
+            const selectedCard = getSelectedCard(currentRow);
+            if (!selectedCard) {
+                return;
+            }
+
+            const disconnectedRow = await createDisconnectedRowFromPathNode(pathNodes[index], {
+                suppressNotFoundAlert: true,
+            });
+            if (!disconnectedRow) {
+                return;
+            }
+
+            selectedCard.childRow = disconnectedRow;
+            currentRow = disconnectedRow;
+            currentChildRow = await ensureVisibleChildRow(currentRow);
+            pendingBreak = false;
+            continue;
+        }
+
         if (!currentChildRow) {
             return;
         }
