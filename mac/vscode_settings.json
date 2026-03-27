@@ -40,6 +40,11 @@
     "editor.defaultFormatter": "vscode.html-language-features",
     "editor.formatOnSave": true
   },
+  "[shellscript]": {
+    "editor.defaultFormatter": "mkhl.shfmt",
+    "editor.formatOnSave": true
+  },
+  "shellformat.path": "/opt/homebrew/bin/shfmt",
   "search.useIgnoreFiles": true,
   "search.useGlobalIgnoreFiles": true,
   "search.useParentIgnoreFiles": true,

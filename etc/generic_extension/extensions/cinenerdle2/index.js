@@ -54,6 +54,24 @@ function alert(message) {
     nativeAlert(normalizedMessage);
 }
 
+function logGenericExtensionProgress(step, details = null) {
+    if (details === null || details === undefined) {
+        console.log("cinenerdle2.genericExtension", step);
+        return;
+    }
+
+    console.log("cinenerdle2.genericExtension", step, details);
+}
+
+function logGenericExtensionError(step, error, details = null) {
+    if (details === null || details === undefined) {
+        console.error("cinenerdle2.genericExtension", step, error);
+        return;
+    }
+
+    console.error("cinenerdle2.genericExtension", step, details, error);
+}
+
 function isVisible(element) {
     if (!(element instanceof HTMLElement)) {
         return false;
@@ -160,6 +178,266 @@ function bindPracticeModeClick(practiceModeEl) {
     );
 
     practiceModeClickBound.add(practiceModeEl);
+}
+
+function getNearestBattleSummaryCard(element) {
+    let current = element;
+
+    while (current instanceof HTMLElement) {
+        const roundLabel = Array.from(current.querySelectorAll("div")).find((node) =>
+            /^Round \d+$/i.test(getText(node)),
+        );
+        const poster = current.querySelector('img[alt$=")"]');
+        if (roundLabel && poster instanceof HTMLImageElement) {
+            return current;
+        }
+        current = current.parentElement;
+    }
+
+    return null;
+}
+
+function parseBattleSummaryMovieCard(cardElement) {
+    if (!(cardElement instanceof HTMLElement)) {
+        return null;
+    }
+
+    const roundLabel = Array.from(cardElement.querySelectorAll("div")).find((node) =>
+        /^Round \d+$/i.test(getText(node)),
+    );
+    const poster = cardElement.querySelector('img[alt$=")"]');
+    if (!(roundLabel instanceof HTMLElement) || !(poster instanceof HTMLImageElement)) {
+        return null;
+    }
+
+    const roundMatch = getText(roundLabel).match(/^Round (\d+)$/i);
+    const label = poster.alt?.trim() ?? "";
+    if (!roundMatch || !label) {
+        return null;
+    }
+
+    return {
+        type: "movie",
+        round: Number(roundMatch[1]),
+        label,
+        element: cardElement,
+    };
+}
+
+function parseBattleSummaryConnector(connectorElement) {
+    if (!(connectorElement instanceof HTMLElement)) {
+        return null;
+    }
+
+    const connectorLabels = Array.from(connectorElement.querySelectorAll("div"))
+        .map(getText)
+        .filter(Boolean);
+    const actionLabel =
+        connectorLabels.find((text) => text === "SKIP" || text === "ESCAPE") ?? null;
+
+    if (actionLabel) {
+        return {
+            type: actionLabel === "SKIP" ? "skip" : "escape",
+            label: actionLabel,
+        };
+    }
+
+    const linkedNameRows = Array.from(
+        connectorElement.querySelectorAll(".fa-solid.fa-link, .fa-duotone.fa-link"),
+    )
+        .map((iconElement) => iconElement.parentElement)
+        .filter((rowElement) => rowElement instanceof HTMLElement)
+        .map((rowElement) => {
+            const labelCandidates = Array.from(rowElement.querySelectorAll("div"))
+                .map(getText)
+                .filter(Boolean)
+                .filter((text) => text !== "SKIP" && text !== "ESCAPE");
+            return labelCandidates[labelCandidates.length - 1] ?? null;
+        })
+        .filter((text) => text && looksLikePersonName(text));
+
+    const label =
+        linkedNameRows[0] ??
+        connectorLabels.find((text) => looksLikePersonName(text)) ??
+        null;
+
+    if (!label) {
+        return null;
+    }
+
+    return {
+        type: "person",
+        label,
+    };
+}
+
+function buildBattleSummaryPathNodes() {
+    const movieCards = Array.from(document.querySelectorAll('img[alt$=")"]'))
+        .map((image) => getNearestBattleSummaryCard(image))
+        .filter((card, index, cards) => card && cards.indexOf(card) === index)
+        .map(parseBattleSummaryMovieCard)
+        .filter(Boolean)
+        .sort((left, right) => (right.round ?? 0) - (left.round ?? 0));
+
+    if (movieCards.length === 0) {
+        return [];
+    }
+
+    const descendingTokens = [];
+    movieCards.forEach((movieCard, index) => {
+        descendingTokens.push(movieCard);
+        const nextMovieCard = movieCards[index + 1];
+        if (!nextMovieCard) {
+            return;
+        }
+
+        const connectorElement = movieCard.element?.parentElement?.nextElementSibling ?? null;
+        const connector = parseBattleSummaryConnector(connectorElement);
+        if (connector) {
+            descendingTokens.push(connector);
+        }
+    });
+
+    const pathNodes = [];
+    let collapseNextDuplicateMovie = false;
+    descendingTokens
+        .slice()
+        .reverse()
+        .forEach((token) => {
+            if (token.type === "movie") {
+                const moviePath = parseMoviePathLabel(token.label);
+                const previousPathNode = pathNodes[pathNodes.length - 1] ?? null;
+                if (
+                    collapseNextDuplicateMovie &&
+                    previousPathNode?.kind === "movie" &&
+                    normalizeTitle(previousPathNode.name) === normalizeTitle(moviePath.name) &&
+                    (previousPathNode.year ?? "") === (moviePath.year ?? "")
+                ) {
+                    console.log(
+                        "cinenerdle2.battleSummary.skipCollapseDuplicateMovie",
+                        token.label,
+                    );
+                    collapseNextDuplicateMovie = false;
+                    return;
+                }
+
+                pathNodes.push(moviePath);
+                collapseNextDuplicateMovie = false;
+                return;
+            }
+
+            if (token.type === "person") {
+                pathNodes.push(createPathNode("person", token.label));
+                collapseNextDuplicateMovie = false;
+                return;
+            }
+
+            if (token.type === "skip") {
+                collapseNextDuplicateMovie = true;
+                return;
+            }
+
+            if (token.type === "escape") {
+                pathNodes.push(createPathBreak());
+                collapseNextDuplicateMovie = false;
+            }
+        });
+
+    return pathNodes;
+}
+
+function findBattleSummaryLabelElement(containerElement, label) {
+    if (!(containerElement instanceof HTMLElement) || !label) {
+        return null;
+    }
+
+    return Array.from(containerElement.querySelectorAll("div")).find(
+        (element) => getText(element) === label,
+    ) ?? null;
+}
+
+function bindBattleSummaryEntryLink(element, pathNode) {
+    if (!(element instanceof HTMLElement) || !pathNode) {
+        return;
+    }
+
+    if (element.dataset.cinenerdle2BattleEntryBound === "true") {
+        return;
+    }
+
+    const targetUrl = buildGenericExtensionUrlFromPath([pathNode]);
+    element.dataset.cinenerdle2BattleEntryBound = "true";
+    element.style.cursor = "pointer";
+    element.style.textDecoration = "underline";
+    element.style.textUnderlineOffset = "2px";
+
+    element.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        console.log("cinenerdle2.battleSummary.entryTargetUrl", targetUrl);
+        window.open(targetUrl, "_blank", "noopener");
+    });
+}
+
+function bindBattleSummaryEntryLinks() {
+    const gameOverElement = Array.from(document.querySelectorAll("div")).find(
+        (element) => getText(element) === "GAME OVER",
+    );
+    if (!(gameOverElement instanceof HTMLElement) || !isVisible(gameOverElement)) {
+        return;
+    }
+
+    const movieCards = Array.from(document.querySelectorAll('img[alt$=")"]'))
+        .map((image) => getNearestBattleSummaryCard(image))
+        .filter((card, index, cards) => card && cards.indexOf(card) === index)
+        .map(parseBattleSummaryMovieCard)
+        .filter(Boolean);
+
+    movieCards.forEach((movieCard) => {
+        const titleElement = findBattleSummaryLabelElement(movieCard.element, movieCard.label);
+        if (!titleElement) {
+            return;
+        }
+
+        bindBattleSummaryEntryLink(titleElement, parseMoviePathLabel(movieCard.label));
+    });
+}
+
+function bindBattleSummaryLink() {
+    const gameOverElement = Array.from(document.querySelectorAll("div")).find(
+        (element) => getText(element) === "GAME OVER",
+    );
+    const viewSummaryElement = Array.from(document.querySelectorAll("div")).find(
+        (element) => getText(element) === "View Battle Summary",
+    );
+
+    const bindClickable = (element) => {
+        if (!(element instanceof HTMLElement) || element.dataset.cinenerdle2BattleBound === "true") {
+            return;
+        }
+
+        element.dataset.cinenerdle2BattleBound = "true";
+        element.style.cursor = "pointer";
+        element.style.textDecoration = "underline";
+        element.style.textUnderlineOffset = "2px";
+
+        element.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const pathNodes = buildBattleSummaryPathNodes();
+            const targetUrl = buildGenericExtensionUrlFromPath(pathNodes);
+            console.log("cinenerdle2.battleSummary.pathNodes", pathNodes);
+            console.log("cinenerdle2.battleSummary.targetUrl", targetUrl);
+            if (!pathNodes.length) {
+                alert("Could not build battle summary link.");
+                return;
+            }
+            window.open(targetUrl, "_blank", "noopener");
+        });
+    };
+
+    bindClickable(gameOverElement);
+    bindClickable(viewSummaryElement);
 }
 
 function hasCastMarker(element) {
@@ -1342,6 +1620,8 @@ function createPosterCard({ imageUrl, title, subtitle, subtitleDetail = "", foot
         const image = document.createElement("img");
         image.src = imageUrl;
         image.alt = title;
+        image.loading = "lazy";
+        image.decoding = "async";
         image.style.width = "100%";
         image.style.height = "100%";
         image.style.objectFit = "contain";
@@ -2128,7 +2408,8 @@ function getPathNodeLabel(pathNode) {
 }
 
 function serializePathNode(pathNode) {
-    return getPathNodeLabel(pathNode).trim().replace(/\s+/g, "+");
+    return encodeURIComponent(getPathNodeLabel(pathNode).trim().replace(/\s+/g, " "))
+        .replace(/%20/g, "+");
 }
 
 function serializeGenericExtensionPath(pathNodes) {
@@ -2206,10 +2487,25 @@ function matchesPathNode(card, pathNode) {
     }
 
     if (pathNode.kind === "movie") {
-        return (
-            normalizeTitle(card.name) === normalizeTitle(pathNode.name) &&
-            (!pathNode.year || card.year === pathNode.year)
-        );
+        if (normalizeTitle(card.name) !== normalizeTitle(pathNode.name)) {
+            return false;
+        }
+
+        if (!pathNode.year) {
+            return true;
+        }
+
+        if (card.year === pathNode.year) {
+            return true;
+        }
+
+        const cardYearNumber = Number.parseInt(card.year, 10);
+        const pathYearNumber = Number.parseInt(pathNode.year, 10);
+        if (!Number.isFinite(cardYearNumber) || !Number.isFinite(pathYearNumber)) {
+            return false;
+        }
+
+        return Math.abs(cardYearNumber - pathYearNumber) <= 1;
     }
 
     return normalizeName(card.name) === normalizeName(pathNode.name);
@@ -2305,8 +2601,13 @@ function collectAncestorSelectedCardKeys(rootRow, targetRow) {
 }
 
 function getGenericExtensionEntryUrl() {
-    const match = location.href.match(/[?&]generic_extension=([^&#]*)/);
-    return match?.[1]?.trim() ?? "";
+    try {
+        return new URL(window.location.href).searchParams.get("generic_extension")?.trim() ?? "";
+    } catch (error) {
+        console.error("cinenerdle2.getGenericExtensionEntryUrl", error);
+        const match = location.href.match(/[?&]generic_extension=([^&#]*)/);
+        return match?.[1]?.trim() ?? "";
+    }
 }
 
 function isGenericExtensionEntryPage() {
@@ -3138,9 +3439,15 @@ function createAutocompleteField(rootRow, placeholder) {
 function loadGenericExtensionPath(pathNodes) {
     resetGenericExtensionSearchState();
     const nextUrl = `${window.location.origin}${window.location.pathname}?generic_extension=${serializeGenericExtensionPath(pathNodes)}`;
+    logGenericExtensionProgress("loadPath", {
+        pathNodes: pathNodes.map((pathNode) => getPathNodeLabel(pathNode)),
+        nextUrl,
+    });
     window.history.pushState({}, "", nextUrl);
     maybeShowGenericExtensionEntry("replace").catch((error) => {
-        console.error("cinenerdle2.loadGenericExtensionPath", error);
+        logGenericExtensionError("loadPath.failed", error, {
+            pathNodes: pathNodes.map((pathNode) => getPathNodeLabel(pathNode)),
+        });
         alert(error.message);
     });
 }
@@ -3191,8 +3498,13 @@ async function connectGenericExtensionSearchEndpoints(
     const sourceSelection = getCurrentSearchSourceEntity(rootRow);
     const { targetSelection } = genericExtensionSearchState;
     if (!sourceSelection) {
-        genericExtensionSearchState.status = "No current source selected";
-        renderGenericExtensionStack(rootRow);
+        if (!targetSelection) {
+            genericExtensionSearchState.status = "Select a destination first";
+            renderGenericExtensionStack(rootRow);
+            return;
+        }
+
+        loadGenericExtensionPath([getSearchEntityPathNode(targetSelection)]);
         return;
     }
 
@@ -4270,6 +4582,11 @@ function createGenericExtensionCardElement(
         titleElement.addEventListener("click", (event) => {
             event.preventDefault();
             event.stopPropagation();
+            const targetUrl = buildGenericExtensionUrlFromPath([getPathNodeFromCard(card)]);
+            if (event.metaKey || event.ctrlKey) {
+                window.open(targetUrl, "_blank", "noopener");
+                return;
+            }
             loadGenericExtensionPath([getPathNodeFromCard(card)]);
         });
     }
@@ -4680,8 +4997,15 @@ async function createDisconnectedRowFromPathNode(pathNode, { suppressNotFoundAle
 }
 
 async function createRootRowFromSegment(segment) {
+    logGenericExtensionProgress("createRootRowFromSegment.start", { segment });
+
     if (normalizeTitle(segment) === "cinenerdle") {
-        return createRootRowFromPathNode(createPathNode("cinenerdle", "cinenerdle"));
+        const cinenerdleRootRow = await createRootRowFromPathNode(createPathNode("cinenerdle", "cinenerdle"));
+        logGenericExtensionProgress("createRootRowFromSegment.success", {
+            segment,
+            selected: getSelectedCard(cinenerdleRootRow)?.name ?? null,
+        });
+        return cinenerdleRootRow;
     }
 
     const prefersMovie = /\(\d{4}\)$/.test(segment);
@@ -4703,17 +5027,32 @@ async function createRootRowFromSegment(segment) {
                     () => createRootRowFromPathNode(createPathNode("person", segment), { suppressNotFoundAlert: true }),
                 ];
 
-    for (const attempt of attempts) {
+    for (let attemptIndex = 0; attemptIndex < attempts.length; attemptIndex += 1) {
+        const attempt = attempts[attemptIndex];
+        logGenericExtensionProgress("createRootRowFromSegment.attempt", {
+            segment,
+            attemptIndex,
+            attemptCount: attempts.length,
+        });
         try {
             const rootRow = await attempt();
             if (rootRow) {
+                logGenericExtensionProgress("createRootRowFromSegment.success", {
+                    segment,
+                    attemptIndex,
+                    selected: getSelectedCard(rootRow)?.name ?? null,
+                });
                 return rootRow;
             }
         } catch (error) {
-            console.warn("cinenerdle2.createRootRowFromSegment", segment, error);
+            logGenericExtensionError("createRootRowFromSegment.attemptFailed", error, {
+                segment,
+                attemptIndex,
+            });
         }
     }
 
+    logGenericExtensionProgress("createRootRowFromSegment.notFound", { segment });
     return null;
 }
 
@@ -4734,23 +5073,52 @@ async function loadGenericExtensionRootSegment(segment, historyMode = "push") {
 async function ensureVisibleChildRow(row) {
     const selectedCard = getSelectedCard(row);
     if (!selectedCard) {
+        logGenericExtensionProgress("ensureVisibleChildRow.noSelectedCard", {
+            rowTitle: row?.title ?? null,
+        });
         return null;
     }
 
     if (!selectedCard.childRow) {
+        logGenericExtensionProgress("ensureVisibleChildRow.build.start", {
+            rowTitle: row?.title ?? null,
+            selectedCard: selectedCard.name,
+            selectedKind: selectedCard.kind,
+        });
         selectedCard.childRow = await buildChildRowForCard(selectedCard);
+        logGenericExtensionProgress("ensureVisibleChildRow.build.complete", {
+            rowTitle: row?.title ?? null,
+            selectedCard: selectedCard.name,
+            childRowTitle: selectedCard.childRow?.title ?? null,
+            childCardCount: selectedCard.childRow?.cards?.length ?? 0,
+        });
+        return selectedCard.childRow;
     }
 
+    logGenericExtensionProgress("ensureVisibleChildRow.reuse", {
+        rowTitle: row?.title ?? null,
+        selectedCard: selectedCard.name,
+        childRowTitle: selectedCard.childRow?.title ?? null,
+        childCardCount: selectedCard.childRow?.cards?.length ?? 0,
+    });
     return selectedCard.childRow;
 }
 
 async function applyPathToRootRow(rootRow, pathNodes) {
+    logGenericExtensionProgress("applyPathToRootRow.start", {
+        root: getSelectedCard(rootRow)?.name ?? null,
+        pathNodes: pathNodes.map((pathNode) => getPathNodeLabel(pathNode)),
+    });
     let currentRow = rootRow;
     let currentChildRow = await ensureVisibleChildRow(currentRow);
     let pendingBreak = false;
 
     for (let index = 1; index < pathNodes.length; index += 1) {
         if (isPathBreak(pathNodes[index])) {
+            logGenericExtensionProgress("applyPathToRootRow.break", {
+                index,
+                previous: getSelectedCard(currentRow)?.name ?? null,
+            });
             pendingBreak = true;
             continue;
         }
@@ -4758,13 +5126,26 @@ async function applyPathToRootRow(rootRow, pathNodes) {
         if (pendingBreak) {
             const selectedCard = getSelectedCard(currentRow);
             if (!selectedCard) {
+                logGenericExtensionProgress("applyPathToRootRow.stop.noSelectedCardForBreak", {
+                    index,
+                    target: getPathNodeLabel(pathNodes[index]),
+                });
                 return;
             }
 
+            logGenericExtensionProgress("applyPathToRootRow.disconnectedRow.start", {
+                index,
+                from: selectedCard.name,
+                target: getPathNodeLabel(pathNodes[index]),
+            });
             const disconnectedRow = await createDisconnectedRowFromPathNode(pathNodes[index], {
                 suppressNotFoundAlert: true,
             });
             if (!disconnectedRow) {
+                logGenericExtensionProgress("applyPathToRootRow.disconnectedRow.notFound", {
+                    index,
+                    target: getPathNodeLabel(pathNodes[index]),
+                });
                 return;
             }
 
@@ -4772,28 +5153,58 @@ async function applyPathToRootRow(rootRow, pathNodes) {
             currentRow = disconnectedRow;
             currentChildRow = await ensureVisibleChildRow(currentRow);
             pendingBreak = false;
+            logGenericExtensionProgress("applyPathToRootRow.disconnectedRow.complete", {
+                index,
+                target: getPathNodeLabel(pathNodes[index]),
+            });
             continue;
         }
 
         if (!currentChildRow) {
+            logGenericExtensionProgress("applyPathToRootRow.stop.noChildRow", {
+                index,
+                target: getPathNodeLabel(pathNodes[index]),
+                current: getSelectedCard(currentRow)?.name ?? null,
+            });
             return;
         }
 
+        logGenericExtensionProgress("applyPathToRootRow.match.start", {
+            index,
+            rowTitle: currentChildRow.title ?? null,
+            target: getPathNodeLabel(pathNodes[index]),
+            cardCount: currentChildRow.cards?.length ?? 0,
+        });
         const matchingCard =
             currentChildRow.cards.find((card) => matchesPathNode(card, pathNodes[index])) ?? null;
         if (!matchingCard) {
             currentChildRow.selectedCardKey = null;
+            logGenericExtensionProgress("applyPathToRootRow.match.notFound", {
+                index,
+                rowTitle: currentChildRow.title ?? null,
+                target: getPathNodeLabel(pathNodes[index]),
+                availableCards: currentChildRow.cards.map((card) => card.name).slice(0, 12),
+            });
             return;
         }
 
         currentChildRow.selectedCardKey = matchingCard.key;
         currentRow = currentChildRow;
         currentChildRow = await ensureVisibleChildRow(currentRow);
+        logGenericExtensionProgress("applyPathToRootRow.match.complete", {
+            index,
+            selected: matchingCard.name,
+            kind: matchingCard.kind,
+        });
     }
 
     if (currentChildRow) {
         currentChildRow.selectedCardKey = null;
     }
+
+    logGenericExtensionProgress("applyPathToRootRow.complete", {
+        final: getSelectedCard(currentRow)?.name ?? null,
+    });
 }
 
 async function buildGenericExtensionRootRow(rootSegment) {
@@ -4813,44 +5224,77 @@ async function buildGenericExtensionRootRow(rootSegment) {
 }
 
 async function maybeShowGenericExtensionEntry(historyMode = "replace") {
-    const genericExtensionValue = getGenericExtensionEntryUrl();
-    if (!genericExtensionValue) {
-        return false;
-    }
+    try {
+        const genericExtensionValue = getGenericExtensionEntryUrl();
+        if (!genericExtensionValue) {
+            return false;
+        }
 
-    const pathSegments = parseGenericExtensionSegments(genericExtensionValue);
-    if (pathSegments.length === 0) {
-        return false;
-    }
-
-    const rootRow = await buildGenericExtensionRootRow(pathSegments[0]);
-    if (!rootRow) {
-        alert(`No local or TMDb item found for ${pathSegments[0]}`);
-        return false;
-    }
-
-    const resolvedRootCard = getSelectedCard(rootRow);
-    const pathNodes = buildGenericExtensionPathNodes(resolvedRootCard?.kind, pathSegments);
-    if (pathNodes.length === 0) {
-        return false;
-    }
-
-    genericExtensionRootRow = rootRow;
-    await applyPathToRootRow(genericExtensionRootRow, pathNodes);
-    renderGenericExtensionStack(genericExtensionRootRow);
-    updateGenericExtensionHistory(genericExtensionRootRow, historyMode);
-
-    if (!genericExtensionPopstateBound) {
-        window.addEventListener("popstate", () => {
-            maybeShowGenericExtensionEntry("replace").catch((error) => {
-                console.error("cinenerdle2.popstate", error);
-                alert(error.message);
-            });
+        logGenericExtensionProgress("maybeShowGenericExtensionEntry.start", {
+            historyMode,
+            genericExtensionValue,
         });
-        genericExtensionPopstateBound = true;
-    }
 
-    return true;
+        const pathSegments = parseGenericExtensionSegments(genericExtensionValue);
+        logGenericExtensionProgress("maybeShowGenericExtensionEntry.segments", {
+            count: pathSegments.length,
+            pathSegments,
+        });
+        if (pathSegments.length === 0) {
+            return false;
+        }
+
+        const rootRow = await buildGenericExtensionRootRow(pathSegments[0]);
+        if (!rootRow) {
+            logGenericExtensionProgress("maybeShowGenericExtensionEntry.rootNotFound", {
+                rootSegment: pathSegments[0],
+            });
+            alert(`No local or TMDb item found for ${pathSegments[0]}`);
+            return false;
+        }
+
+        const resolvedRootCard = getSelectedCard(rootRow);
+        logGenericExtensionProgress("maybeShowGenericExtensionEntry.rootResolved", {
+            rootSegment: pathSegments[0],
+            resolvedRoot: resolvedRootCard?.name ?? null,
+            resolvedKind: resolvedRootCard?.kind ?? null,
+        });
+
+        const pathNodes = buildGenericExtensionPathNodes(resolvedRootCard?.kind, pathSegments);
+        logGenericExtensionProgress("maybeShowGenericExtensionEntry.pathNodes", {
+            count: pathNodes.length,
+            pathNodes: pathNodes.map((pathNode) => getPathNodeLabel(pathNode)),
+        });
+        if (pathNodes.length === 0) {
+            return false;
+        }
+
+        genericExtensionRootRow = rootRow;
+        await applyPathToRootRow(genericExtensionRootRow, pathNodes);
+        logGenericExtensionProgress("maybeShowGenericExtensionEntry.render.start", {
+            root: resolvedRootCard?.name ?? null,
+        });
+        renderGenericExtensionStack(genericExtensionRootRow);
+        updateGenericExtensionHistory(genericExtensionRootRow, historyMode);
+        logGenericExtensionProgress("maybeShowGenericExtensionEntry.complete", {
+            title: document.title,
+        });
+
+        if (!genericExtensionPopstateBound) {
+            window.addEventListener("popstate", () => {
+                maybeShowGenericExtensionEntry("replace").catch((error) => {
+                    logGenericExtensionError("popstate.failed", error);
+                    alert(error.message);
+                });
+            });
+            genericExtensionPopstateBound = true;
+        }
+
+        return true;
+    } catch (error) {
+        logGenericExtensionError("maybeShowGenericExtensionEntry.failed", error);
+        throw error;
+    }
 }
 
 async function handlePersonClick(personName, sourceElement, targetWindow = null) {
@@ -5173,10 +5617,42 @@ function createGenericExtensionInfoRow(label, value) {
     return row;
 }
 
+function createCompactGenericExtensionInfoRow(label, value) {
+    const row = document.createElement("div");
+    row.style.display = "flex";
+    row.style.alignItems = "baseline";
+    row.style.gap = "6px";
+    row.style.minWidth = "0";
+    row.style.whiteSpace = "nowrap";
+
+    const labelElement = document.createElement("div");
+    labelElement.textContent = `${label}:`;
+    labelElement.style.flex = "0 0 auto";
+    labelElement.style.fontSize = "11px";
+    labelElement.style.fontWeight = "700";
+    labelElement.style.letterSpacing = "0.03em";
+    labelElement.style.textTransform = "uppercase";
+    labelElement.style.color = "#94a3b8";
+    row.appendChild(labelElement);
+
+    const valueElement = document.createElement("div");
+    valueElement.textContent = formatGenericExtensionInfoValue(value);
+    valueElement.style.minWidth = "0";
+    valueElement.style.fontSize = "12px";
+    valueElement.style.color = "#e2e8f0";
+    valueElement.style.overflowX = "auto";
+    valueElement.style.overflowY = "hidden";
+    row.appendChild(valueElement);
+
+    return row;
+}
+
 function createGenerationZeroInfoPanel(card) {
     const panel = document.createElement("aside");
-    panel.style.flex = "0 0 320px";
-    panel.style.maxWidth = "320px";
+    panel.style.flex = "0 0 960px";
+    panel.style.minWidth = "960px";
+    panel.style.maxWidth = "960px";
+    panel.style.alignSelf = "flex-start";
     panel.style.display = "flex";
     panel.style.flexDirection = "column";
     panel.style.gap = "10px";
@@ -5191,7 +5667,9 @@ function createGenerationZeroInfoPanel(card) {
     title.style.fontSize = "16px";
     title.style.fontWeight = "700";
     title.style.color = "#f8fafc";
-    title.style.whiteSpace = "pre-wrap";
+    title.style.whiteSpace = "nowrap";
+    title.style.overflowX = "auto";
+    title.style.overflowY = "hidden";
     panel.appendChild(title);
 
     const sourceBadges = createSourceBadge(card?.sources ?? []);
@@ -5243,9 +5721,16 @@ function createGenerationZeroInfoPanel(card) {
         );
     }
 
+    const infoGrid = document.createElement("div");
+    infoGrid.style.display = "grid";
+    infoGrid.style.gridTemplateColumns = "repeat(4, minmax(0, 1fr))";
+    infoGrid.style.gap = "10px 14px";
+
     infoRows.forEach(([label, value]) => {
-        panel.appendChild(createGenericExtensionInfoRow(label, value));
+        infoGrid.appendChild(createCompactGenericExtensionInfoRow(label, value));
     });
+
+    panel.appendChild(infoGrid);
 
     return panel;
 }
@@ -5458,6 +5943,8 @@ function handlePractice() {
         bindPracticeModeClick(practiceModeEl);
     }
 
+    bindBattleSummaryLink();
+    bindBattleSummaryEntryLinks();
     getVisibleMovieTitleElements()
         .map((titleElement) => parseDomFilmSnapshotFromElement(titleElement))
         .filter(Boolean)
