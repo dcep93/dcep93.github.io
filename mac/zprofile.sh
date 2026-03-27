@@ -40,12 +40,12 @@ ghtf() {
 	say g
 }
 
-newapp() {
+function newapp() {
 	(
 		set -xeuo pipefail
 		BACKUP_DIR=~/repos/watchwall420
 		cp -r $BACKUP_DIR/.github ./
-		yes n | npm create vite@latest app -- --template react-ts
+		yes n | npm create vite@latest app -- --template react-ts || true
 		mkdir -p app/src/app_x/config
 		cp $BACKUP_DIR/app/src/app_x/config/sha_x.json app/src/app_x/config/sha_x.json
 		cp $BACKUP_DIR/app/src/app_x/config/sha_x.ts app/src/app_x/config/sha_x.ts
