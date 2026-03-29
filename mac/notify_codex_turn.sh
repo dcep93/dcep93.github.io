@@ -4,7 +4,7 @@ set -euo pipefail
 json="$1"
 
 event_type="$(printf '%s' "$json" | /usr/bin/python3 -c 'import sys,json; print(json.load(sys.stdin).get("type",""))')"
-msg="$(printf '%s' "$json" | /usr/bin/python3 -c 'import sys,json; print(json.load(sys.stdin).get("last-assistant-message","Turn complete"))')"
+msg="$(printf '%s' "$json" | /usr/bin/python3 -c 'import sys,json; print(json.load(sys.stdin).get("last-assistant-message",""))')"
 
 [[ "$event_type" == "agent-turn-complete" ]] || exit 0
 
