@@ -30,10 +30,6 @@ function execute() {
       p: /https:\/\/colonist\.io\/.*/,
       jss: ["colonist.js"],
     },
-    {
-      p: /https:\/\/www\.cinenerdle2\.app\/.*/,
-      jss: ["cinenerdle2/index.js"],
-    },
   ];
 
   const jss = paths
