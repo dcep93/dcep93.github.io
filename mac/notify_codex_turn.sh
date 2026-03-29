@@ -40,5 +40,5 @@ echo "$msg" >>/tmp/last_codex_turn.txt
 
 /opt/homebrew/bin/terminal-notifier \
 	-title "Codex.VSCode" \
-	-message "x:$msg" \
+	-message "$msg" \
 	-activate "com.microsoft.VSCode"
