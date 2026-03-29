@@ -154,4 +154,12 @@ gcloud iam service-accounts keys create gac.json --iam-account "deployer-github@
 echo; echo; echo
 cat gac.json
 echo; echo; echo
+
+/plan let's build _
+
+you will only edit files in _/app/src/app_x or the public folder
+
+its color theme should be similar to watchwall420/app/src/app_x/styles/watchwall.css
+
+_ should be generally night mode, modular, with good organization and files not too big.
 EOF
