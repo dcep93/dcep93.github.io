@@ -13,6 +13,6 @@ msg="${msg//$'\n'/ }"
 msg="${msg:0:140}"
 
 /opt/homebrew/bin/terminal-notifier \
-  -title "Codex.VSCode" \
-  -message "$msg" \
-  -activate "com.microsoft.VSCode"
+	-title "Codex.VSCode" \
+	-message "$msg" \
+	-activate "com.microsoft.VSCode"
