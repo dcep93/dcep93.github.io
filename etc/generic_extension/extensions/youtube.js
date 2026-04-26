@@ -1,9 +1,57 @@
 function main() {
-  setTimeout(init_scroll_button, 5000);
+  installShortsAutoNextBootstrap();
   enableShortsBulkOpen();
 }
 
-function init_scroll_button() {
+function installShortsAutoNextBootstrap() {
+  if (window.__shortsAutoNextBootstrapInstalled) return;
+  window.__shortsAutoNextBootstrapInstalled = true;
+
+  let initTimer = null;
+  let settledTimer = null;
+
+  function queueInit(reason, delay = 0) {
+    try {
+      if (initTimer) clearTimeout(initTimer);
+    } catch {}
+
+    initTimer = setTimeout(() => {
+      initTimer = null;
+      init_scroll_button(reason);
+    }, delay);
+  }
+
+  function scheduleNavigationRefresh(reason) {
+    queueInit(`${reason}:soon`, 200);
+    try {
+      if (settledTimer) clearTimeout(settledTimer);
+    } catch {}
+    settledTimer = setTimeout(() => {
+      settledTimer = null;
+      init_scroll_button(`${reason}:settled`);
+    }, 1200);
+  }
+
+  queueInit("startup", 0);
+  setTimeout(() => {
+    init_scroll_button("startup:settled");
+  }, 5000);
+
+  document.addEventListener(
+    "yt-navigate-finish",
+    () => scheduleNavigationRefresh("yt-navigate-finish"),
+    true,
+  );
+  document.addEventListener(
+    "yt-page-data-updated",
+    () => scheduleNavigationRefresh("yt-page-data-updated"),
+    true,
+  );
+  window.addEventListener("pageshow", () => scheduleNavigationRefresh("pageshow"));
+  window.addEventListener("popstate", () => scheduleNavigationRefresh("popstate"));
+}
+
+function init_scroll_button(reason = "manual") {
   const TAG = "[shorts-autonext]";
   const DEBUG = true;
 
@@ -191,15 +239,26 @@ function init_scroll_button() {
 
   function send_arrow_down() {
     try {
-      const ev = new KeyboardEvent("keydown", {
+      const keyboardEventInit = {
         key: "ArrowDown",
         code: "ArrowDown",
         keyCode: 40,
         which: 40,
         bubbles: true,
         cancelable: true,
+      };
+      const targets = [
+        document.activeElement,
+        document.querySelector("ytd-reel-video-renderer[is-active]"),
+        document.body,
+        document.documentElement,
+        document,
+      ].filter(Boolean);
+
+      targets.forEach((target) => {
+        target.dispatchEvent(new KeyboardEvent("keydown", keyboardEventInit));
+        target.dispatchEvent(new KeyboardEvent("keyup", keyboardEventInit));
       });
-      document.dispatchEvent(ev);
       return true;
     } catch (e) {
       warn("send_arrow_down failed", e);
@@ -207,8 +266,84 @@ function init_scroll_button() {
     }
   }
 
+  function get_scroll_parent(node) {
+    try {
+      for (let el = node?.parentElement; el; el = el.parentElement) {
+        const style = window.getComputedStyle(el);
+        const canScroll =
+          /(auto|scroll|overlay)/.test(style.overflowY) &&
+          el.scrollHeight > el.clientHeight + 16;
+        if (canScroll) return el;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  function get_active_short_item(v = get_active_video()) {
+    try {
+      if (!v) return null;
+
+      return (
+        v.closest(
+          [
+            "ytd-reel-video-renderer[is-active]",
+            "ytd-reel-video-renderer",
+            "ytd-reel-item-renderer[is-active]",
+            "ytd-reel-item-renderer",
+          ].join(","),
+        ) || null
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  function click_next_button() {
+    try {
+      const selectors = [
+        "ytd-reel-player-overlay-renderer #navigation-button-down button",
+        "ytd-reel-player-overlay-renderer #navigation-button-down",
+        'button[aria-label*="Next"]',
+        'button[title*="Next"]',
+      ];
+      for (const selector of selectors) {
+        const btn = document.querySelector(selector);
+        if (!btn) continue;
+        btn.click();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      warn("click_next_button failed", e);
+      return false;
+    }
+  }
+
   function scroll_fallback() {
     try {
+      const activeItem = get_active_short_item();
+      const items = Array.from(
+        document.querySelectorAll("ytd-reel-video-renderer, ytd-reel-item-renderer"),
+      );
+      const currentIndex = activeItem ? items.indexOf(activeItem) : -1;
+      const nextItem =
+        currentIndex >= 0 && currentIndex + 1 < items.length
+          ? items[currentIndex + 1]
+          : null;
+
+      if (nextItem?.scrollIntoView) {
+        nextItem.scrollIntoView({ block: "start", behavior: "smooth" });
+        return true;
+      }
+
+      const scrollParent = get_scroll_parent(activeItem);
+      if (scrollParent?.scrollBy) {
+        scrollParent.scrollBy({ top: innerHeight * 1.1, behavior: "smooth" });
+        return true;
+      }
+
       window.scrollBy({ top: innerHeight * 1.1, behavior: "smooth" });
       return true;
     } catch (e) {
@@ -231,6 +366,17 @@ function init_scroll_button() {
     }
   }
 
+  function did_advance(startPath, startSig) {
+    try {
+      if (window.location.pathname !== startPath) return true;
+
+      const currentSig = video_sig(get_active_video());
+      return Boolean(startSig && currentSig && currentSig !== startSig);
+    } catch {
+      return false;
+    }
+  }
+
   function advance_next(reason) {
     if (!can_advance()) return;
     if (!is_shorts_url()) {
@@ -240,18 +386,27 @@ function init_scroll_button() {
 
     STATE.inAdvance = true;
     STATE.lastAdvanceAt = now();
-    log("advancing…", reason);
+    log("advancing...", reason);
 
+    const startPath = window.location.pathname;
+    const startSig = video_sig(get_active_video());
     const ok = send_arrow_down();
+
+    setTimeout(() => {
+      if (!STATE.enabled || did_advance(startPath, startSig)) return;
+      click_next_button();
+    }, ok ? 180 : 0);
+
     setTimeout(
       () => {
         try {
-          if (STATE.enabled) scroll_fallback();
+          if (!STATE.enabled || did_advance(startPath, startSig)) return;
+          scroll_fallback();
         } finally {
           STATE.inAdvance = false;
         }
       },
-      ok ? 150 : 0,
+      ok ? 520 : 220,
     );
   }
 
@@ -329,7 +484,14 @@ function init_scroll_button() {
     STATE.uiPollId = setInterval(poll_ui, CFG.uiPollMs);
     STATE.pollId = setInterval(poll_tick, CFG.pollMs);
 
-    log("started uiPoll", CFG.uiPollMs, "ms; poll", CFG.pollMs, "ms");
+    log(
+      "started uiPoll",
+      CFG.uiPollMs,
+      "ms; poll",
+      CFG.pollMs,
+      "ms; reason=",
+      reason,
+    );
   } catch (e) {
     warn("startup failed", e);
     stop_all();

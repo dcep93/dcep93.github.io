@@ -6,8 +6,6 @@ json="$1"
 event_type="$(/usr/bin/python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("type",""))' "$json")"
 msg="$(/usr/bin/python3 -c 'import json,sys; print(json.loads(sys.argv[1]).get("last-assistant-message",""))' "$json")"
 
-[[ "$event_type" == "agent-turn-complete" ]] || exit 0
-
 skip_notification="$(
 	/usr/bin/python3 -c '
 import json
@@ -29,14 +27,20 @@ print(
 	' "$msg"
 )"
 
-[[ "$skip_notification" == "1" ]] && exit 0
-
 msg="${msg:-Turn complete}"
 msg="${msg//$'\n'/ }"
 msg="${msg:0:140}"
 
-echo "$json" >/tmp/last_codex_turn.txt
+echo "" >>/tmp/last_codex_turn.txt
+echo "" >>/tmp/last_codex_turn.txt
+echo "" >>/tmp/last_codex_turn.txt
+echo "" >>/tmp/last_codex_turn.txt
+echo "" >>/tmp/last_codex_turn.txt
 echo "$msg" >>/tmp/last_codex_turn.txt
+echo "$json" >>/tmp/last_codex_turn.txt
+
+[[ "$event_type" == "agent-turn-complete" ]] || exit 0
+[[ "$skip_notification" == "1" ]] && exit 0
 
 /opt/homebrew/bin/terminal-notifier \
 	-title "Codex.VSCode" \

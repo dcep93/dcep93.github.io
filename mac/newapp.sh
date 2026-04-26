@@ -137,6 +137,16 @@ createRoot(document.getElementById("root")!).render(
   </StrictMode>,
 );
 EOF
+cat >AGENTS.md <<'EOF'
+Agent rules for this repo:
+
+- You will only edit files in `app/src/app_x` or the `public` folder.
+- Its color theme should be similar to `watchwall420/app/src/app_x/styles/watchwall.css`.
+- The app should generally be night mode, modular, with good organization, and files not too big.
+- For CSS sizing, prefer `rem` for layout, spacing, widths, heights, radii, and other app-level scale decisions so global resizing stays predictable from the root font size.
+- Use `em` for element-local sizing that should track the component's own text, such as icon size, inline spacing, or typography-relative padding.
+- Avoid defaulting to `px` unless exact fixed geometry is intentionally required.
+EOF
 (
 	cd app
 	npm install
@@ -154,12 +164,4 @@ gcloud iam service-accounts keys create gac.json --iam-account "deployer-github@
 echo; echo; echo
 cat gac.json
 echo; echo; echo
-
-/plan let's build _
-
-you will only edit files in _/app/src/app_x or the public folder
-
-its color theme should be similar to watchwall420/app/src/app_x/styles/watchwall.css
-
-_ should be generally night mode, modular, with good organization and files not too big.
 EOF
