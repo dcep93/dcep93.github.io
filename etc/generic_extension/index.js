@@ -32,7 +32,7 @@ function execute() {
     },
     {
       p: /https:\/\/open\.spotify\.com\/.*/,
-      jss: ["ktv420/index.js"],
+      jss: ["ktv420/index.js", "ktv420/clickLogo.js"],
     },
   ];
 
