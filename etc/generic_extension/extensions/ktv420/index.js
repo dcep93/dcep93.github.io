@@ -1,52 +1,70 @@
-const KTV_LOGO_ID = "ktv420-spotify-logo-button";
+const KTV_TRACK_ID_INPUT_ID = "ktv420-spotify-track-id-input";
+const KTV_FORM_ID = "ktv420-spotify-track-id-form";
+const KTV_DEFAULT_TRACK_ID = "4kr3l1fAE5gkjxkbE7WU65";
 
-function createLogoButton() {
+function createSubmitButton() {
     const button = document.createElement("button");
-    button.id = KTV_LOGO_ID;
-    button.type = "button";
-    button.setAttribute("aria-label", "ktv420");
-    button.title = "ktv420";
+    button.type = "submit";
+    button.textContent = "md5";
     button.style.display = "inline-flex";
     button.style.alignItems = "center";
     button.style.justifyContent = "center";
-    button.style.width = "32px";
+    button.style.minWidth = "52px";
     button.style.height = "32px";
-    button.style.marginLeft = "12px";
-    button.style.padding = "0";
-    button.style.border = "0";
-    button.style.background = "transparent";
+    button.style.padding = "0 12px";
+    button.style.border = "1px solid rgba(255,255,255,0.18)";
+    button.style.borderRadius = "999px";
+    button.style.background = "rgba(255,255,255,0.08)";
+    button.style.color = "#fff";
+    button.style.fontSize = "14px";
     button.style.cursor = "pointer";
-
-    button.innerHTML = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="32" height="32" aria-hidden="true">
-      <g transform="translate(32 35) scale(1.22 1.22)">
-        <text
-          x="0"
-          y="0"
-          fill="#ff7bc3"
-          font-family="'Comic Sans MS', 'Comic Sans', cursive"
-          font-size="58"
-          font-weight="400"
-          stroke="#000"
-          stroke-width="3"
-          paint-order="stroke fill"
-          text-anchor="middle"
-          dominant-baseline="middle"
-        >
-          k
-        </text>
-      </g>
-    </svg>
-  `;
-
-    button.addEventListener("click", () => {
-        clickLogo()
-    });
 
     return button;
 }
 
-function attachLogo() {
+function createTrackIdInput() {
+    const input = document.createElement("input");
+    input.id = KTV_TRACK_ID_INPUT_ID;
+    input.type = "text";
+    input.value = KTV_DEFAULT_TRACK_ID;
+    input.placeholder = "track id";
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.style.width = "170px";
+    input.style.height = "32px";
+    input.style.padding = "0 10px";
+    input.style.border = "1px solid rgba(255,255,255,0.18)";
+    input.style.borderRadius = "999px";
+    input.style.background = "rgba(255,255,255,0.08)";
+    input.style.color = "#fff";
+    input.style.fontSize = "14px";
+    input.style.outline = "none";
+    return input;
+}
+
+function createTrackIdForm() {
+    const form = document.createElement("form");
+    form.id = KTV_FORM_ID;
+    form.style.display = "inline-flex";
+    form.style.alignItems = "center";
+    form.style.gap = "8px";
+    form.style.marginLeft = "12px";
+
+    const input = createTrackIdInput();
+    const button = createSubmitButton();
+
+    form.appendChild(input);
+    form.appendChild(button);
+
+    form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        submitTrackId(input.value);
+    });
+
+    return form;
+}
+
+function attachTrackIdForm() {
     const spotifyLogo = document.querySelector('[data-encore-id="logoSpotify"]');
     if (!spotifyLogo) {
         return false;
@@ -57,21 +75,22 @@ function attachLogo() {
         return false;
     }
 
-    const existingButton = document.getElementById(KTV_LOGO_ID);
-    if (existingButton && existingButton.parentElement === logoContainer) {
+    const existingForm = document.getElementById(KTV_FORM_ID);
+    if (existingForm && existingForm.parentElement === logoContainer) {
         return true;
     }
 
-    existingButton?.remove();
-    logoContainer.appendChild(createLogoButton());
+    existingForm?.remove();
+    document.getElementById(KTV_TRACK_ID_INPUT_ID)?.remove();
+    logoContainer.appendChild(createTrackIdForm());
     return true;
 }
 
 function init() {
-    attachLogo();
+    attachTrackIdForm();
 
     const observer = new MutationObserver(() => {
-        attachLogo();
+        attachTrackIdForm();
     });
 
     observer.observe(document.body, {
