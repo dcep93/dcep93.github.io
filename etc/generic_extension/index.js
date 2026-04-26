@@ -30,6 +30,10 @@ function execute() {
       p: /https:\/\/colonist\.io\/.*/,
       jss: ["colonist.js"],
     },
+    {
+      p: /https:\/\/open\.spotify\.com\/.*/,
+      jss: ["ktv420/index.js"],
+    },
   ];
 
   const jss = paths
