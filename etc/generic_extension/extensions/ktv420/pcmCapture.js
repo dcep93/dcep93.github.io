@@ -1,46 +1,47 @@
 (() => {
   const app = window.KTV420 || (window.KTV420 = {});
 
-  async function captureMediaElement(mediaElement, trackId, timings) {
+  function createSession(mediaElement, options = {}) {
     if (!app.mediaElements.isMediaElement(mediaElement)) {
       throw new Error("The selected playback target is not an HTML media element.");
     }
 
-    const normalizedTrackId = app.trackId.requireTrackId(trackId);
     const graph = ensureAudioGraph(mediaElement);
-    await graph.audioContext.resume();
-    await resetMediaToStart(mediaElement);
-    const durationSeconds = getRequiredDurationSeconds(mediaElement);
-
-    const capturePromise = collectPcmBytes(graph, mediaElement, durationSeconds);
-    let capture;
-    try {
-      await startPlayback(mediaElement);
-      capture = await capturePromise;
-    } catch (error) {
-      abortActiveCapture(graph);
-      await capturePromise.catch(() => {});
-      throw error;
-    } finally {
-      mediaElement.pause();
+    if (graph.activeSession) {
+      throw new Error("Another Spotify PCM capture is already running.");
     }
 
-    const bytes = concatenateChunks(capture.chunks, capture.byteLength);
+    const firstFrame = createDeferred();
+    const session = {
+      currentSegment: null,
+      error: null,
+      firstFrame,
+      firstFrameSeen: false,
+      graph,
+      onError: typeof options.onError === "function" ? options.onError : null,
+      totalByteLength: 0,
+    };
 
-    if (!bytes.length) {
-      throw new Error("No audio bytes were captured from Spotify playback.");
-    }
+    graph.activeSession = session;
 
     return {
-      audioChannelCount: capture.channelCount,
-      audioChannelLayout: "interleaved",
-      audioByteLength: bytes.length,
-      audioDataBase64: bytesToBase64(bytes),
-      audioSampleFormat: "PCM_S16LE",
-      audioSampleRate: capture.sampleRate,
-      md5: app.md5.hex(bytes),
-      timings: timings?.entries || [],
-      trackId: normalizedTrackId,
+      abort(error) {
+        setSessionError(session, error || new Error("Spotify PCM capture was interrupted."));
+        finishSession(graph, session);
+      },
+      async resumeAudioContext() {
+        await graph.audioContext.resume();
+      },
+      finish() {
+        finishSession(graph, session);
+      },
+      finishSegment(options) {
+        return finishSegment(session, options);
+      },
+      firstFrame: firstFrame.promise,
+      startSegment(track, options) {
+        startSegment(session, track, options);
+      },
     };
   }
 
@@ -87,61 +88,144 @@
     return graph;
   }
 
-  function abortActiveCapture(graph) {
-    if (graph.activeSession && !graph.activeSession.error) {
-      graph.activeSession.error = new Error("Spotify PCM capture was interrupted.");
-    }
-  }
-
   function isUsableAudioGraph(graph) {
     return Boolean(
       graph &&
-      graph.audioContext &&
-      graph.audioContext.state !== "closed" &&
-      graph.processorNode &&
-      graph.sourceNode,
+        graph.audioContext &&
+        graph.audioContext.state !== "closed" &&
+        graph.processorNode &&
+        graph.sourceNode,
     );
+  }
+
+  function startSegment(session, track, options = {}) {
+    if (session.error) {
+      throw session.error;
+    }
+    if (session.currentSegment) {
+      throw new Error("A Spotify PCM track segment is already open.");
+    }
+
+    const durationSeconds = requireFinitePositiveNumber(
+      options.durationSeconds,
+      "Spotify playback target did not expose a finite track duration.",
+    );
+
+    session.currentSegment = {
+      byteLength: 0,
+      channelCount: 0,
+      chunks: [],
+      durationSeconds,
+      sampleRate: 0,
+      startTimeSeconds: normalizeTime(options.startTimeSeconds),
+      timings: app.timing.createTimingRecorder(),
+      trackArtist: String(track.trackArtist || "").trim(),
+      trackId: app.trackId.requireTrackId(track.trackId),
+      trackName: String(track.trackName || "").trim(),
+    };
+    session.currentSegment.timings.mark("track_segment_started");
   }
 
   function recordAudioFrame(graph, audioBuffer) {
     const session = graph.activeSession;
-    if (!session || session.error) {
+    if (!session || session.error || !session.currentSegment) {
       return;
     }
 
-    session.sampleRate = Number(audioBuffer.sampleRate || 0) || session.sampleRate || 0;
-    session.channelCount = Math.min(Number(audioBuffer.numberOfChannels || 0) || 0, 2);
+    const segment = session.currentSegment;
+    segment.sampleRate = Number(audioBuffer.sampleRate || 0) || segment.sampleRate || 0;
+    segment.channelCount = Math.min(Number(audioBuffer.numberOfChannels || 0) || 0, 2);
 
     const pcmBytes = audioBufferToPcmBytes(audioBuffer);
     if (!pcmBytes.length) {
       return;
     }
 
-    const targetByteLength = getExpectedByteLength(session);
-    const remainingByteLength = targetByteLength
-      ? targetByteLength - session.byteLength
-      : Infinity;
-    if (remainingByteLength <= 0) {
-      session.complete = true;
+    session.totalByteLength += pcmBytes.length;
+    if (session.totalByteLength > app.config.capture.maxBytes) {
+      setSessionError(session, new Error("Captured audio exceeded the maximum byte limit."));
       return;
     }
 
-    const capturedBytes = pcmBytes.length > remainingByteLength
-      ? pcmBytes.subarray(0, remainingByteLength)
-      : pcmBytes;
+    segment.byteLength += pcmBytes.length;
+    segment.chunks.push(pcmBytes);
 
-    const now = performance.now();
-    session.firstFrameAt = session.firstFrameAt || now;
-    session.lastFrameAt = now;
-    session.byteLength += capturedBytes.length;
+    if (!session.firstFrameSeen) {
+      session.firstFrameSeen = true;
+      session.firstFrame.resolve();
+    }
+  }
 
-    if (session.byteLength > app.config.capture.maxBytes) {
-      session.error = new Error("Captured audio exceeded the maximum byte limit.");
+  function finishSegment(session, options = {}) {
+    if (session.error) {
+      throw session.error;
+    }
+    if (!session.currentSegment) {
+      return null;
+    }
+
+    const segment = session.currentSegment;
+    session.currentSegment = null;
+    segment.timings.mark("track_segment_finished");
+
+    if (!segment.byteLength) {
+      throw new Error(`No PCM bytes were captured for "${segment.trackName || "unknown"}".`);
+    }
+    if (!segment.sampleRate || !segment.channelCount) {
+      throw new Error("Spotify PCM capture did not expose a sample rate and channel count.");
+    }
+
+    const endTimeSeconds = normalizeTime(options.endTimeSeconds);
+    const endedAtEnd = Boolean(options.endedAtEnd);
+    let bytes = concatenateChunks(segment.chunks, segment.byteLength);
+    const expectedByteLength = getExpectedByteLength(segment, endTimeSeconds, endedAtEnd);
+    if (expectedByteLength && bytes.length > expectedByteLength) {
+      bytes = bytes.subarray(0, expectedByteLength);
+    }
+    if (
+      expectedByteLength &&
+      endedAtEnd &&
+      expectedByteLength - bytes.length > getAllowedShortfallByteLength(segment)
+    ) {
+      throw new Error(
+        `Spotify changed tracks before KTV420 captured the full "${segment.trackName}" PCM segment.`,
+      );
+    }
+
+    return {
+      audioDataBase64: bytesToBase64(bytes),
+      metadata: {
+        audioChannelCount: segment.channelCount,
+        audioChannelLayout: "interleaved",
+        audioByteLength: bytes.length,
+        audioSampleFormat: "PCM_S16LE",
+        audioSampleRate: segment.sampleRate,
+        crop: formatCrop(segment.startTimeSeconds, endTimeSeconds, segment.durationSeconds, endedAtEnd),
+        md5: app.md5.hex(bytes),
+        timings: segment.timings.entries,
+        trackArtist: segment.trackArtist,
+        trackId: segment.trackId,
+        trackName: segment.trackName,
+      },
+    };
+  }
+
+  function finishSession(graph, session) {
+    if (graph.activeSession === session) {
+      graph.activeSession = null;
+    }
+  }
+
+  function setSessionError(session, error) {
+    if (session.error) {
       return;
     }
 
-    session.chunks.push(capturedBytes);
-    session.complete = Boolean(targetByteLength && session.byteLength >= targetByteLength);
+    session.error = error;
+    session.firstFrame.reject(error);
+    if (session.onError) {
+      session.onError(error);
+    }
   }
 
   function forwardAudio(event) {
@@ -192,191 +276,57 @@
     return bytes;
   }
 
-  async function resetMediaToStart(mediaElement) {
-    mediaElement.pause();
-
-    try {
-      mediaElement.currentTime = 0;
-    } catch (error) {
-      throw new Error(`Could not seek Spotify playback to the start: ${error.message}`);
-    }
-
-    await waitForCondition(
-      () => Number(mediaElement.currentTime) <= 0.25,
-      app.config.timeouts.seekMs,
-      "Spotify did not settle at the start of the track in time.",
-    );
-  }
-
-  async function startPlayback(mediaElement) {
-    try {
-      await mediaElement.play();
-    } catch (error) {
-      throw new Error(`Spotify refused to start playback: ${error.message}`);
-    }
-
-    await waitForCondition(
-      () => !mediaElement.paused,
-      app.config.timeouts.playStartMs,
-      "Spotify stayed paused after playback was requested.",
-    );
-  }
-
-  async function waitForCondition(predicate, timeoutMs, timeoutMessage) {
-    const startedAt = performance.now();
-    while (performance.now() - startedAt < timeoutMs) {
-      if (predicate()) {
-        return;
-      }
-      await app.spotifyPage.sleep(50);
-    }
-    throw new Error(timeoutMessage);
-  }
-
-  async function collectPcmBytes(graph, mediaElement, durationSeconds) {
-    if (graph.activeSession) {
-      throw new Error("Another Spotify PCM capture is already running.");
-    }
-
-    const session = {
-      byteLength: 0,
-      channelCount: 0,
-      chunks: [],
-      complete: false,
-      durationSeconds,
-      error: null,
-      firstFrameAt: 0,
-      lastFrameAt: 0,
-      sampleRate: 0,
-      startedAt: performance.now(),
-    };
-    graph.activeSession = session;
-
-    try {
-      const timeoutMs = getCaptureTimeoutMs(durationSeconds);
-      let lastProgressAt = performance.now();
-      let lastCurrentTime = Number(mediaElement.currentTime) || 0;
-
-      while (true) {
-        if (session.error) {
-          throw session.error;
-        }
-
-        const now = performance.now();
-        const currentTime = Number(mediaElement.currentTime);
-        if (Number.isFinite(currentTime) && Math.abs(currentTime - lastCurrentTime) > 0.05) {
-          lastProgressAt = now;
-          lastCurrentTime = currentTime;
-        }
-
-        if (!session.firstFrameAt && now - session.startedAt > app.config.timeouts.firstAudioMs) {
-          throw new Error("Spotify playback started, but no decoded audio frames reached KTV420.");
-        }
-
-        if (session.complete || mediaElement.ended) {
-          break;
-        }
-
-        if (session.firstFrameAt && !app.spotifyPage.mediaSessionMatchesTrack()) {
-          const expectedTrack = app.spotifyPage.getExpectedTrackFromPageTitle();
-          const mediaSessionTrack = app.spotifyPage.getMediaSessionTrack();
-          throw new Error(
-            `Spotify changed playback before capture finished: expected "${expectedTrack.title}", now "${mediaSessionTrack.title || "unknown"}".`,
-          );
-        }
-
-        if (
-          session.firstFrameAt &&
-          isNearTrackEnd(mediaElement, durationSeconds) &&
-          session.lastFrameAt &&
-          now - session.lastFrameAt >= app.config.timeouts.trackEndIdleMs
-        ) {
-          break;
-        }
-
-        if (!isPlaying(mediaElement) && session.firstFrameAt && now - lastProgressAt > app.config.timeouts.pauseMs) {
-          throw new Error("Playback paused before the full-track PCM capture finished.");
-        }
-
-        if (now - session.startedAt > timeoutMs) {
-          throw new Error("Timed out while capturing full-track Spotify PCM audio.");
-        }
-
-        await app.spotifyPage.sleep(app.config.capture.pollMs);
-      }
-    } finally {
-      if (graph.activeSession === session) {
-        graph.activeSession = null;
-      }
-    }
-
-    if (!session.byteLength) {
-      throw new Error("No PCM bytes were captured from Spotify playback.");
-    }
-
-    const expectedByteLength = getExpectedByteLength(session);
-    if (expectedByteLength && session.byteLength < expectedByteLength) {
-      throw new Error(
-        `Spotify playback ended before full-track PCM capture finished: captured ${session.byteLength} of ${expectedByteLength} bytes.`,
-      );
-    }
-
-    return session;
-  }
-
-  function isPlaying(mediaElement) {
-    return (
-      app.mediaElements.isMediaElement(mediaElement) &&
-      !mediaElement.paused &&
-      !mediaElement.ended &&
-      mediaElement.readyState >= 2 &&
-      mediaElement.playbackRate > 0
-    );
-  }
-
-  function isNearTrackEnd(mediaElement, duration) {
-    const currentTime = Number(mediaElement.currentTime);
-    return (
-      Number.isFinite(duration) &&
-      duration > 0 &&
-      Number.isFinite(currentTime) &&
-      currentTime >= Math.max(0, duration - app.config.capture.endToleranceSeconds)
-    );
-  }
-
-  function getRequiredDurationSeconds(mediaElement) {
-    const duration = Number(mediaElement.duration);
-    if (
-      !Number.isFinite(duration) ||
-      duration <= 0
-    ) {
-      throw new Error("Spotify playback target did not expose a finite track duration.");
-    }
-
-    return duration;
-  }
-
-  function getExpectedByteLength(session) {
-    if (
-      !Number.isFinite(session.durationSeconds) ||
-      session.durationSeconds <= 0 ||
-      !session.sampleRate ||
-      !session.channelCount
-    ) {
+  function getExpectedByteLength(segment, endTimeSeconds, endedAtEnd) {
+    const start = segment.startTimeSeconds;
+    const end = endedAtEnd ? segment.durationSeconds : endTimeSeconds;
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
       return 0;
     }
 
-    return Math.round(session.durationSeconds * session.sampleRate) * session.channelCount * 2;
+    return Math.round((end - start) * segment.sampleRate) * segment.channelCount * 2;
   }
 
-  function getCaptureTimeoutMs(durationSeconds) {
-    return Math.min(
-      app.config.timeouts.captureMaxMs,
-      Math.max(
-        app.config.timeouts.captureMinMs,
-        Math.ceil(durationSeconds * 1000) + app.config.timeouts.capturePaddingMs,
-      ),
+  function getAllowedShortfallByteLength(segment) {
+    return (
+      Math.round(app.config.capture.edgeToleranceSeconds * segment.sampleRate) *
+      segment.channelCount *
+      2
     );
+  }
+
+  function formatCrop(startTimeSeconds, endTimeSeconds, durationSeconds, endedAtEnd) {
+    const startsAtBeginning = startTimeSeconds <= app.config.capture.edgeToleranceSeconds;
+    const finishesAtEnd = endedAtEnd ||
+      (
+        Number.isFinite(durationSeconds) &&
+        Number.isFinite(endTimeSeconds) &&
+        durationSeconds - endTimeSeconds <= app.config.capture.edgeToleranceSeconds
+      );
+
+    const start = startsAtBeginning ? "" : formatSeconds(startTimeSeconds);
+    const end = finishesAtEnd ? "" : formatSeconds(endTimeSeconds);
+    return start || end ? `${start}-${end}` : "";
+  }
+
+  function formatSeconds(value) {
+    if (!Number.isFinite(value)) {
+      return "";
+    }
+
+    return value.toFixed(6).replace(/\.?0+$/, "");
+  }
+
+  function normalizeTime(value) {
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0 ? number : 0;
+  }
+
+  function requireFinitePositiveNumber(value, message) {
+    const number = Number(value);
+    if (!Number.isFinite(number) || number <= 0) {
+      throw new Error(message);
+    }
+    return number;
   }
 
   function concatenateChunks(chunks, byteLength) {
@@ -403,5 +353,16 @@
     return btoa(binary);
   }
 
-  app.pcmCapture = { captureMediaElement };
+  function createDeferred() {
+    let resolve;
+    let reject;
+    const promise = new Promise((resolvePromise, rejectPromise) => {
+      resolve = resolvePromise;
+      reject = rejectPromise;
+    });
+    promise.catch(() => {});
+    return { promise, reject, resolve };
+  }
+
+  app.pcmCapture = { createSession };
 })();

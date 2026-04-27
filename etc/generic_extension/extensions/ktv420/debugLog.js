@@ -6,34 +6,32 @@
       type: "ktv420-debug-log",
       version: 1,
       timestamp: new Date().toISOString(),
-      input: {
-        normalizedTrackId: context.normalizedTrackId || "",
-        raw: context.rawInput || "",
-      },
       error: {
         message: error?.message || String(error),
         name: error?.name || "",
         stack: error?.stack || "",
       },
       timings: context.timings?.entries || [],
-      route: {
-        href: location.href,
-        isExpectedTrackPage: context.normalizedTrackId
-          ? app.trackId.isTrackPageFor(context.normalizedTrackId)
-          : false,
-        pathname: location.pathname,
-        routeTrackId: app.trackId.getTrackIdFromPathname(),
-      },
-      playButton: app.spotifyPage.describeCurrentPlayButton(),
-      media: app.playbackCapture.describeMediaAcrossFrames(),
-      mediaSession: describeMediaSession(),
-      expectedTrack: app.spotifyPage.getExpectedTrackFromPageTitle(),
-      mediaSessionMatchesExpected: app.spotifyPage.mediaSessionMatchesTrack(),
-      frame: describeFrame(),
-      dom: describeDom(),
-      performanceEntries: describePerformanceEntries(),
+      playbackState: safelyDescribe(() => app.playbackState?.describe()),
+      media: safelyDescribe(() => app.playbackCapture?.describeMediaAcrossFrames()),
+      mediaSession: safelyDescribe(describeMediaSession),
+      route: safelyDescribe(describeRoute),
+      frame: safelyDescribe(describeFrame),
+      dom: safelyDescribe(describeDom),
+      performanceEntries: safelyDescribe(describePerformanceEntries),
       userAgent: navigator.userAgent,
     };
+  }
+
+  function safelyDescribe(describe) {
+    try {
+      const value = describe();
+      return value === undefined ? null : value;
+    } catch (error) {
+      return {
+        error: error?.message || String(error),
+      };
+    }
   }
 
   function describeMediaSession() {
@@ -46,6 +44,14 @@
       album: metadata.album || "",
       artist: metadata.artist || "",
       title: metadata.title || "",
+    };
+  }
+
+  function describeRoute() {
+    return {
+      href: location.href,
+      pathname: location.pathname,
+      routeTrackId: app.trackId.getTrackIdFromPathname(),
     };
   }
 
@@ -64,14 +70,14 @@
       hasNowPlayingWidget: Boolean(document.querySelector('[data-testid="now-playing-widget"]')),
       hasSpotifyRoot: Boolean(document.querySelector('[data-testid="root"]')),
       iframeCount: document.querySelectorAll("iframe").length,
-      spotifyLogoPath: app.spotifyPage.buildElementPath(
+      spotifyLogoPath: app.spotifyPage?.buildElementPath?.(
         document.querySelector('[data-encore-id="logoSpotify"]'),
-      ),
+      ) || "",
     };
   }
 
   function describePerformanceEntries() {
-    const pattern = /(audio|media|playback|spotify|track|video)/i;
+    const pattern = /(audio|connect-state|media|playback|spotify|track|video)/i;
     return performance
       .getEntriesByType("resource")
       .filter((entry) => pattern.test(entry.name))

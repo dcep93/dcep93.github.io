@@ -1,33 +1,10 @@
 (() => {
   const app = window.KTV420 || (window.KTV420 = {});
-
-  function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  async function waitForValue(getter, timeoutMs, timeoutMessage, pollMs = 100) {
-    const startedAt = performance.now();
-    let lastError = null;
-
-    while (performance.now() - startedAt < timeoutMs) {
-      try {
-        const value = await getter();
-        if (value) {
-          return value;
-        }
-      } catch (error) {
-        lastError = error;
-      }
-
-      await sleep(pollMs);
-    }
-
-    if (lastError?.message) {
-      throw new Error(`${timeoutMessage} Last error: ${lastError.message}`);
-    }
-
-    throw new Error(timeoutMessage);
-  }
+  const STATE_URL_PATTERN =
+    /\/(?:track-playback\/v1\/devices\/[^/?#]+\/state|connect-state\/v1\/(?:devices|player)(?:[/?#]|\/|$))/i;
+  const playbackStateListeners = new Set();
+  let currentTrack = null;
+  let lastObservation = null;
 
   function buildElementPath(element) {
     if (!element || element.nodeType !== Node.ELEMENT_NODE) {
@@ -49,156 +26,10 @@
     return segments.join(" > ");
   }
 
-  function isVisible(element) {
-    if (!(element instanceof Element)) {
-      return false;
-    }
-
-    const style = getComputedStyle(element);
-    return (
-      style.display !== "none" &&
-      style.visibility !== "hidden" &&
-      style.opacity !== "0" &&
-      element.getClientRects().length > 0
-    );
-  }
-
-  function getSpotifyAppRoot() {
-    const root = document.querySelector('[data-testid="root"]');
-    if (!root) {
-      throw new Error('Spotify did not expose [data-testid="root"].');
-    }
-
-    return root;
-  }
-
-  function getVisibleTrackPagePlayButtons() {
-    return Array.from(
-      getSpotifyAppRoot().querySelectorAll(
-        '[data-testid="play-button"], button[aria-label^="Play"], button[aria-label^="Pause"]',
-      ),
-    )
-      .filter((button) => button instanceof HTMLElement)
-      .filter((button) => !button.closest('[data-testid="now-playing-bar"]'))
-      .filter((button) => !button.disabled)
-      .filter(isVisible);
-  }
-
-  function getTrackPagePlayButton() {
-    const buttons = getVisibleTrackPagePlayButtons();
-    const expectedTrack = getExpectedTrackFromPageTitle();
-    const expectedTitle = expectedTrack.title;
-
-    if (expectedTitle) {
-      const labelButtons = buttons.filter((button) =>
-        playButtonLabelMatchesTrack(button, expectedTrack),
-      );
-      if (labelButtons.length === 1) {
-        return labelButtons[0];
-      }
-
-      const contextButtons = buttons.filter((button) =>
-        playButtonContextMatchesTrack(button, expectedTrack),
-      );
-      if (contextButtons.length !== 1) {
-        throw new Error(
-          `Expected one visible track play button for "${expectedTitle}", found ${contextButtons.length} context match(es) and ${labelButtons.length} label match(es) among ${buttons.length}.`,
-        );
-      }
-
-      return contextButtons[0];
-    }
-
-    if (buttons.length !== 1) {
-      throw new Error(`Expected one visible track play button, found ${buttons.length}.`);
-    }
-
-    return buttons[0];
-  }
-
-  function getExpectedTrackFromPageTitle() {
-    let title = String(document.title || "").trim();
-    let artist = "";
-
-    title = title.replace(/\s*\|\s*Spotify\s*$/i, "").trim();
-
-    const songAndLyricsMatch = title.match(/^(.+?)\s+-\s+song and lyrics by\s+(.+)$/i);
-    if (songAndLyricsMatch) {
-      return {
-        artist: normalizeText(songAndLyricsMatch[2]),
-        title: normalizeText(songAndLyricsMatch[1]),
-      };
-    }
-
-    const dotParts = title.split(/\s+•\s+/);
-    if (dotParts.length >= 2) {
-      artist = dotParts.slice(1).join(" ");
-      title = dotParts[0];
-    }
-
-    return {
-      artist: normalizeText(artist),
-      title: normalizeText(title),
-    };
-  }
-
-  function normalizeText(value) {
-    return String(value || "")
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, " ");
-  }
-
-  function playButtonLabelMatchesTrack(button, expectedTrack) {
-    const label = normalizeText(button.getAttribute("aria-label"));
-    if (!expectedTrack.title || !label.includes(expectedTrack.title)) {
-      return false;
-    }
-
-    return !expectedTrack.artist || label.includes(expectedTrack.artist);
-  }
-
-  function playButtonContextMatchesTrack(button, expectedTrack) {
-    if (!expectedTrack.title) {
-      return false;
-    }
-
-    let current = button.parentElement;
-    let depth = 0;
-
-    while (current && depth < 8) {
-      const text = normalizeText(current.textContent);
-      const textIsLocalEnough = text.length > 0 && text.length <= 4000;
-      if (
-        textIsLocalEnough &&
-        text.includes(expectedTrack.title) &&
-        (!expectedTrack.artist || text.includes(expectedTrack.artist))
-      ) {
-        return true;
-      }
-
-      if (current.getAttribute("data-testid") === "root") {
-        return false;
-      }
-
-      current = current.parentElement;
-      depth += 1;
-    }
-
-    return false;
-  }
-
-  function getMediaSessionTrack() {
-    const metadata = getMediaSessionMetadata();
-    return {
-      artist: normalizeText(metadata.artist),
-      title: normalizeText(metadata.title),
-    };
-  }
-
   function getMediaSessionMetadata() {
     const metadata = navigator.mediaSession?.metadata;
     return {
+      album: String(metadata?.album || "").trim(),
       artist: String(metadata?.artist || "").trim(),
       title: String(metadata?.title || "").trim(),
     };
@@ -219,128 +50,385 @@
     };
   }
 
-  function mediaSessionMatchesTrack(expectedTrack = getExpectedTrackFromPageTitle()) {
-    const currentTrack = getMediaSessionTrack();
-    if (!expectedTrack.title || !currentTrack.title) {
-      return false;
-    }
-
-    if (currentTrack.title !== expectedTrack.title) {
-      return false;
-    }
-
-    return !expectedTrack.artist || !currentTrack.artist || currentTrack.artist.includes(expectedTrack.artist);
+  function normalizeText(value) {
+    return String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
   }
 
-  function getPlayButtonIntent(button) {
-    const label = String(button?.getAttribute("aria-label") || "").trim();
-    if (/^play(?:\b|$)/i.test(label)) {
-      return "play";
-    }
-    if (/^pause(?:\b|$)/i.test(label)) {
-      return "pause";
-    }
-
-    throw new Error(`Expected a Play or Pause button label, found "${label || "empty"}".`);
-  }
-
-  async function waitForTrackPagePlayButton(trackId) {
-    return waitForValue(
-      () => {
-        if (!app.trackId.isTrackPageFor(trackId)) {
-          return null;
-        }
-
-        return getTrackPagePlayButton();
-      },
-      app.config.timeouts.playButtonMs,
-      "Spotify did not finish rendering the requested track page in time.",
+  function textMatches(left, right) {
+    const normalizedLeft = normalizeText(left);
+    const normalizedRight = normalizeText(right);
+    return Boolean(
+      normalizedLeft &&
+        normalizedRight &&
+        (normalizedLeft === normalizedRight ||
+          normalizedLeft.includes(normalizedRight) ||
+          normalizedRight.includes(normalizedLeft)),
     );
-  }
-
-  async function ensureRequestedTrackPlayback(trackId, timings) {
-    const normalizedTrackId = app.trackId.requireTrackId(trackId);
-    if (!app.trackId.isTrackPageFor(normalizedTrackId)) {
-      throw new Error("Spotify is not on the requested track page.");
-    }
-
-    const playingTargets = app.mediaElements.getPlayingTargetsAcrossFrames();
-    if (playingTargets.length === 1 && mediaSessionMatchesTrack()) {
-      timings?.mark("requested_track_already_current");
-      return;
-    }
-
-    const button = await waitForTrackPagePlayButton(normalizedTrackId);
-    const intent = getPlayButtonIntent(button);
-
-    if (intent === "pause") {
-      timings?.mark("requested_track_already_current");
-      return;
-    }
-
-    button.click();
-    timings?.mark("play_clicked");
-
-    await waitForValue(
-      () => {
-        const currentButton = getTrackPagePlayButton();
-        return getPlayButtonIntent(currentButton) === "pause" ? currentButton : null;
-      },
-      app.config.timeouts.playStartMs,
-      "Spotify did not switch the requested track button to Pause after clicking Play.",
-    );
-
-    timings?.mark("requested_track_current");
-  }
-
-  function describeCurrentPlayButton() {
-    try {
-      const button = getTrackPagePlayButton();
-      return {
-        ariaLabel: button.getAttribute("aria-label") || "",
-        disabled: Boolean(button.disabled),
-        expectedTrack: getExpectedTrackFromPageTitle(),
-        intent: getPlayButtonIntent(button),
-        mediaSessionTrack: getMediaSessionTrack(),
-        path: buildElementPath(button),
-      };
-    } catch (error) {
-      return {
-        error: error.message,
-        expectedTrack: getExpectedTrackFromPageTitle(),
-        mediaSessionMatchesExpected: mediaSessionMatchesTrack(),
-        mediaSessionTrack: getMediaSessionTrack(),
-        visiblePlayButtons: summarizeVisiblePlayButtons(),
-      };
-    }
-  }
-
-  function summarizeVisiblePlayButtons() {
-    try {
-      return getVisibleTrackPagePlayButtons().slice(0, 12).map((button) => ({
-        ariaLabel: button.getAttribute("aria-label") || "",
-        path: buildElementPath(button),
-      }));
-    } catch (_error) {
-      return [];
-    }
   }
 
   app.spotifyPage = {
     buildElementPath,
-    describeCurrentPlayButton,
-    ensureRequestedTrackPlayback,
-    getExpectedTrackFromPageTitle,
     getMediaSessionMetadata,
-    getMediaSessionTrack,
-    getPlayButtonIntent,
-    getSpotifyAppRoot,
-    getTrackPagePlayButton,
-    isVisible,
-    mediaSessionMatchesTrack,
     normalizeText,
     requireMediaSessionTrackMetadata,
-    sleep,
-    waitForValue,
+    textMatches,
   };
+
+  installPlaybackStateHooks();
+
+  function installPlaybackStateHooks() {
+    installFetchHook();
+    installXhrHook();
+
+    app.playbackState = {
+      describe: describePlaybackState,
+      onTrackChange,
+      requireCurrentTrack,
+    };
+  }
+
+  function installFetchHook() {
+    if (window.__ktv420FetchHookInstalled || typeof window.fetch !== "function") {
+      return;
+    }
+
+    window.__ktv420FetchHookInstalled = true;
+    const nativeFetch = window.fetch;
+
+    window.fetch = async function ktv420Fetch(input, init) {
+      const response = await nativeFetch.apply(this, arguments);
+      const url = getFetchUrl(input, response);
+      if (isPlaybackStateUrl(url)) {
+        inspectFetchResponse(url, response);
+      }
+      return response;
+    };
+  }
+
+  function installXhrHook() {
+    if (window.__ktv420XhrHookInstalled || typeof XMLHttpRequest !== "function") {
+      return;
+    }
+
+    window.__ktv420XhrHookInstalled = true;
+    const nativeOpen = XMLHttpRequest.prototype.open;
+    const nativeSend = XMLHttpRequest.prototype.send;
+
+    XMLHttpRequest.prototype.open = function ktv420Open(method, url, ...args) {
+      this.__ktv420PlaybackStateUrl = resolveUrl(url);
+      return nativeOpen.call(this, method, url, ...args);
+    };
+
+    XMLHttpRequest.prototype.send = function ktv420Send(...args) {
+      const url = this.__ktv420PlaybackStateUrl || "";
+      if (isPlaybackStateUrl(url)) {
+        this.addEventListener("loadend", () => inspectXhrResponse(url, this), { once: true });
+      }
+      return nativeSend.apply(this, args);
+    };
+  }
+
+  function getFetchUrl(input, response) {
+    if (typeof input === "string") {
+      return resolveUrl(input);
+    }
+    if (input instanceof URL) {
+      return resolveUrl(input.href);
+    }
+    if (input?.url) {
+      return resolveUrl(input.url);
+    }
+    return resolveUrl(response?.url || "");
+  }
+
+  function resolveUrl(value) {
+    try {
+      return new URL(String(value || ""), location.href).href;
+    } catch (_error) {
+      return String(value || "");
+    }
+  }
+
+  function isPlaybackStateUrl(url) {
+    return STATE_URL_PATTERN.test(String(url || ""));
+  }
+
+  function inspectFetchResponse(url, response) {
+    if (!response || !response.ok) {
+      return;
+    }
+
+    response
+      .clone()
+      .text()
+      .then((text) => inspectResponseText(url, text))
+      .catch((error) => rememberObservation(url, [], error));
+  }
+
+  function inspectXhrResponse(url, xhr) {
+    if (!xhr || xhr.status < 200 || xhr.status >= 300) {
+      return;
+    }
+
+    try {
+      if (xhr.responseType === "json") {
+        inspectPayload(url, xhr.response);
+        return;
+      }
+      if (xhr.responseType && xhr.responseType !== "text") {
+        return;
+      }
+      inspectResponseText(url, xhr.responseText);
+    } catch (error) {
+      rememberObservation(url, [], error);
+    }
+  }
+
+  function inspectResponseText(url, text) {
+    const trimmed = String(text || "").trim();
+    if (!trimmed) {
+      return;
+    }
+    inspectPayload(url, JSON.parse(trimmed));
+  }
+
+  function inspectPayload(url, payload) {
+    const candidates = extractTrackCandidates(payload);
+    const selected = selectCandidate(candidates, getMediaSessionMetadata());
+    rememberObservation(url, candidates, null, selected);
+    if (selected) {
+      setCurrentTrack(selected, url);
+    }
+  }
+
+  function rememberObservation(url, candidates, error = null, selected = null) {
+    lastObservation = {
+      candidateCount: candidates.length,
+      candidates: candidates.slice(0, 8).map(summarizeCandidate),
+      error: error?.message || "",
+      selected: selected ? summarizeCandidate(selected) : null,
+      timestamp: new Date().toISOString(),
+      url,
+    };
+  }
+
+  function extractTrackCandidates(payload) {
+    const candidates = [];
+    const seenObjects = new Set();
+
+    function visit(value, path) {
+      if (!value || typeof value !== "object" || seenObjects.has(value)) {
+        return;
+      }
+
+      seenObjects.add(value);
+      collectObjectCandidates(value, path, candidates);
+
+      if (Array.isArray(value)) {
+        value.forEach((item, index) => visit(item, path.concat(String(index))));
+        return;
+      }
+
+      for (const [key, childValue] of Object.entries(value)) {
+        visit(childValue, path.concat(key));
+      }
+    }
+
+    visit(payload, []);
+    return candidates;
+  }
+
+  function collectObjectCandidates(object, path, candidates) {
+    for (const [key, value] of Object.entries(object)) {
+      const trackId = typeof value === "string" ? app.trackId.getTrackIdFromUri(value) : "";
+      if (!trackId) {
+        continue;
+      }
+
+      const candidatePath = path.concat(key).join(".");
+      candidates.push({
+        path: candidatePath,
+        score: scoreCandidate(candidatePath, object),
+        trackArtist: extractArtist(object),
+        trackId,
+        trackName: extractTrackName(object),
+      });
+    }
+  }
+
+  function extractTrackName(object) {
+    const metadata = object.metadata && typeof object.metadata === "object" ? object.metadata : {};
+    return firstString(
+      object.name,
+      object.title,
+      object.track_name,
+      metadata.name,
+      metadata.title,
+      metadata.track_name,
+    );
+  }
+
+  function extractArtist(object) {
+    const metadata = object.metadata && typeof object.metadata === "object" ? object.metadata : {};
+    const artistFromArray = Array.isArray(object.artists)
+      ? object.artists.map((artist) => artist?.name || artist).filter(Boolean).join(", ")
+      : "";
+
+    return firstString(
+      artistFromArray,
+      object.artist,
+      object.artist_name,
+      object.artistName,
+      metadata.artist,
+      metadata.artist_name,
+      metadata.artistName,
+    );
+  }
+
+  function firstString(...values) {
+    for (const value of values) {
+      const text = String(value || "").trim();
+      if (text) {
+        return text;
+      }
+    }
+    return "";
+  }
+
+  function scoreCandidate(path, object) {
+    const pathText = path.toLowerCase();
+    const text = `${path} ${Object.keys(object).join(" ")}`.toLowerCase();
+    let score = 0;
+
+    if (/player[_-]?state|now|current|playing/.test(text)) {
+      score += 80;
+    }
+    if (/\btrack\b|item|episode/.test(text)) {
+      score += 40;
+    }
+    if (extractTrackName(object)) {
+      score += 20;
+    }
+    if (extractArtist(object)) {
+      score += 20;
+    }
+    if (/queue|next|previous|recent|history|context|playlist|album/.test(pathText)) {
+      score -= 80;
+    }
+
+    return score;
+  }
+
+  function selectCandidate(candidates, mediaSessionMetadata) {
+    if (!candidates.length) {
+      return null;
+    }
+
+    const scored = candidates.map((candidate) => ({
+      ...candidate,
+      score: candidate.score + mediaSessionScore(candidate, mediaSessionMetadata),
+    }));
+
+    const byScore = scored
+      .slice()
+      .sort((left, right) =>
+        right.score - left.score ||
+        left.path.localeCompare(right.path) ||
+        left.trackId.localeCompare(right.trackId),
+      );
+
+    const bestScore = byScore[0].score;
+    const best = byScore.filter((candidate) => candidate.score === bestScore);
+    const bestTrackIds = Array.from(new Set(best.map((candidate) => candidate.trackId)));
+    if (bestTrackIds.length !== 1) {
+      return null;
+    }
+
+    return byScore[0];
+  }
+
+  function mediaSessionScore(candidate, metadata) {
+    let score = 0;
+    if (candidate.trackName && textMatches(candidate.trackName, metadata.title)) {
+      score += 100;
+    }
+    if (candidate.trackArtist && textMatches(candidate.trackArtist, metadata.artist)) {
+      score += 100;
+    }
+    return score;
+  }
+
+  function setCurrentTrack(candidate, sourceUrl) {
+    const previousTrack = currentTrack;
+    currentTrack = {
+      observedAt: new Date().toISOString(),
+      path: candidate.path,
+      sourceUrl,
+      trackArtist: candidate.trackArtist,
+      trackId: app.trackId.requireTrackId(candidate.trackId),
+      trackName: candidate.trackName,
+    };
+
+    if (!previousTrack || previousTrack.trackId !== currentTrack.trackId) {
+      emitTrackChange(currentTrack, previousTrack);
+    }
+  }
+
+  function emitTrackChange(track, previousTrack) {
+    const event = { previousTrack, track };
+    for (const listener of Array.from(playbackStateListeners)) {
+      try {
+        listener(event);
+      } catch (error) {
+        console.error("KTV420 trackchange listener failed.", error);
+      }
+    }
+  }
+
+  function onTrackChange(listener) {
+    playbackStateListeners.add(listener);
+    return () => playbackStateListeners.delete(listener);
+  }
+
+  function requireCurrentTrack(expectedMetadata = requireMediaSessionTrackMetadata()) {
+    if (!currentTrack?.trackId) {
+      throw new Error("Spotify playback-state hook has not identified the current track id.");
+    }
+    if (currentTrack.trackName && !textMatches(currentTrack.trackName, expectedMetadata.trackName)) {
+      throw new Error(
+        `Spotify playback-state track name "${currentTrack.trackName}" does not match Media Session "${expectedMetadata.trackName}".`,
+      );
+    }
+    if (currentTrack.trackArtist && !textMatches(currentTrack.trackArtist, expectedMetadata.trackArtist)) {
+      throw new Error(
+        `Spotify playback-state artist "${currentTrack.trackArtist}" does not match Media Session "${expectedMetadata.trackArtist}".`,
+      );
+    }
+
+    return {
+      trackArtist: expectedMetadata.trackArtist,
+      trackId: currentTrack.trackId,
+      trackName: expectedMetadata.trackName,
+    };
+  }
+
+  function summarizeCandidate(candidate) {
+    return {
+      path: candidate.path,
+      score: candidate.score,
+      trackArtist: candidate.trackArtist,
+      trackId: candidate.trackId,
+      trackName: candidate.trackName,
+    };
+  }
+
+  function describePlaybackState() {
+    return {
+      currentTrack,
+      lastObservation,
+    };
+  }
 })();

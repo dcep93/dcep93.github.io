@@ -1,6 +1,7 @@
 (() => {
   const app = window.KTV420 || (window.KTV420 = {});
   const TRACK_ID_PATTERN = /^[A-Za-z0-9]{22}$/;
+  const TRACK_URI_PATTERN = /spotify:track:([A-Za-z0-9]{22})/i;
 
   function normalizeTrackId(value) {
     const text = String(value || "").trim();
@@ -29,10 +30,15 @@
   function requireTrackId(value) {
     const trackId = normalizeTrackId(value);
     if (!trackId) {
-      throw new Error("Enter a valid 22-character Spotify track id.");
+      throw new Error("Spotify did not expose a valid 22-character track id.");
     }
 
     return trackId;
+  }
+
+  function getTrackIdFromUri(value) {
+    const match = String(value || "").match(TRACK_URI_PATTERN);
+    return match?.[1] || "";
   }
 
   function getTrackIdFromPathname(pathname = location.pathname) {
@@ -40,19 +46,9 @@
     return match?.[1] || "";
   }
 
-  function isTrackPageFor(trackId, pathname = location.pathname) {
-    const normalizedTrackId = normalizeTrackId(trackId);
-    return Boolean(normalizedTrackId && getTrackIdFromPathname(pathname) === normalizedTrackId);
-  }
-
-  function buildTrackUrl(trackId) {
-    return new URL(`/track/${requireTrackId(trackId)}`, location.origin).toString();
-  }
-
   app.trackId = {
-    buildTrackUrl,
     getTrackIdFromPathname,
-    isTrackPageFor,
+    getTrackIdFromUri,
     normalizeTrackId,
     requireTrackId,
   };

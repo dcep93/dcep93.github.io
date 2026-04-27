@@ -34,11 +34,15 @@
       for (const eventName of [
         "canplay",
         "durationchange",
+        "emptied",
+        "error",
         "loadeddata",
         "loadedmetadata",
         "pause",
         "play",
         "playing",
+        "ratechange",
+        "seeking",
         "seeked",
         "timeupdate",
       ]) {
