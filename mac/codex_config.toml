@@ -4,3 +4,6 @@ model_reasoning_effort = "high"
 
 [plugins."github@openai-curated"]
 enabled = true
+
+[projects."/Users/danielcepeda/repos"]
+trust_level = "trusted"
