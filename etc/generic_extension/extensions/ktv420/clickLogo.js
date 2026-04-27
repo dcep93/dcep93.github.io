@@ -547,6 +547,19 @@ async function ensureCaptureGraph(mediaElement) {
             return;
         }
 
+        if (!session.audioSampleRate) {
+            session.audioSampleRate = Number(event.inputBuffer?.sampleRate || 0) || 0;
+        }
+        if (!session.audioChannelCount) {
+            session.audioChannelCount = Math.min(
+                Number(event.inputBuffer?.numberOfChannels || 0) || 0,
+                2,
+            );
+        }
+        if (!session.audioSampleFormat) {
+            session.audioSampleFormat = "PCM_S16LE";
+        }
+
         const pcmBytes = audioBufferToPcmBytes(event.inputBuffer);
         if (!pcmBytes.length) {
             return;
@@ -683,8 +696,8 @@ async function waitForCondition(predicate, timeoutMs, timeoutMessage) {
 }
 
 async function captureTrackMd5(graph, mediaElement, trackInfo) {
-    const bytes = await captureTrackAudioBytes(graph, mediaElement, trackInfo);
-    return md5Hex(bytes);
+    const capture = await captureTrackAudioBytes(graph, mediaElement, trackInfo);
+    return md5Hex(capture.bytes);
 }
 
 async function captureTrackAudioBytes(graph, mediaElement, trackInfo) {
@@ -801,7 +814,12 @@ async function captureTrackAudioBytes(graph, mediaElement, trackInfo) {
         throw new Error("No audio bytes were captured for the current track.");
     }
 
-    return concatenateChunks(session.chunks, session.byteLength);
+    return {
+        audioChannelCount: Number(session.audioChannelCount || 0) || 0,
+        audioSampleFormat: String(session.audioSampleFormat || "PCM_S16LE"),
+        audioSampleRate: Number(session.audioSampleRate || 0) || 0,
+        bytes: concatenateChunks(session.chunks, session.byteLength),
+    };
 }
 
 function concatenateChunks(chunks, totalLength) {
@@ -836,6 +854,59 @@ function bytesToBase64(bytes) {
     }
 
     return btoa(binary);
+}
+
+function base64ToBytes(base64Value) {
+    const normalizedBase64 = String(base64Value || "").trim();
+    if (!normalizedBase64) {
+        return new Uint8Array(0);
+    }
+
+    const binary = atob(normalizedBase64);
+    const bytes = new Uint8Array(binary.length);
+
+    for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+    }
+
+    return bytes;
+}
+
+function normalizePcmSampleFormat(sampleFormat) {
+    const normalized = String(sampleFormat || "").trim().toUpperCase();
+    return normalized === "S16LE" ? "PCM_S16LE" : normalized;
+}
+
+async function ensureTrackHashResultHasMp3BytesBase64(result) {
+    if (!result || typeof result !== "object") {
+        return result;
+    }
+
+    const audioDataBase64 = String(result.audioDataBase64 || "");
+    const normalizedFormat = inferTrackHashFormat(result?.format, result?.assetUrl || "");
+    const normalizedSampleFormat = normalizePcmSampleFormat(
+        result?.audioSampleFormat || normalizedFormat,
+    );
+
+    if (!audioDataBase64) {
+        return {
+            ...result,
+            audioChannelLayout: String(result.audioChannelLayout || ""),
+            audioSampleFormat: normalizedSampleFormat || String(result.audioSampleFormat || ""),
+            mp3BytesBase64: String(result.mp3BytesBase64 || ""),
+        };
+    }
+
+    return {
+        ...result,
+        audioChannelCount: Number(result.audioChannelCount || 0) || 0,
+        audioChannelLayout:
+            String(result.audioChannelLayout || "") ||
+            (/^PCM(?:_|$)|^S16LE$/i.test(normalizedFormat) ? "interleaved" : ""),
+        audioSampleFormat: normalizedSampleFormat || String(result.audioSampleFormat || ""),
+        audioSampleRate: Number(result.audioSampleRate || 0) || 0,
+        mp3BytesBase64: String(result.mp3BytesBase64 || ""),
+    };
 }
 
 function sleep(ms) {
@@ -2590,13 +2661,18 @@ function getCachedTrackHashResult(trackId) {
 
     return {
         assetUrl: String(cacheEntry.assetUrl || ""),
+        audioChannelCount: Number(rawAudioEntry?.audioChannelCount || 0) || 0,
+        audioChannelLayout: String(rawAudioEntry?.audioChannelLayout || ""),
         audioByteLength: Number(rawAudioEntry?.audioByteLength || 0) || 0,
         audioDataBase64: String(rawAudioEntry?.audioDataBase64 || ""),
         audioDataEncoding: String(rawAudioEntry?.audioDataEncoding || ""),
+        audioSampleFormat: String(rawAudioEntry?.audioSampleFormat || ""),
+        audioSampleRate: Number(rawAudioEntry?.audioSampleRate || 0) || 0,
         capturedAt: String(cacheEntry.capturedAt || ""),
         fileId: normalizeSpotifyFileId(cacheEntry.fileId),
         format: String(cacheEntry.format || ""),
         md5: String(cacheEntry.md5 || ""),
+        mp3BytesBase64: String(rawAudioEntry?.mp3BytesBase64 || ""),
         source: "cache",
         trackId: normalizedTrackId,
     };
@@ -2631,9 +2707,14 @@ function cacheTrackHashResult(result) {
 
     if (result?.audioDataBase64) {
         getTrackHashRawAudioCacheStore()[normalizedTrackId] = {
+            audioChannelCount: Number(result.audioChannelCount || 0) || 0,
+            audioChannelLayout: String(result.audioChannelLayout || ""),
             audioByteLength: Number(result.audioByteLength || 0) || 0,
             audioDataBase64: String(result.audioDataBase64 || ""),
             audioDataEncoding: String(result.audioDataEncoding || "base64"),
+            audioSampleFormat: String(result.audioSampleFormat || ""),
+            audioSampleRate: Number(result.audioSampleRate || 0) || 0,
+            mp3BytesBase64: String(result.mp3BytesBase64 || ""),
         };
     }
 }
@@ -3623,14 +3704,19 @@ async function captureCurrentFramePlaybackHashResult(trackInfo, normalizedTrackI
     const graph = await ensureCaptureGraph(mediaElement);
     await graph.audioContext.resume();
     await resetTrackToStart(mediaElement);
-    const bytesPromise = captureTrackAudioBytes(graph, mediaElement, trackInfo);
+    const capturePromise = captureTrackAudioBytes(graph, mediaElement, trackInfo);
     await ensurePlaybackIsRunning(mediaElement);
-    const bytes = await bytesPromise;
+    const capture = await capturePromise;
+    const bytes = capture.bytes;
 
     return {
+        audioChannelCount: capture.audioChannelCount,
+        audioChannelLayout: "interleaved",
         audioByteLength: bytes.length,
         audioDataBase64: bytesToBase64(bytes),
         audioDataEncoding: "base64",
+        audioSampleFormat: capture.audioSampleFormat,
+        audioSampleRate: capture.audioSampleRate,
         byteLength: bytes.length,
         format: "PCM_S16LE",
         md5: md5Hex(bytes),
@@ -4759,11 +4845,16 @@ function formatSuccessfulTrackHashAlert(result) {
 
 function buildSuccessfulTrackHashClipboardPayload(result) {
     return {
+        audioChannelCount: Number(result?.audioChannelCount || 0) || 0,
+        audioChannelLayout: String(result?.audioChannelLayout || ""),
         audioByteLength: Number(result?.audioByteLength || 0) || 0,
         audioDataBase64: String(result?.audioDataBase64 || ""),
         audioDataEncoding: String(result?.audioDataEncoding || ""),
+        audioSampleFormat: String(result?.audioSampleFormat || ""),
+        audioSampleRate: Number(result?.audioSampleRate || 0) || 0,
         format: inferTrackHashFormat(result?.format, result?.assetUrl || ""),
         md5: String(result?.md5 || ""),
+        mp3BytesBase64: String(result?.mp3BytesBase64 || ""),
         source: normalizeTrackHashSource(result?.source),
         timings: Array.isArray(result?.timings) ? result.timings : [],
         trackId: normalizeTrackIdInput(result?.trackId) || String(result?.trackId || ""),
@@ -5458,9 +5549,10 @@ async function requestTrackAssetHashFromCurrentPage(trackId) {
             timings,
         );
         timings.mark("md5_computed");
+        const enrichedAssetHash = await ensureTrackHashResultHasMp3BytesBase64(assetHash);
         cacheResolvedTrackAsset(normalizedTrackId, resolvedAsset);
-        cacheTrackHashResult(assetHash);
-        return assetHash;
+        cacheTrackHashResult(enrichedAssetHash);
+        return enrichedAssetHash;
     } catch (assetResolutionError) {
         timings.mark("asset_resolution_failed");
         throw new Error(
@@ -5485,8 +5577,9 @@ async function resolveRequestedTrackAssetHash(trackId) {
             timings,
         );
         timings.mark("md5_computed");
-        cacheTrackHashResult(assetHash);
-        return assetHash;
+        const enrichedAssetHash = await ensureTrackHashResultHasMp3BytesBase64(assetHash);
+        cacheTrackHashResult(enrichedAssetHash);
+        return enrichedAssetHash;
     }
 
     return requestTrackAssetHashFromCurrentPage(normalizedTrackId);
@@ -5507,21 +5600,24 @@ async function requestTrackPlaybackHashFromCurrentPage(trackId) {
         normalizedTrackId,
     );
     timings.mark("playback_pcm_hash_captured");
-    const result = {
+    const result = await ensureTrackHashResultHasMp3BytesBase64({
         ...playbackHash,
         timings: timings.entries,
-    };
+    });
     cacheTrackHashResult(result);
     return result;
 }
 
 async function reportSuccessfulTrackHashResult(assetHash) {
+    const enrichedResult = await ensureTrackHashResultHasMp3BytesBase64(assetHash);
     const normalizedResult = {
-        ...assetHash,
-        format: inferTrackHashFormat(assetHash?.format, assetHash?.assetUrl || ""),
-        source: normalizeTrackHashSource(assetHash?.source),
-        timings: Array.isArray(assetHash?.timings) ? assetHash.timings : [],
-        trackId: normalizeTrackIdInput(assetHash?.trackId) || String(assetHash?.trackId || ""),
+        ...enrichedResult,
+        format: inferTrackHashFormat(enrichedResult?.format, enrichedResult?.assetUrl || ""),
+        source: normalizeTrackHashSource(enrichedResult?.source),
+        timings: Array.isArray(enrichedResult?.timings) ? enrichedResult.timings : [],
+        trackId:
+            normalizeTrackIdInput(enrichedResult?.trackId) ||
+            String(enrichedResult?.trackId || ""),
     };
     const resultText = formatSuccessfulTrackHashAlert(normalizedResult);
     window.__ktv420LastTrackIdResult = {
@@ -5575,7 +5671,7 @@ async function submitTrackId(trackIdInput, options = {}) {
                 : null;
             if (hasCompleteCachedTrackHashResult(cachedResult)) {
                 await reportSuccessfulTrackHashResult({
-                    ...cachedResult,
+                    ...(await ensureTrackHashResultHasMp3BytesBase64(cachedResult)),
                     timings: buildCachedTrackHashTimings(),
                 });
                 clearPendingTrackHashJob(normalizedTrackId);
