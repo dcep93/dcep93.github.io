@@ -877,12 +877,41 @@ function normalizePcmSampleFormat(sampleFormat) {
     return normalized === "S16LE" ? "PCM_S16LE" : normalized;
 }
 
+function normalizeFallbackPath(fallbackPath) {
+    if (!Array.isArray(fallbackPath)) {
+        return [];
+    }
+
+    const normalizedFallbackPath = [];
+
+    for (const step of fallbackPath) {
+        const normalizedStep = String(step || "").trim();
+        if (normalizedStep && !normalizedFallbackPath.includes(normalizedStep)) {
+            normalizedFallbackPath.push(normalizedStep);
+        }
+    }
+
+    return normalizedFallbackPath;
+}
+
+function appendFallbackStep(fallbackPath, step) {
+    const normalizedFallbackPath = normalizeFallbackPath(fallbackPath);
+    const normalizedStep = String(step || "").trim();
+
+    if (normalizedStep && !normalizedFallbackPath.includes(normalizedStep)) {
+        normalizedFallbackPath.push(normalizedStep);
+    }
+
+    return normalizedFallbackPath;
+}
+
 async function ensureTrackHashResultHasMp3BytesBase64(result) {
     if (!result || typeof result !== "object") {
         return result;
     }
 
     const audioDataBase64 = String(result.audioDataBase64 || "");
+    const fallbackPath = normalizeFallbackPath(result.fallbackPath);
     const normalizedFormat = inferTrackHashFormat(result?.format, result?.assetUrl || "");
     const normalizedSampleFormat = normalizePcmSampleFormat(
         result?.audioSampleFormat || normalizedFormat,
@@ -893,6 +922,7 @@ async function ensureTrackHashResultHasMp3BytesBase64(result) {
             ...result,
             audioChannelLayout: String(result.audioChannelLayout || ""),
             audioSampleFormat: normalizedSampleFormat || String(result.audioSampleFormat || ""),
+            fallbackPath,
             mp3BytesBase64: String(result.mp3BytesBase64 || ""),
         };
     }
@@ -905,6 +935,7 @@ async function ensureTrackHashResultHasMp3BytesBase64(result) {
             (/^PCM(?:_|$)|^S16LE$/i.test(normalizedFormat) ? "interleaved" : ""),
         audioSampleFormat: normalizedSampleFormat || String(result.audioSampleFormat || ""),
         audioSampleRate: Number(result.audioSampleRate || 0) || 0,
+        fallbackPath,
         mp3BytesBase64: String(result.mp3BytesBase64 || ""),
     };
 }
@@ -2669,6 +2700,7 @@ function getCachedTrackHashResult(trackId) {
         audioSampleFormat: String(rawAudioEntry?.audioSampleFormat || ""),
         audioSampleRate: Number(rawAudioEntry?.audioSampleRate || 0) || 0,
         capturedAt: String(cacheEntry.capturedAt || ""),
+        fallbackPath: normalizeFallbackPath(rawAudioEntry?.fallbackPath),
         fileId: normalizeSpotifyFileId(cacheEntry.fileId),
         format: String(cacheEntry.format || ""),
         md5: String(cacheEntry.md5 || ""),
@@ -2714,6 +2746,7 @@ function cacheTrackHashResult(result) {
             audioDataEncoding: String(result.audioDataEncoding || "base64"),
             audioSampleFormat: String(result.audioSampleFormat || ""),
             audioSampleRate: Number(result.audioSampleRate || 0) || 0,
+            fallbackPath: normalizeFallbackPath(result.fallbackPath),
             mp3BytesBase64: String(result.mp3BytesBase64 || ""),
         };
     }
@@ -2759,6 +2792,7 @@ function getResolvedTrackAssetCacheEntry(trackId) {
         currentTrackUri: String(
             cacheEntry.currentTrackUri || `spotify:track:${normalizedTrackId}`,
         ),
+        fallbackPath: normalizeFallbackPath(cacheEntry.fallbackPath),
         fileId: normalizeSpotifyFileId(cacheEntry.fileId),
         format: String(cacheEntry.format || ""),
         resolutionSource: String(cacheEntry.resolutionSource || ""),
@@ -2792,6 +2826,7 @@ function cacheResolvedTrackAsset(trackId, resolvedAsset) {
         capturedAt: new Date().toISOString(),
         currentTrackUri:
             resolvedAsset.currentTrackUri || `spotify:track:${normalizedTrackId}`,
+        fallbackPath: normalizeFallbackPath(resolvedAsset.fallbackPath),
         fileId: normalizeSpotifyFileId(resolvedAsset.fileId),
         format: String(resolvedAsset.format || ""),
         resolutionSource: String(resolvedAsset.resolutionSource || ""),
@@ -3718,6 +3753,7 @@ async function captureCurrentFramePlaybackHashResult(trackInfo, normalizedTrackI
         audioSampleFormat: capture.audioSampleFormat,
         audioSampleRate: capture.audioSampleRate,
         byteLength: bytes.length,
+        fallbackPath: [],
         format: "PCM_S16LE",
         md5: md5Hex(bytes),
         source: "playback-pcm",
@@ -3734,6 +3770,7 @@ async function capturePlaybackHashResultInThisFrameOrChildren(trackInfo, normali
         }
 
         return {
+            fallbackPath: ["child_frame_playback_capture"],
             format: "PCM_S16LE",
             md5: await requestHashFromChildFrames(trackInfo),
             source: "playback-pcm",
@@ -4370,6 +4407,7 @@ async function computeTrackAssetMd5FromResolvedAsset(
             byteLength: bytes.length,
             currentTrackUri:
                 resolvedAsset.currentTrackUri || `spotify:track:${normalizedTrackId}`,
+            fallbackPath: normalizeFallbackPath(resolvedAsset?.fallbackPath),
             fileId: resolvedAsset.fileId,
             format,
             md5: md5Hex(bytes),
@@ -4433,6 +4471,10 @@ async function computeTrackAssetMd5FromResolvedAsset(
                             byteLength: bytes.length,
                             currentTrackUri:
                                 resolvedAsset.currentTrackUri || `spotify:track:${normalizedTrackId}`,
+                            fallbackPath: appendFallbackStep(
+                                resolvedAsset?.fallbackPath,
+                                "byte_range_fetch",
+                            ),
                             fileId: resolvedAsset.fileId,
                             format,
                             md5: md5Hex(bytes),
@@ -4457,6 +4499,10 @@ async function computeTrackAssetMd5FromResolvedAsset(
                     byteLength: bytes.length,
                     currentTrackUri:
                         resolvedAsset.currentTrackUri || `spotify:track:${normalizedTrackId}`,
+                    fallbackPath: appendFallbackStep(
+                        resolvedAsset?.fallbackPath,
+                        "byte_range_fetch",
+                    ),
                     fileId: resolvedAsset.fileId,
                     format,
                     md5: md5Hex(bytes),
@@ -4497,13 +4543,19 @@ async function resolveAssetFromPlaybackState(deviceId) {
 
     if (currentTrackId) {
         try {
-            return await resolveAssetFromLivePlaybackUrls(currentTrackId);
+            return {
+                ...(await resolveAssetFromLivePlaybackUrls(currentTrackId)),
+                fallbackPath: ["live_playback_urls"],
+            };
         } catch (error) {
             playbackFailures.push(error?.message || "live-playback-url-failed");
         }
 
         try {
-            return await resolveAssetFromLocalPageState(currentTrackId);
+            return {
+                ...(await resolveAssetFromLocalPageState(currentTrackId)),
+                fallbackPath: ["local_page_state"],
+            };
         } catch (error) {
             playbackFailures.push(error?.message || "local-page-state-failed");
         }
@@ -4525,7 +4577,10 @@ async function resolveAssetFromPlaybackState(deviceId) {
         const currentTrack = pickCurrentTrackFromState(trackPlaybackState, currentTrackUri);
 
         if (currentTrack?.manifest) {
-            return resolveAssetFromManifest(currentTrack.manifest, currentTrackUri);
+            return {
+                ...resolveAssetFromManifest(currentTrack.manifest, currentTrackUri),
+                fallbackPath: ["device_track_playback_state"],
+            };
         }
 
         const refreshedCapturedManifestEntry = findLatestCapturedManifestTrackPlaybackEntry(
@@ -4533,10 +4588,13 @@ async function resolveAssetFromPlaybackState(deviceId) {
             attemptedDeviceIds,
         );
         if (refreshedCapturedManifestEntry?.currentTrack?.manifest) {
-            return resolveAssetFromManifest(
-                refreshedCapturedManifestEntry.currentTrack.manifest,
-                currentTrackUri,
-            );
+            return {
+                ...resolveAssetFromManifest(
+                    refreshedCapturedManifestEntry.currentTrack.manifest,
+                    currentTrackUri,
+                ),
+                fallbackPath: ["refreshed_captured_manifest"],
+            };
         }
     }
 
@@ -4546,7 +4604,10 @@ async function resolveAssetFromPlaybackState(deviceId) {
 
     if (currentTrackId) {
         try {
-            return await resolveAssetFromTrackMetadata(currentTrackId);
+            return {
+                ...(await resolveAssetFromTrackMetadata(currentTrackId)),
+                fallbackPath: ["track_metadata"],
+            };
         } catch (metadataError) {
             const attemptedDeviceSummary = attemptedDeviceIds.join(", ");
             const playbackFailureSummary = playbackFailures.slice(0, 5).join(", ");
@@ -4852,6 +4913,7 @@ function buildSuccessfulTrackHashClipboardPayload(result) {
         audioDataEncoding: String(result?.audioDataEncoding || ""),
         audioSampleFormat: String(result?.audioSampleFormat || ""),
         audioSampleRate: Number(result?.audioSampleRate || 0) || 0,
+        fallbackPath: normalizeFallbackPath(result?.fallbackPath),
         format: inferTrackHashFormat(result?.format, result?.assetUrl || ""),
         md5: String(result?.md5 || ""),
         mp3BytesBase64: String(result?.mp3BytesBase64 || ""),
@@ -5612,6 +5674,7 @@ async function reportSuccessfulTrackHashResult(assetHash) {
     const enrichedResult = await ensureTrackHashResultHasMp3BytesBase64(assetHash);
     const normalizedResult = {
         ...enrichedResult,
+        fallbackPath: normalizeFallbackPath(enrichedResult?.fallbackPath),
         format: inferTrackHashFormat(enrichedResult?.format, enrichedResult?.assetUrl || ""),
         source: normalizeTrackHashSource(enrichedResult?.source),
         timings: Array.isArray(enrichedResult?.timings) ? enrichedResult.timings : [],
