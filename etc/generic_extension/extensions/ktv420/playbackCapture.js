@@ -1,5 +1,7 @@
 (() => {
   const app = window.KTV420 || (window.KTV420 = {});
+  const STARTUP_SEEK_GRACE_MS = 3000;
+  const SEEK_JUMP_TOLERANCE_SECONDS = 1;
 
   function requireExactlyOneCaptureTarget() {
     const targets = app.mediaElements.getCaptureTargetsAcrossFrames();
@@ -32,6 +34,10 @@
     const results = [];
     let currentTrack = requireCurrentTrack();
     let active = true;
+    let lastStableMediaTime = Number(mediaElement.currentTime) || 0;
+    let lastStableWallTime = performance.now();
+    let pendingSeek = null;
+    let playbackStartedAt = 0;
     let rejectCapture;
     let resolveCapture;
 
@@ -49,7 +55,11 @@
           fail(new Error("Spotify playback rate changed during capture."));
         }
       }),
-      listen(mediaElement, "seeking", () => fail(new Error("Spotify playback seeked during capture."))),
+      listen(mediaElement, "play", () => rememberStablePlaybackTime()),
+      listen(mediaElement, "playing", () => rememberStablePlaybackTime()),
+      listen(mediaElement, "timeupdate", () => rememberStablePlaybackTime()),
+      listen(mediaElement, "seeking", () => rememberSeekStart()),
+      listen(mediaElement, "seeked", () => validateSeekEnd()),
       getPlaybackStateApi().onTrackChange((event) => handleTrackChange(event.track)),
     ];
 
@@ -69,6 +79,8 @@
       await recorder.resumeAudioContext();
       startCurrentSegment(currentTrack);
       await playFromPausedPosition(mediaElement);
+      playbackStartedAt = performance.now();
+      rememberStablePlaybackTime();
       timings.mark("playback_started");
       return await completion;
     } catch (error) {
@@ -109,6 +121,48 @@
       });
       if (result) {
         results.push(result);
+      }
+    }
+
+    function rememberStablePlaybackTime() {
+      const currentTime = Number(mediaElement.currentTime);
+      if (!Number.isFinite(currentTime)) {
+        return;
+      }
+
+      lastStableMediaTime = currentTime;
+      lastStableWallTime = performance.now();
+    }
+
+    function rememberSeekStart() {
+      const now = performance.now();
+      if (!playbackStartedAt || now - playbackStartedAt < STARTUP_SEEK_GRACE_MS) {
+        return;
+      }
+
+      pendingSeek = {
+        mediaTime: lastStableMediaTime,
+        wallTime: lastStableWallTime,
+      };
+    }
+
+    function validateSeekEnd() {
+      if (!pendingSeek) {
+        rememberStablePlaybackTime();
+        return;
+      }
+
+      const currentTime = Number(mediaElement.currentTime);
+      const expectedTime =
+        pendingSeek.mediaTime + ((performance.now() - pendingSeek.wallTime) / 1000) * playbackRate;
+      pendingSeek = null;
+      rememberStablePlaybackTime();
+
+      if (
+        Number.isFinite(currentTime) &&
+        Math.abs(currentTime - expectedTime) > SEEK_JUMP_TOLERANCE_SECONDS
+      ) {
+        fail(new Error("Spotify playback seeked during capture."));
       }
     }
 

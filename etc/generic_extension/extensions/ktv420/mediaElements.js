@@ -153,20 +153,21 @@
       return false;
     }
 
-    if (isActivelyPlaying(mediaElement)) {
-      return true;
-    }
-
-    if (!mediaElement.isConnected) {
-      return false;
-    }
-
     return Boolean(
-      mediaElement.readyState >= 2 ||
-      mediaElement.currentSrc ||
-      mediaElement.getAttribute("src") ||
-      Number.isFinite(mediaElement.duration) ||
-      Number(mediaElement.__ktv420LastSeenAt || 0) > 0,
+      hasUsablePlaybackSource(mediaElement) &&
+        !mediaElement.muted &&
+        mediaElement.volume > 0 &&
+        mediaElement.playbackRate > 0
+    );
+  }
+
+  function hasUsablePlaybackSource(mediaElement) {
+    const duration = Number(mediaElement.duration);
+    return Boolean(
+      (mediaElement.currentSrc || mediaElement.getAttribute("src")) &&
+        Number.isFinite(duration) &&
+        duration > 0 &&
+        mediaElement.readyState >= 2
     );
   }
 
@@ -247,6 +248,7 @@
       currentTime: Number.isFinite(mediaElement.currentTime) ? mediaElement.currentTime : null,
       duration: Number.isFinite(mediaElement.duration) ? mediaElement.duration : null,
       ended: mediaElement.ended,
+      isCaptureTarget: hasCaptureSignal(mediaElement),
       isConnected: Boolean(mediaElement.isConnected),
       muted: mediaElement.muted,
       networkState: mediaElement.networkState,

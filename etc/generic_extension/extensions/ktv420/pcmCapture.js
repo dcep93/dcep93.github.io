@@ -305,7 +305,7 @@
 
     const start = startsAtBeginning ? "" : formatSeconds(startTimeSeconds);
     const end = finishesAtEnd ? "" : formatSeconds(endTimeSeconds);
-    return start || end ? `${start}-${end}` : "";
+    return `${start}-${end}`;
   }
 
   function formatSeconds(value) {
