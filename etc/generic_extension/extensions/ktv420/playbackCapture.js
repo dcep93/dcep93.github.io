@@ -2,6 +2,7 @@
   const app = window.KTV420 || (window.KTV420 = {});
   const STARTUP_SEEK_GRACE_MS = 3000;
   const SEEK_JUMP_TOLERANCE_SECONDS = 1;
+  const USER_PAUSE_INTENT_WINDOW_MS = 2500;
 
   function requireExactlyOneCaptureTarget() {
     const targets = app.mediaElements.getCaptureTargetsAcrossFrames();
@@ -34,9 +35,16 @@
     const results = [];
     let currentTrack = requireCurrentTrack();
     let active = true;
+    let currentSegmentSource = getMediaSource(mediaElement);
     let lastStableMediaTime = Number(mediaElement.currentTime) || 0;
     let lastStableWallTime = performance.now();
+    let pendingTrackStart = null;
     let pendingSeek = null;
+    let pauseWasUserInitiated = false;
+    let pauseCompletionTimer = 0;
+    let transitionTimer = 0;
+    let waitingForAutoAdvance = false;
+    let lastUserInputAt = 0;
     let playbackStartedAt = 0;
     let rejectCapture;
     let resolveCapture;
@@ -47,19 +55,29 @@
     });
 
     const cleanupCallbacks = [
-      listen(mediaElement, "pause", () => complete(false)),
-      listen(mediaElement, "ended", () => complete(true)),
+      listen(mediaElement, "pause", () => handlePause()),
+      listen(mediaElement, "ended", () => handleTrackEnded()),
       listen(mediaElement, "error", () => fail(new Error("Spotify playback media element errored."))),
-      listen(mediaElement, "ratechange", () => {
-        if (mediaElement.playbackRate !== playbackRate) {
-          fail(new Error("Spotify playback rate changed during capture."));
-        }
+      listen(mediaElement, "ratechange", () => handleRateChange()),
+      listen(mediaElement, "play", () => {
+        cancelPauseCompletion("playback_resumed_after_pause");
+        rememberStablePlaybackTime();
       }),
-      listen(mediaElement, "play", () => rememberStablePlaybackTime()),
-      listen(mediaElement, "playing", () => rememberStablePlaybackTime()),
-      listen(mediaElement, "timeupdate", () => rememberStablePlaybackTime()),
+      listen(mediaElement, "playing", () => {
+        cancelPauseCompletion("playback_resumed_after_pause");
+        rememberStablePlaybackTime();
+        tryStartPendingTrack();
+      }),
+      listen(mediaElement, "timeupdate", () => {
+        rememberStablePlaybackTime();
+        tryStartPendingTrack();
+      }),
+      listen(mediaElement, "loadedmetadata", () => tryStartPendingTrack()),
+      listen(mediaElement, "durationchange", () => tryStartPendingTrack()),
       listen(mediaElement, "seeking", () => rememberSeekStart()),
       listen(mediaElement, "seeked", () => validateSeekEnd()),
+      listen(document, "keydown", () => rememberUserInput(), { capture: true }),
+      listen(document, "pointerdown", () => rememberUserInput(), { capture: true, passive: true }),
       getPlaybackStateApi().onTrackChange((event) => handleTrackChange(event.track)),
     ];
 
@@ -87,7 +105,9 @@
       fail(error);
       throw error;
     } finally {
+      clearPauseCompletionTimer();
       window.clearTimeout(firstFrameTimer);
+      clearTransitionTimer();
       cleanupCallbacks.forEach((cleanup) => cleanup());
       recorder.finish();
     }
@@ -96,12 +116,30 @@
       if (!active || !track || track.trackId === currentTrack.trackId) {
         return;
       }
+      if (pauseCompletionTimer) {
+        cancelPauseCompletion("track_change_after_pause");
+      }
 
       try {
-        finishCurrentSegment(true);
-        currentTrack = requireCurrentTrack();
+        const trackEnded = waitingForAutoAdvance || mediaIsAtEnd(mediaElement);
+        const nextTrack = requireHookTrack(track);
+        const previousSource = currentSegmentSource;
+        if (!waitingForAutoAdvance && !pendingTrackStart) {
+          finishCurrentSegment(trackEnded);
+        }
+
+        currentTrack = nextTrack;
         timings.mark("track_changed");
-        startCurrentSegment(currentTrack);
+        pendingTrackStart = {
+          expectBeginning: trackEnded,
+          previousSource,
+          track: currentTrack,
+        };
+        waitingForAutoAdvance = false;
+        if (!transitionTimer) {
+          startTransitionTimer();
+        }
+        tryStartPendingTrack();
       } catch (error) {
         fail(error);
       }
@@ -112,6 +150,10 @@
         durationSeconds: requireDurationSeconds(mediaElement),
         startTimeSeconds: mediaElement.currentTime,
       });
+      currentSegmentSource = getMediaSource(mediaElement);
+      pendingSeek = null;
+      playbackStartedAt = performance.now();
+      rememberStablePlaybackTime();
     }
 
     function finishCurrentSegment(endedAtEnd) {
@@ -122,6 +164,151 @@
       if (result) {
         results.push(result);
       }
+    }
+
+    function handleTrackEnded() {
+      if (!active) {
+        return;
+      }
+
+      try {
+        if (pauseCompletionTimer) {
+          timings.mark("track_ended_after_pause");
+          return;
+        }
+        if (pendingTrackStart) {
+          startTransitionTimer();
+          return;
+        }
+        finishCurrentSegment(true);
+        waitingForAutoAdvance = true;
+        timings.mark("track_ended");
+        startTransitionTimer();
+      } catch (error) {
+        fail(error);
+      }
+    }
+
+    function handlePause() {
+      if (waitingForAutoAdvance || pendingTrackStart) {
+        return;
+      }
+      schedulePauseCompletion(hasRecentUserPauseIntent());
+    }
+
+    function handleRateChange() {
+      if (mediaElement.playbackRate === playbackRate) {
+        return;
+      }
+      if (captureIsSettling()) {
+        timings.mark("playback_rate_changed_after_settle");
+        return;
+      }
+      if (
+        mediaElement.playbackRate === 0 &&
+        (mediaElement.paused || mediaElement.ended || mediaIsAtEnd(mediaElement))
+      ) {
+        timings.mark("playback_rate_zero_at_boundary");
+        return;
+      }
+
+      fail(new Error("Spotify playback rate changed during capture."));
+    }
+
+    function captureIsSettling() {
+      return Boolean(pauseCompletionTimer || waitingForAutoAdvance || pendingTrackStart);
+    }
+
+    function rememberUserInput() {
+      lastUserInputAt = performance.now();
+    }
+
+    function hasRecentUserPauseIntent() {
+      return performance.now() - lastUserInputAt <= USER_PAUSE_INTENT_WINDOW_MS;
+    }
+
+    function tryStartPendingTrack() {
+      if (!active || !pendingTrackStart) {
+        return;
+      }
+
+      try {
+        const readiness = getPendingTrackReadiness(pendingTrackStart);
+        if (readiness.wait) {
+          return;
+        }
+        if (readiness.error) {
+          throw readiness.error;
+        }
+        const validation = getValidatedPendingTrack(pendingTrackStart.track);
+        if (validation.wait) {
+          return;
+        }
+
+        pendingTrackStart = null;
+        clearTransitionTimer();
+        startCurrentSegment(validation.track);
+      } catch (error) {
+        fail(error);
+      }
+    }
+
+    function getValidatedPendingTrack(track) {
+      const spotifyPageApi = getSpotifyPageApi();
+      const metadata = spotifyPageApi.getMediaSessionMetadata();
+      if (!metadata.title || !metadata.artist) {
+        return { wait: true };
+      }
+      if (track.trackName && !spotifyPageApi.textMatches(track.trackName, metadata.title)) {
+        return { wait: true };
+      }
+      if (track.trackArtist && !spotifyPageApi.textMatches(track.trackArtist, metadata.artist)) {
+        return { wait: true };
+      }
+
+      return {
+        track: {
+          trackArtist: metadata.artist,
+          trackId: track.trackId,
+          trackName: metadata.title,
+        },
+      };
+    }
+
+    function getPendingTrackReadiness(pending) {
+      const currentTime = Number(mediaElement.currentTime);
+      const duration = Number(mediaElement.duration);
+      if (
+        mediaElement.ended ||
+        !Number.isFinite(currentTime) ||
+        !Number.isFinite(duration) ||
+        duration <= 0
+      ) {
+        return { wait: true };
+      }
+
+      const source = getMediaSource(mediaElement);
+      const sourceChanged = Boolean(
+        pending.previousSource &&
+          source &&
+          pending.previousSource !== source,
+      );
+      const nearBeginning = currentTime <= app.config.capture.edgeToleranceSeconds;
+      const stillAtPreviousEnd =
+        !sourceChanged &&
+        currentTime > app.config.capture.edgeToleranceSeconds &&
+        duration - currentTime <= app.config.capture.edgeToleranceSeconds;
+
+      if (stillAtPreviousEnd || (!sourceChanged && !nearBeginning)) {
+        return { wait: true };
+      }
+      if (pending.expectBeginning && currentTime > app.config.capture.edgeToleranceSeconds) {
+        return {
+          error: new Error("Spotify started the next track before KTV420 opened its capture segment."),
+        };
+      }
+
+      return { wait: false };
     }
 
     function rememberStablePlaybackTime() {
@@ -136,7 +323,12 @@
 
     function rememberSeekStart() {
       const now = performance.now();
-      if (!playbackStartedAt || now - playbackStartedAt < STARTUP_SEEK_GRACE_MS) {
+      if (
+        pendingTrackStart ||
+        waitingForAutoAdvance ||
+        !playbackStartedAt ||
+        now - playbackStartedAt < STARTUP_SEEK_GRACE_MS
+      ) {
         return;
       }
 
@@ -147,6 +339,10 @@
     }
 
     function validateSeekEnd() {
+      if (pendingTrackStart || waitingForAutoAdvance) {
+        rememberStablePlaybackTime();
+        return;
+      }
       if (!pendingSeek) {
         rememberStablePlaybackTime();
         return;
@@ -177,6 +373,8 @@
           throw new Error("No Spotify track segments were captured.");
         }
         active = false;
+        clearPauseCompletionTimer();
+        clearTransitionTimer();
         timings.mark("capture_finished");
         resolveCapture(results);
       } catch (error) {
@@ -189,14 +387,93 @@
         return;
       }
       active = false;
+      clearPauseCompletionTimer();
+      clearTransitionTimer();
       recorder.abort(error);
       rejectCapture(error);
+    }
+
+    function schedulePauseCompletion(userInitiated) {
+      if (pauseCompletionTimer) {
+        return;
+      }
+
+      pauseWasUserInitiated = Boolean(userInitiated);
+      timings.mark("pause_observed");
+      pauseCompletionTimer = window.setTimeout(() => {
+        pauseCompletionTimer = 0;
+        const wasUserInitiated = pauseWasUserInitiated;
+        pauseWasUserInitiated = false;
+        if (!mediaElement.paused) {
+          timings.mark("pause_cancelled_by_resume");
+          return;
+        }
+        if (wasUserInitiated) {
+          complete(false);
+          return;
+        }
+        fail(new Error("Spotify paused during capture without a recent user pause action."));
+      }, app.config.timeouts.pauseSettleMs);
+    }
+
+    function clearPauseCompletionTimer() {
+      if (!pauseCompletionTimer) {
+        return;
+      }
+      window.clearTimeout(pauseCompletionTimer);
+      pauseCompletionTimer = 0;
+      pauseWasUserInitiated = false;
+    }
+
+    function cancelPauseCompletion(step) {
+      if (!pauseCompletionTimer) {
+        return;
+      }
+      clearPauseCompletionTimer();
+      timings.mark(step);
+    }
+
+    function startTransitionTimer() {
+      clearTransitionTimer();
+      transitionTimer = window.setTimeout(() => {
+        transitionTimer = 0;
+        handleTransitionTimeout();
+      }, app.config.timeouts.trackTransitionMs);
+    }
+
+    function clearTransitionTimer() {
+      if (!transitionTimer) {
+        return;
+      }
+      window.clearTimeout(transitionTimer);
+      transitionTimer = 0;
+    }
+
+    function handleTransitionTimeout() {
+      if (!active) {
+        return;
+      }
+      if (pendingTrackStart) {
+        fail(new Error("Spotify did not expose a validated playable next track in time."));
+        return;
+      }
+      if (waitingForAutoAdvance) {
+        fail(new Error("Spotify changed tracks before the playback-state hook identified the next track."));
+      }
     }
   }
 
   function requireCurrentTrack() {
     const metadata = getSpotifyPageApi().requireMediaSessionTrackMetadata();
     return getPlaybackStateApi().requireCurrentTrack(metadata);
+  }
+
+  function requireHookTrack(track) {
+    return {
+      trackArtist: String(track.trackArtist || "").trim(),
+      trackId: app.trackId.requireTrackId(track.trackId),
+      trackName: String(track.trackName || "").trim(),
+    };
   }
 
   function getRootApp() {
@@ -242,6 +519,10 @@
           duration - currentTime <= app.config.capture.edgeToleranceSeconds
         ),
     );
+  }
+
+  function getMediaSource(mediaElement) {
+    return String(mediaElement.currentSrc || mediaElement.src || "");
   }
 
   async function playFromPausedPosition(mediaElement) {
@@ -294,9 +575,9 @@
     await started;
   }
 
-  function listen(target, eventName, listener) {
-    target.addEventListener(eventName, listener);
-    return () => target.removeEventListener(eventName, listener);
+  function listen(target, eventName, listener, options) {
+    target.addEventListener(eventName, listener, options);
+    return () => target.removeEventListener(eventName, listener, options);
   }
 
   function createPauseToStartError() {

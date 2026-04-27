@@ -5,7 +5,9 @@
     buttonId: "ktv420-capture-button",
     timeouts: Object.freeze({
       firstAudioMs: 5000,
+      pauseSettleMs: 1500,
       playStartMs: 10000,
+      trackTransitionMs: 10000,
     }),
     capture: Object.freeze({
       edgeToleranceSeconds: 0.25,
