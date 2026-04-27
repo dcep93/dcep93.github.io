@@ -369,6 +369,14 @@
       if (!Number.isFinite(currentTime) || (source && currentSegmentSource && source !== currentSegmentSource)) {
         return;
       }
+      if (
+        currentTime < lastStableMediaTime &&
+        !pendingSeek &&
+        !pendingTrackStart &&
+        !waitingForAutoAdvance
+      ) {
+        return;
+      }
 
       lastStableMediaTime = currentTime;
       lastStableWallTime = performance.now();
@@ -466,7 +474,7 @@
           return;
         }
         fail(new Error("Spotify paused during capture without a recent user pause action."));
-      }, app.config.timeouts.pausePollIntervalMs);
+      }, app.config.timeouts.pausePollIntervalMs + app.config.timeouts.pauseAlertDelayMs);
     }
 
     function clearPauseCompletionTimer() {
