@@ -15,6 +15,7 @@
     const button = document.createElement("button");
     button.id = app.config.buttonId;
     button.type = "button";
+    button.setAttribute("aria-label", "KTV420");
     button.style.display = "inline-flex";
     button.style.alignItems = "center";
     button.style.justifyContent = "center";
@@ -40,10 +41,22 @@
     button.addEventListener("click", () => {
       app.main.startCapture();
     });
+    syncCaptureButtonState(button);
     return button;
   }
 
-  function attachCaptureButton() {
+  function syncCaptureButtonState(button) {
+    const enabled = Boolean(app.main?.isRunning?.() || app.spotifyPage?.isAlbumOrPlaylistRoute?.());
+    button.disabled = !enabled;
+    button.title = enabled
+      ? "Run KTV420 on this album or playlist."
+      : "KTV420 only runs on Spotify album and playlist pages.";
+    button.style.cursor = enabled ? "pointer" : "not-allowed";
+    button.style.opacity = enabled ? "1" : "0.45";
+    button.style.filter = enabled ? "" : "grayscale(1)";
+  }
+
+  function refreshCaptureButton() {
     const spotifyLogo = document.querySelector('[data-encore-id="logoSpotify"]');
     if (!spotifyLogo) {
       return false;
@@ -56,11 +69,14 @@
 
     const existingButton = document.getElementById(app.config.buttonId);
     if (existingButton && existingButton.parentElement === logoContainer) {
+      syncCaptureButtonState(existingButton);
       return true;
     }
 
     existingButton?.remove();
-    logoContainer.appendChild(createCaptureButton());
+    const button = createCaptureButton();
+    logoContainer.appendChild(button);
+    syncCaptureButtonState(button);
     return true;
   }
 
@@ -69,14 +85,18 @@
       return;
     }
 
-    attachCaptureButton();
+    refreshCaptureButton();
 
     const observer = new MutationObserver(() => {
-      attachCaptureButton();
+      refreshCaptureButton();
     });
 
     observer.observe(document.body, { childList: true, subtree: true });
   }
+
+  app.ui = {
+    refreshCaptureButton,
+  };
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init, { once: true });

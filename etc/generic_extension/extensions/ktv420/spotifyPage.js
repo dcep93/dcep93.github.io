@@ -71,10 +71,16 @@
 
   app.spotifyPage = {
     buildElementPath,
+    clickSkipForwardButton,
     clickPlayPauseButton,
+    doubleClickTrackRow,
+    getTrackListEntries,
     getMediaSessionMetadata,
+    isAlbumOrPlaylistRoute,
+    isElementVisible,
     normalizeText,
     requireMediaSessionTrackMetadata,
+    resolveTrackListRowElement,
     textMatches,
   };
 
@@ -83,10 +89,96 @@
     await waitForNextTask();
   }
 
+  async function clickSkipForwardButton() {
+    requireSkipForwardButton().click();
+    await waitForNextTask();
+  }
+
+  function doubleClickTrackRow(entryOrElement) {
+    const rowElement = resolveTrackListRowElement(entryOrElement);
+    dispatchMouseActivation(rowElement);
+  }
+
+  function resolveTrackListRowElement(entryOrElement) {
+    if (entryOrElement instanceof HTMLElement) {
+      return entryOrElement;
+    }
+
+    if (entryOrElement?.rowElement instanceof HTMLElement && entryOrElement.rowElement.isConnected) {
+      return entryOrElement.rowElement;
+    }
+
+    const rows = getTrackListRows();
+    const rowIndex = Number(entryOrElement?.rowIndex);
+    if (Number.isInteger(rowIndex) && rows[rowIndex]) {
+      const candidate = rows[rowIndex];
+      try {
+        if (describeTrackListRow(candidate).trackId === entryOrElement?.trackId) {
+          return candidate;
+        }
+      } catch (_error) {}
+    }
+
+    for (const rowElement of rows) {
+      try {
+        if (describeTrackListRow(rowElement).trackId === entryOrElement?.trackId) {
+          return rowElement;
+        }
+      } catch (_error) {}
+    }
+
+    throw new Error("Spotify did not keep the expected track row in the DOM.");
+  }
+
+  function getTrackListEntries() {
+    return getTrackListRows().map((rowElement, rowIndex) => ({
+      ...describeTrackListRow(rowElement),
+      rowElement,
+      rowIndex,
+    }));
+  }
+
+  function getTrackListRows() {
+    return Array.from(document.querySelectorAll('div[data-testid="tracklist-row"]')).filter(
+      (element) => element instanceof HTMLElement,
+    );
+  }
+
+  function describeTrackListRow(rowElement) {
+    const trackLink = rowElement.querySelector('a[href*="/track/"]');
+    if (!(trackLink instanceof HTMLAnchorElement)) {
+      throw new Error("Spotify did not expose a track link inside a tracklist row.");
+    }
+
+    const trackId = app.trackId.normalizeTrackId(trackLink.href);
+    if (!trackId) {
+      throw new Error("Spotify did not expose a valid track id inside a tracklist row.");
+    }
+
+    const trackName = String(trackLink.textContent || "").trim();
+    if (!trackName) {
+      throw new Error(`Spotify did not expose a track name for "${trackId}".`);
+    }
+
+    return { trackId, trackName };
+  }
+
+  function isAlbumOrPlaylistRoute(pathname = location.pathname) {
+    return /^\/(?:album|playlist)\/[A-Za-z0-9]+(?:\/|$)/i.test(String(pathname || ""));
+  }
+
   function requirePlayPauseButton() {
     const button = document.querySelector('[data-testid="control-button-playpause"]');
     if (!(button instanceof HTMLButtonElement) || button.disabled || !isElementVisible(button)) {
       throw new Error("Spotify did not expose one enabled play/pause control.");
+    }
+    return button;
+  }
+
+  function requireSkipForwardButton() {
+    const button = document.querySelector('[data-testid="control-button-skip-forward"]');
+    if (!(button instanceof HTMLButtonElement) || button.disabled || !isElementVisible(button)) {
+      throw new Error("Spotify did not expose one enabled skip-forward control.");
     }
     return button;
   }
@@ -103,6 +195,20 @@
 
   function waitForNextTask() {
     return new Promise((resolve) => window.setTimeout(resolve, 0));
+  }
+
+  function dispatchMouseActivation(element) {
+    for (const eventName of ["mousedown", "mouseup", "click", "mousedown", "mouseup", "click", "dblclick"]) {
+      element.dispatchEvent(
+        new MouseEvent(eventName, {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          detail: eventName === "dblclick" ? 2 : eventName === "click" ? 1 : 0,
+          view: window,
+        }),
+      );
+    }
   }
 
   installPlaybackStateHooks();

@@ -7,11 +7,6 @@
       firstAudioMs: 1000,
       pauseAlertDelayMs: 1000,
       pausePollIntervalMs: 100,
-      playStartMs: 1000,
-      trackTransitionMs: 10000,
-    }),
-    capture: Object.freeze({
-      maxBytes: 1024 * 1024 * 1024,
     }),
   });
 })();

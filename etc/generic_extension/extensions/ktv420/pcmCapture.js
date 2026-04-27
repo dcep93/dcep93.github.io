@@ -19,7 +19,6 @@
       firstFrameSeen: false,
       graph,
       onError: typeof options.onError === "function" ? options.onError : null,
-      totalByteLength: 0,
     };
 
     graph.activeSession = session;
@@ -40,7 +39,7 @@
       },
       firstFrame: firstFrame.promise,
       startSegment(track, options) {
-        startSegment(session, track, options);
+        return startSegment(session, track, options);
       },
     };
   }
@@ -116,6 +115,8 @@
       channelCount: 0,
       chunks: [],
       durationSeconds,
+      firstFrame: createDeferred(),
+      firstFrameSeen: false,
       sampleRate: 0,
       startTimeSeconds: normalizeTime(options.startTimeSeconds),
       timings: app.timing.createTimingRecorder(),
@@ -124,6 +125,7 @@
       trackName: String(track.trackName || "").trim(),
     };
     session.currentSegment.timings.mark("track_segment_started");
+    return session.currentSegment.firstFrame.promise;
   }
 
   function recordAudioFrame(graph, audioBuffer) {
@@ -141,18 +143,16 @@
       return;
     }
 
-    session.totalByteLength += pcmBytes.length;
-    if (session.totalByteLength > app.config.capture.maxBytes) {
-      setSessionError(session, new Error("Captured audio exceeded the maximum byte limit."));
-      return;
-    }
-
     segment.byteLength += pcmBytes.length;
     segment.chunks.push(pcmBytes);
 
     if (!session.firstFrameSeen) {
       session.firstFrameSeen = true;
       session.firstFrame.resolve();
+    }
+    if (!segment.firstFrameSeen) {
+      segment.firstFrameSeen = true;
+      segment.firstFrame.resolve();
     }
   }
 
@@ -219,6 +219,7 @@
 
     session.error = error;
     session.firstFrame.reject(error);
+    session.currentSegment?.firstFrame?.reject?.(error);
     if (session.onError) {
       session.onError(error);
     }

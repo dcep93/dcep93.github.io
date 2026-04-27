@@ -8,6 +8,7 @@ function execute() {
         "ktv420/timing.js",
         "ktv420/spotifyPage.js",
         "ktv420/clipboard.js",
+        "ktv420/storage.js",
         "ktv420/md5.js",
         "ktv420/mediaElements.js",
         "ktv420/pcmCapture.js",
