@@ -1,5 +1,6 @@
 (() => {
   const app = window.KTV420 || (window.KTV420 = {});
+  const FULL_TRACK_END_TOLERANCE_SECONDS = 0.05;
 
   function createSession(mediaElement, options = {}) {
     if (!app.mediaElements.isMediaElement(mediaElement)) {
@@ -182,11 +183,18 @@
     if (expectedByteLength && bytes.length > expectedByteLength) {
       bytes = bytes.subarray(0, expectedByteLength);
     }
-    if (expectedByteLength && endedAtEnd && bytes.length < expectedByteLength) {
+    if (
+      expectedByteLength &&
+      endedAtEnd &&
+      bytes.length < expectedByteLength &&
+      expectedByteLength - bytes.length > getEndToleranceByteLength(segment)
+    ) {
       throw new Error(
         `Spotify ended "${segment.trackName}" before KTV420 captured exact full-track PCM: expected ${expectedByteLength} bytes, captured ${bytes.length}.`,
       );
     }
+
+    const capturedEndTimeSeconds = getCapturedEndTimeSeconds(segment, bytes.length);
 
     return {
       audioDataBase64: bytesToBase64(bytes),
@@ -196,8 +204,13 @@
         audioByteLength: bytes.length,
         audioSampleFormat: "PCM_S16LE",
         audioSampleRate: segment.sampleRate,
-        crop: formatCrop(segment.startTimeSeconds, endTimeSeconds, segment.durationSeconds, endedAtEnd),
+        crop: formatCrop(
+          segment.startTimeSeconds,
+          capturedEndTimeSeconds,
+          segment.durationSeconds,
+        ),
         md5: app.md5.hex(bytes),
+        storageVersion: 1,
         timings: segment.timings.entries,
         trackArtist: segment.trackArtist,
         trackId: segment.trackId,
@@ -283,18 +296,40 @@
     return Math.round((end - start) * segment.sampleRate) * segment.channelCount * 2;
   }
 
-  function formatCrop(startTimeSeconds, endTimeSeconds, durationSeconds, endedAtEnd) {
+  function getEndToleranceByteLength(segment) {
+    if (!segment.sampleRate || !segment.channelCount) {
+      return 0;
+    }
+
+    return Math.ceil(FULL_TRACK_END_TOLERANCE_SECONDS * segment.sampleRate) * segment.channelCount * 2;
+  }
+
+  function getCapturedEndTimeSeconds(segment, byteLength) {
+    if (!segment.sampleRate || !segment.channelCount) {
+      return segment.startTimeSeconds;
+    }
+
+    const bytesPerFrame = segment.channelCount * 2;
+    if (!bytesPerFrame) {
+      return segment.startTimeSeconds;
+    }
+
+    const capturedFrameCount = Math.floor(byteLength / bytesPerFrame);
+    return segment.startTimeSeconds + capturedFrameCount / segment.sampleRate;
+  }
+
+  function formatCrop(startTimeSeconds, capturedEndTimeSeconds, durationSeconds) {
     const startsAtBeginning = startTimeSeconds === 0;
-    const finishesAtEnd = endedAtEnd ||
-      (
-        Number.isFinite(durationSeconds) &&
-        Number.isFinite(endTimeSeconds) &&
-        endTimeSeconds >= durationSeconds
-      );
+    const endDiffSeconds = Number(durationSeconds) - Number(capturedEndTimeSeconds);
+    const finishesAtEnd = !Number.isFinite(endDiffSeconds) || endDiffSeconds <= 0;
+
+    if (startsAtBeginning && finishesAtEnd) {
+      return "-";
+    }
 
     const start = startsAtBeginning ? "" : formatSeconds(startTimeSeconds);
-    const end = finishesAtEnd ? "" : formatSeconds(endTimeSeconds);
-    return `${start}-${end}`;
+    const endDiff = finishesAtEnd ? "" : formatSeconds(endDiffSeconds);
+    return `${start}-${endDiff}`;
   }
 
   function formatSeconds(value) {

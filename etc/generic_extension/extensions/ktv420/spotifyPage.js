@@ -139,7 +139,14 @@
   }
 
   function getTrackListRows() {
-    return Array.from(document.querySelectorAll('div[data-testid="tracklist-row"]')).filter(
+    const trackListRoot = document.querySelector(
+      'div[data-testid="playlist-tracklist"], div[data-testid="track-list"]',
+    );
+    if (!trackListRoot) {
+      return [];
+    }
+
+    return Array.from(trackListRoot.querySelectorAll('div[data-testid="tracklist-row"]')).filter(
       (element) => element instanceof HTMLElement,
     );
   }

@@ -1,5 +1,6 @@
 (() => {
   const app = window.KTV420 || (window.KTV420 = {});
+  const STORAGE_VERSION = 1;
 
   async function getRootDirectory() {
     if (typeof navigator.storage?.getDirectory !== "function") {
@@ -47,6 +48,13 @@
 
     if (!parsed || typeof parsed !== "object") {
       throw new Error(`Stored metadata for "${trackId}" is not a JSON object.`);
+    }
+    if (parsed.storageVersion !== STORAGE_VERSION) {
+      const error = new Error(
+        `Stored metadata for "${trackId}" uses storage version ${String(parsed.storageVersion || "")}, expected ${STORAGE_VERSION}.`,
+      );
+      error.code = "KTV420_STORAGE_VERSION_MISMATCH";
+      throw error;
     }
 
     return parsed;
