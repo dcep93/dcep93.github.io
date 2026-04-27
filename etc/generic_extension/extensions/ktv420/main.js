@@ -58,7 +58,7 @@
 
   async function submitTrackId(input, options = {}) {
     if (activeRun) {
-      alert("A Spotify PCM capture is already running.");
+      alert("Busy.");
       return activeRun;
     }
 
@@ -97,26 +97,24 @@
   }
 
   async function reportSuccess(result) {
-    const payload = {
+    const metadata = {
       audioChannelCount: Number(result.audioChannelCount || 0) || 0,
       audioChannelLayout: "interleaved",
       audioByteLength: Number(result.audioByteLength || 0) || 0,
-      audioDataBase64: String(result.audioDataBase64 || ""),
-      audioDataEncoding: "base64",
       audioSampleFormat: "PCM_S16LE",
       audioSampleRate: Number(result.audioSampleRate || 0) || 0,
-      fallbackPath: [],
-      format: "PCM_S16LE",
       md5: String(result.md5 || ""),
-      mp3BytesBase64: "",
-      source: "playback-pcm",
       timings: Array.isArray(result.timings) ? result.timings : [],
       trackId: app.trackId.requireTrackId(result.trackId),
+    };
+    const payload = {
+      audioDataBase64: String(result.audioDataBase64 || ""),
+      metadata,
     };
 
     window.__ktv420LastResult = payload;
     await app.clipboard.copyJson(payload);
-    alert(`${payload.trackId}:${payload.md5}\nformat:${payload.format}\nsource:${payload.source}`);
+    alert("Copied.");
   }
 
   async function reportFailure(error, context) {
@@ -126,14 +124,10 @@
 
     try {
       await app.clipboard.copyJson(debugLog);
-      alert(`Copied KTV420 debug logs to clipboard.\n${error?.message || String(error)}`);
+      alert("Failed. Debug copied.");
     } catch (copyError) {
-      alert([
-        "KTV420 failed and could not copy debug logs.",
-        copyError?.message || String(copyError),
-        error?.message || String(error),
-        "Debug log saved on window.__ktv420LastDebugLog.",
-      ].join("\n"));
+      console.error("KTV420 could not copy debug log.", copyError);
+      alert("Failed. Debug copy failed.");
     }
   }
 

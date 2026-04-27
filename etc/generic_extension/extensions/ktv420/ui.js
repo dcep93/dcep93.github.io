@@ -1,5 +1,15 @@
 (() => {
   const app = window.KTV420 || (window.KTV420 = {});
+  const faviconUrl = getModuleAssetUrl("favicon.svg");
+
+  function getModuleAssetUrl(fileName) {
+    const scriptUrl = document.currentScript?.src;
+    if (!scriptUrl) {
+      throw new Error("KTV420 UI could not resolve its module URL.");
+    }
+
+    return new URL(fileName, scriptUrl).href;
+  }
 
   function getInitialTrackIdValue() {
     return app.trackId.getTrackIdFromPathname() || app.config.defaultTrackId;
@@ -8,19 +18,29 @@
   function createSubmitButton() {
     const button = document.createElement("button");
     button.type = "submit";
-    button.textContent = "md5";
     button.style.display = "inline-flex";
     button.style.alignItems = "center";
     button.style.justifyContent = "center";
-    button.style.minWidth = "52px";
+    button.style.width = "32px";
+    button.style.minWidth = "32px";
     button.style.height = "32px";
-    button.style.padding = "0 12px";
+    button.style.padding = "0";
     button.style.border = "1px solid rgba(255,255,255,0.18)";
     button.style.borderRadius = "999px";
     button.style.background = "rgba(255,255,255,0.08)";
     button.style.color = "#fff";
     button.style.fontSize = "14px";
     button.style.cursor = "pointer";
+
+    const icon = document.createElement("img");
+    icon.src = faviconUrl;
+    icon.alt = "";
+    icon.draggable = false;
+    icon.style.display = "block";
+    icon.style.width = "18px";
+    icon.style.height = "18px";
+
+    button.appendChild(icon);
     return button;
   }
 
