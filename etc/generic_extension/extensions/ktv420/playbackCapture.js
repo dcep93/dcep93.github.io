@@ -35,6 +35,7 @@
     const results = [];
     let currentTrack = requireCurrentTrack();
     let active = true;
+    let currentSegmentDuration = requireDurationSeconds(mediaElement);
     let currentSegmentSource = getMediaSource(mediaElement);
     let lastStableMediaTime = Number(mediaElement.currentTime) || 0;
     let lastStableWallTime = performance.now();
@@ -121,11 +122,21 @@
       }
 
       try {
-        const trackEnded = waitingForAutoAdvance || mediaIsAtEnd(mediaElement);
+        const sourceChanged = currentSegmentSourceChanged();
+        const naturalSourceAdvance = sourceChanged && !hasRecentUserPauseIntent();
+        const trackEnded =
+          waitingForAutoAdvance ||
+          mediaIsAtEnd(mediaElement) ||
+          (sourceChanged && lastStableMediaTimeIsAtEnd()) ||
+          naturalSourceAdvance;
+        if (sourceChanged && !trackEnded) {
+          throw new Error("Spotify changed tracks before the previous capture segment reached its end.");
+        }
+
         const nextTrack = requireHookTrack(track);
         const previousSource = currentSegmentSource;
         if (!waitingForAutoAdvance && !pendingTrackStart) {
-          finishCurrentSegment(trackEnded);
+          finishCurrentSegment(trackEnded, trackEnded ? currentSegmentDuration : lastStableMediaTime);
         }
 
         currentTrack = nextTrack;
@@ -146,20 +157,22 @@
     }
 
     function startCurrentSegment(track) {
+      const durationSeconds = requireDurationSeconds(mediaElement);
       recorder.startSegment(track, {
-        durationSeconds: requireDurationSeconds(mediaElement),
+        durationSeconds,
         startTimeSeconds: mediaElement.currentTime,
       });
+      currentSegmentDuration = durationSeconds;
       currentSegmentSource = getMediaSource(mediaElement);
       pendingSeek = null;
       playbackStartedAt = performance.now();
       rememberStablePlaybackTime();
     }
 
-    function finishCurrentSegment(endedAtEnd) {
+    function finishCurrentSegment(endedAtEnd, endTimeSeconds = null) {
       const result = recorder.finishSegment({
         endedAtEnd,
-        endTimeSeconds: endedAtEnd ? mediaElement.duration : mediaElement.currentTime,
+        endTimeSeconds: endTimeSeconds ?? (endedAtEnd ? currentSegmentDuration : mediaElement.currentTime),
       });
       if (result) {
         results.push(result);
@@ -313,7 +326,8 @@
 
     function rememberStablePlaybackTime() {
       const currentTime = Number(mediaElement.currentTime);
-      if (!Number.isFinite(currentTime)) {
+      const source = getMediaSource(mediaElement);
+      if (!Number.isFinite(currentTime) || (source && currentSegmentSource && source !== currentSegmentSource)) {
         return;
       }
 
@@ -460,6 +474,19 @@
       if (waitingForAutoAdvance) {
         fail(new Error("Spotify changed tracks before the playback-state hook identified the next track."));
       }
+    }
+
+    function currentSegmentSourceChanged() {
+      const source = getMediaSource(mediaElement);
+      return Boolean(currentSegmentSource && source && source !== currentSegmentSource);
+    }
+
+    function lastStableMediaTimeIsAtEnd() {
+      return Boolean(
+        Number.isFinite(currentSegmentDuration) &&
+          Number.isFinite(lastStableMediaTime) &&
+          currentSegmentDuration - lastStableMediaTime <= app.config.capture.edgeToleranceSeconds,
+      );
     }
   }
 

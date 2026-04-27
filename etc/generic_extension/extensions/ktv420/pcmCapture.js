@@ -182,13 +182,9 @@
     if (expectedByteLength && bytes.length > expectedByteLength) {
       bytes = bytes.subarray(0, expectedByteLength);
     }
-    if (
-      expectedByteLength &&
-      endedAtEnd &&
-      expectedByteLength - bytes.length > getAllowedShortfallByteLength(segment)
-    ) {
+    if (expectedByteLength && endedAtEnd && bytes.length < expectedByteLength) {
       throw new Error(
-        `Spotify changed tracks before KTV420 captured the full "${segment.trackName}" PCM segment.`,
+        `Spotify ended "${segment.trackName}" before KTV420 captured exact full-track PCM: expected ${expectedByteLength} bytes, captured ${bytes.length}.`,
       );
     }
 
@@ -284,14 +280,6 @@
     }
 
     return Math.round((end - start) * segment.sampleRate) * segment.channelCount * 2;
-  }
-
-  function getAllowedShortfallByteLength(segment) {
-    return (
-      Math.round(app.config.capture.edgeToleranceSeconds * segment.sampleRate) *
-      segment.channelCount *
-      2
-    );
   }
 
   function formatCrop(startTimeSeconds, endTimeSeconds, durationSeconds, endedAtEnd) {
