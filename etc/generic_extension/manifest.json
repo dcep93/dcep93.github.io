@@ -11,15 +11,10 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://open.spotify.com/*"],
-      "js": ["extensions/ktv420/bootstrap.js"],
-      "all_frames": true,
-      "run_at": "document_start"
-    },
-    {
       "matches": ["<all_urls>"],
       "js": ["typescriptServices.js", "index.js"],
-      "all_frames": true
+      "all_frames": true,
+      "run_at": "document_start"
     }
   ],
   "web_accessible_resources": [
