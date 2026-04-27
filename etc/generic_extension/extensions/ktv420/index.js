@@ -2,6 +2,20 @@ const KTV_TRACK_ID_INPUT_ID = "ktv420-spotify-track-id-input";
 const KTV_FORM_ID = "ktv420-spotify-track-id-form";
 const KTV_DEFAULT_TRACK_ID = "4kr3l1fAE5gkjxkbE7WU65";
 
+function getTrackIdFromLocationPathname(pathname = location.pathname) {
+    const match = String(pathname || "").match(/\/track\/([A-Za-z0-9]{22})(?:\/|$)/i);
+    return match?.[1] || "";
+}
+
+function getInitialTrackIdValue() {
+    const routeTrackId = getTrackIdFromLocationPathname();
+    if (routeTrackId) {
+        return routeTrackId;
+    }
+
+    return KTV_DEFAULT_TRACK_ID;
+}
+
 function createSubmitButton() {
     const button = document.createElement("button");
     button.type = "submit";
@@ -26,7 +40,7 @@ function createTrackIdInput() {
     const input = document.createElement("input");
     input.id = KTV_TRACK_ID_INPUT_ID;
     input.type = "text";
-    input.value = KTV_DEFAULT_TRACK_ID;
+    input.value = getInitialTrackIdValue();
     input.placeholder = "track id";
     input.autocomplete = "off";
     input.spellcheck = false;

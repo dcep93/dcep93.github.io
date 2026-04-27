@@ -7,13 +7,25 @@ const TRACK_END_GRACE_SECONDS = 1.5;
 const MD5_IDLE_FALLBACK_MS = 1500;
 const HASH_REQUEST_TYPE = "ktv420-audio-hash-request";
 const HASH_RESPONSE_TYPE = "ktv420-audio-hash-response";
+const TRACK_PAGE_IFRAME_RESPONSE_TYPE = "ktv420-track-page-iframe-response";
 const FRAME_REQUEST_TIMEOUT_MS = 12000;
+const TRACK_PAGE_IFRAME_TIMEOUT_MS = 45000;
 const NETWORK_CAPTURE_LIMIT = 60;
 const REQUEST_REPLAY_LIMIT = 60;
+const TRACK_PAGE_PLAY_BUTTON_TIMEOUT_MS = 15000;
+const SPOTIFY_ASSET_RESOLUTION_TIMEOUT_MS = 20000;
+const SPOTIFY_POLL_MS = 500;
+const SPOTIFY_CONNECT_STATE_CACHE_MS = 1200;
+const SPOTIFY_CAPTURED_CONNECT_STATE_MAX_AGE_MS = 1500;
+const TRACK_PAGE_AUTORUN_HASH = "#ktv420-md5";
+const TRACK_PAGE_IFRAME_REQUEST_PARAM = "ktv420_iframe_request";
+const TRACK_PAGE_IFRAME_REQUEST_ATTRIBUTE = "data-ktv420-track-page-iframe-request";
 
 let activeHashCapture = null;
 let sharedCaptureGraph = null;
 const pendingFrameHashRequests = new Map();
+const pendingTrackPageIframeRequests = new Map();
+const spotifyConnectStateCache = new Map();
 
 function getNowPlayingSongTitle() {
     const titleElement = document.querySelector(
@@ -725,7 +737,7 @@ function summarizeIframes() {
     });
 }
 
-function getNetworkCaptureStore() {
+function getLocalNetworkCaptureStore() {
     if (!window.__ktv420NetworkCaptureStore) {
         window.__ktv420NetworkCaptureStore = [];
     }
@@ -733,12 +745,73 @@ function getNetworkCaptureStore() {
     return window.__ktv420NetworkCaptureStore;
 }
 
-function getRequestReplayStore() {
+function getLocalRequestReplayStore() {
     if (!window.__ktv420RequestReplayStore) {
         window.__ktv420RequestReplayStore = [];
     }
 
     return window.__ktv420RequestReplayStore;
+}
+
+function getNetworkCaptureStore() {
+    return getLocalNetworkCaptureStore();
+}
+
+function getRequestReplayStore() {
+    return getLocalRequestReplayStore();
+}
+
+function getSameOriginWindowChain() {
+    const windows = [];
+    const seen = new Set();
+    const candidates = [window, window.parent, window.top];
+    const currentOrigin = location.origin;
+
+    for (const candidate of candidates) {
+        if (!candidate || seen.has(candidate)) {
+            continue;
+        }
+
+        seen.add(candidate);
+
+        try {
+            if (candidate.location?.origin !== currentOrigin) {
+                continue;
+            }
+        } catch (_error) {
+            continue;
+        }
+
+        windows.push(candidate);
+    }
+
+    return windows;
+}
+
+function getMergedRequestReplayStore() {
+    const mergedReplays = [];
+
+    for (const candidateWindow of getSameOriginWindowChain()) {
+        const store = Array.isArray(candidateWindow.__ktv420RequestReplayStore)
+            ? candidateWindow.__ktv420RequestReplayStore
+            : [];
+        mergedReplays.push(...store);
+    }
+
+    return mergedReplays;
+}
+
+function getMergedNetworkCaptureStore() {
+    const mergedCaptures = [];
+
+    for (const candidateWindow of getSameOriginWindowChain()) {
+        const store = Array.isArray(candidateWindow.__ktv420NetworkCaptureStore)
+            ? candidateWindow.__ktv420NetworkCaptureStore
+            : [];
+        mergedCaptures.push(...store);
+    }
+
+    return mergedCaptures;
 }
 
 function shouldCaptureNetworkUrl(url) {
@@ -753,6 +826,59 @@ function safeJsonParse(text) {
     } catch (_error) {
         return null;
     }
+}
+
+function findNestedObjects(rootValue, predicate, limit = 20) {
+    const results = [];
+    const visited = new Set();
+    const queue = [rootValue];
+
+    while (queue.length > 0 && results.length < limit) {
+        const current = queue.shift();
+        if (!current || typeof current !== "object" || visited.has(current)) {
+            continue;
+        }
+
+        visited.add(current);
+
+        if (predicate(current)) {
+            results.push(current);
+        }
+
+        const values = Array.isArray(current) ? current : Object.values(current);
+        for (const value of values) {
+            if (value && typeof value === "object") {
+                queue.push(value);
+            }
+        }
+    }
+
+    return results;
+}
+
+function extractTrackPlaybackStates(rootValue) {
+    return findNestedObjects(
+        rootValue,
+        (value) =>
+            Array.isArray(value?.state_machine?.tracks) &&
+            value.state_machine.tracks.length > 0,
+        20,
+    );
+}
+
+function getTrackPlaybackStatesFromCapture(capture) {
+    const parsed =
+        capture?.parsedData ||
+        safeJsonParse(capture?.textPreview || "") ||
+        safeJsonParse(typeof capture?.payloadSummary === "string" ? capture.payloadSummary : "");
+    if (!parsed) {
+        return [];
+    }
+
+    const directStates = Array.isArray(parsed?.state_machine?.tracks) ? [parsed] : [];
+    return [...directStates, ...extractTrackPlaybackStates(parsed)].filter(
+        (state, index, states) => states.indexOf(state) === index,
+    );
 }
 
 function summarizeCapturedPayload(payload) {
@@ -776,8 +902,12 @@ function shouldPersistParsedNetworkPayload(url, parsed) {
         return false;
     }
 
-    return /(connect-state\/v1\/devices|metadata\/4\/track|storage-resolve\/v2\/files\/audio\/interactive)/i.test(
-        url,
+    return (
+        /(connect-state\/v1\/devices|metadata\/4\/track|storage-resolve\/v2\/files\/audio\/interactive|track-playback\/v1\/devices\/[a-f0-9]+\/state)/i.test(
+            url,
+        ) ||
+        (/(dealer|spclient|track-playback)/i.test(url) &&
+            extractTrackPlaybackStates(parsed).length > 0)
     );
 }
 
@@ -909,7 +1039,7 @@ function getReplayableHeaders(headers) {
 }
 
 function findLatestSuccessfulRequestReplay(urlPattern, methods = []) {
-    const replays = getRequestReplayStore();
+    const replays = getMergedRequestReplayStore();
 
     for (let index = replays.length - 1; index >= 0; index -= 1) {
         const replay = replays[index];
@@ -928,7 +1058,7 @@ function findLatestSuccessfulRequestReplay(urlPattern, methods = []) {
 }
 
 function findLatestSuccessfulRequestReplayForHost(hostname) {
-    const replays = getRequestReplayStore();
+    const replays = getMergedRequestReplayStore();
 
     for (let index = replays.length - 1; index >= 0; index -= 1) {
         const replay = replays[index];
@@ -946,8 +1076,48 @@ function findLatestSuccessfulRequestReplayForHost(hostname) {
     return null;
 }
 
+function findLatestSuccessfulSpotifyRequestReplay() {
+    const replays = getMergedRequestReplayStore();
+
+    for (let index = replays.length - 1; index >= 0; index -= 1) {
+        const replay = replays[index];
+        if (!replay.ok) {
+            continue;
+        }
+
+        try {
+            const hostname = new URL(replay.url).hostname;
+            if (
+                /(spclient|dealer|apresolve)\.spotify\.com$/i.test(hostname) ||
+                hostname === "spclient.wg.spotify.com"
+            ) {
+                return replay;
+            }
+        } catch (_error) {}
+    }
+
+    return null;
+}
+
+function getLatestSpotifyHeaderValue(headerName) {
+    const normalizedHeaderName = String(headerName || "").toLowerCase();
+    if (!normalizedHeaderName) {
+        return "";
+    }
+
+    const replays = getMergedRequestReplayStore();
+    for (let index = replays.length - 1; index >= 0; index -= 1) {
+        const value = String(replays[index]?.headers?.[normalizedHeaderName] || "");
+        if (value) {
+            return value;
+        }
+    }
+
+    return "";
+}
+
 function getLatestSpotifyAccessToken() {
-    const replays = getRequestReplayStore();
+    const replays = getMergedRequestReplayStore();
 
     for (let index = replays.length - 1; index >= 0; index -= 1) {
         const authorizationHeader = String(replays[index]?.headers?.authorization || "");
@@ -957,7 +1127,7 @@ function getLatestSpotifyAccessToken() {
         }
     }
 
-    const captures = getNetworkCaptureStore();
+    const captures = getMergedNetworkCaptureStore();
     for (let index = captures.length - 1; index >= 0; index -= 1) {
         const captureUrl = captures[index]?.url || "";
 
@@ -973,7 +1143,7 @@ function getLatestSpotifyAccessToken() {
 }
 
 function getLatestSpotifyConnectionId() {
-    const captures = getNetworkCaptureStore();
+    const captures = getMergedNetworkCaptureStore();
 
     for (let index = captures.length - 1; index >= 0; index -= 1) {
         const capture = captures[index];
@@ -993,6 +1163,47 @@ function getLatestSpotifyConnectionId() {
     return "";
 }
 
+function getPreferredSpotifySpclientHost() {
+    const replays = getMergedRequestReplayStore();
+
+    for (let index = replays.length - 1; index >= 0; index -= 1) {
+        const replay = replays[index];
+        if (!replay?.ok) {
+            continue;
+        }
+
+        try {
+            const hostname = new URL(replay.url).hostname;
+            if (
+                hostname === "spclient.wg.spotify.com" ||
+                /(?:^|[-.])spclient\.spotify\.com$/i.test(hostname)
+            ) {
+                return hostname;
+            }
+        } catch (_error) {}
+    }
+
+    return window.top === window
+        ? "gue1-spclient.spotify.com"
+        : "spclient.wg.spotify.com";
+}
+
+function buildSpotifyStorageResolveUrls(fileFormat, fileId) {
+    const preferredHost = getPreferredSpotifySpclientHost();
+    const hosts = [
+        preferredHost,
+        "spclient.wg.spotify.com",
+        "gue1-spclient.spotify.com",
+    ].filter(Boolean);
+
+    const uniqueHosts = hosts.filter((hostname, index) => hosts.indexOf(hostname) === index);
+
+    return uniqueHosts.map(
+        (hostname) =>
+            `https://${hostname}/storage-resolve/v2/files/audio/interactive/${fileFormat}/${fileId}?version=10000000&product=9&platform=39&alt=json`,
+    );
+}
+
 function buildSpotifyApiRequestInit(url, method, patterns = {}) {
     const normalizedMethod = String(method || "GET").toUpperCase();
     const exactReplay = patterns.exactUrlPattern
@@ -1002,12 +1213,13 @@ function buildSpotifyApiRequestInit(url, method, patterns = {}) {
         ? findLatestSuccessfulRequestReplay(patterns.familyUrlPattern)
         : null;
     let hostReplay = null;
+    const spotifyReplay = findLatestSuccessfulSpotifyRequestReplay();
 
     try {
         hostReplay = findLatestSuccessfulRequestReplayForHost(new URL(url).hostname);
     } catch (_error) {}
 
-    const replaySource = exactReplay || familyReplay || hostReplay;
+    const replaySource = exactReplay || familyReplay || hostReplay || spotifyReplay;
     const init = {
         credentials: replaySource?.credentials || "include",
         headers: getReplayableHeaders(replaySource?.headers),
@@ -1023,6 +1235,16 @@ function buildSpotifyApiRequestInit(url, method, patterns = {}) {
 
     if (connectionId && !init.headers["spotify-connection-id"]) {
         init.headers["spotify-connection-id"] = connectionId;
+    }
+
+    const spotifyAppVersion = getLatestSpotifyHeaderValue("spotify-app-version");
+    if (spotifyAppVersion && !init.headers["spotify-app-version"]) {
+        init.headers["spotify-app-version"] = spotifyAppVersion;
+    }
+
+    const clientToken = getLatestSpotifyHeaderValue("client-token");
+    if (clientToken && !init.headers["client-token"]) {
+        init.headers["client-token"] = clientToken;
     }
 
     const replayBody =
@@ -1045,6 +1267,70 @@ function captureResponseText(text) {
     return text.slice(0, 1500);
 }
 
+function captureStructuredText(value) {
+    if (typeof value === "string") {
+        return captureResponseText(value);
+    }
+
+    if (value == null) {
+        return "";
+    }
+
+    try {
+        return captureResponseText(JSON.stringify(value));
+    } catch (_error) {
+        return "";
+    }
+}
+
+function snapshotXhrResponse(xhr) {
+    const responseType = String(xhr?.responseType || "");
+
+    if (!responseType || responseType === "text") {
+        const text = typeof xhr?.responseText === "string" ? xhr.responseText : "";
+        return {
+            parsed: safeJsonParse(text),
+            text,
+        };
+    }
+
+    if (responseType === "json") {
+        const parsed =
+            xhr?.response && typeof xhr.response === "object"
+                ? xhr.response
+                : safeJsonParse(captureStructuredText(xhr?.response));
+        return {
+            parsed,
+            text: captureStructuredText(parsed),
+        };
+    }
+
+    return {
+        parsed: null,
+        text: captureStructuredText(xhr?.response),
+    };
+}
+
+function summarizeRequestReplays() {
+    return getRequestReplayStore()
+        .slice(-REQUEST_REPLAY_LIMIT)
+        .map((replay) => {
+            const parsedBody = safeJsonParse(replay.body || "");
+            return {
+                bodyPreview: captureResponseText(replay.body || ""),
+                bodySummary: summarizeCapturedPayload(parsedBody || replay.body || ""),
+                capturedAt: replay.capturedAt,
+                credentials: replay.credentials,
+                headers: summarizeObjectInterestingBits(replay.headers || {}),
+                method: replay.method,
+                ok: replay.ok,
+                source: replay.source,
+                status: replay.status,
+                url: replay.url,
+            };
+        });
+}
+
 function initializeNetworkInstrumentation() {
     if (window.__ktv420NetworkInstrumentationInstalled) {
         return;
@@ -1061,7 +1347,39 @@ function initializeNetworkInstrumentation() {
                 typeof request === "string"
                     ? request
                     : request?.url || "";
-            const response = await originalFetch(...args);
+            let response = null;
+
+            try {
+                response = await originalFetch(...args);
+            } catch (error) {
+                if (shouldCaptureNetworkUrl(url)) {
+                    recordRequestReplay({
+                        ...replayRequest,
+                        error: error?.message || String(error),
+                        ok: false,
+                        source: "fetch",
+                        status: 0,
+                    });
+                    recordNetworkCapture({
+                        error: error?.message || String(error),
+                        method:
+                            typeof request === "object" && request?.method
+                                ? request.method
+                                : args[1]?.method || "GET",
+                        ok: false,
+                        requestBodyPreview: captureResponseText(replayRequest.body || ""),
+                        requestPayloadSummary: summarizeCapturedPayload(
+                            safeJsonParse(replayRequest.body || "") || replayRequest.body || "",
+                        ),
+                        source: "fetch",
+                        status: 0,
+                        textPreview: "",
+                        url,
+                    });
+                }
+
+                throw error;
+            }
 
             if (shouldCaptureNetworkUrl(url)) {
                 recordRequestReplay({
@@ -1154,9 +1472,8 @@ function initializeNetworkInstrumentation() {
             });
 
             try {
-                const text =
-                    typeof this.responseText === "string" ? this.responseText : "";
-                const parsed = safeJsonParse(text);
+                const { parsed, text } = snapshotXhrResponse(this);
+                const requestBodyParsed = safeJsonParse(this.__ktv420RequestBody || "");
 
                 recordNetworkCapture({
                     method: this.__ktv420Method || "GET",
@@ -1165,6 +1482,10 @@ function initializeNetworkInstrumentation() {
                         ? parsed
                         : null,
                     payloadSummary: summarizeCapturedPayload(parsed || text),
+                    requestBodyPreview: captureResponseText(this.__ktv420RequestBody || ""),
+                    requestPayloadSummary: summarizeCapturedPayload(
+                        requestBodyParsed || this.__ktv420RequestBody || "",
+                    ),
                     source: "xhr",
                     status: this.status,
                     textPreview: captureResponseText(text),
@@ -1208,11 +1529,16 @@ function initializeNetworkInstrumentation() {
                         return;
                     }
 
+                    const parsed = safeJsonParse(event.data);
+
                     recordNetworkCapture({
                         method: "WS",
                         ok: true,
+                        parsedData: shouldPersistParsedNetworkPayload(String(url), parsed)
+                            ? parsed
+                            : null,
                         payloadSummary: summarizeCapturedPayload(
-                            safeJsonParse(event.data) || event.data,
+                            parsed || event.data,
                         ),
                         source: "websocket-message",
                         status: 101,
@@ -1256,50 +1582,6 @@ function getLatestCapturedJson(urlPattern) {
     return null;
 }
 
-function getLatestStorageResolveData() {
-    const latest = getLatestCapturedJson(/storage-resolve\/v2\/files\/audio\/interactive/i);
-    if (!latest) {
-        return null;
-    }
-
-    const fileId = latest.parsed.fileid || "";
-    const assetUrl = Array.isArray(latest.parsed.cdnurl)
-        ? latest.parsed.cdnurl.find((url) => typeof url === "string" && url.length > 0)
-        : "";
-
-    if (!fileId || !assetUrl) {
-        return null;
-    }
-
-    return {
-        assetUrl,
-        capture: latest.capture,
-        fileId,
-    };
-}
-
-function getLatestStorageResolveDataForTrackId(trackId) {
-    const normalizedTrackId = normalizeTrackIdInput(trackId);
-    if (!normalizedTrackId) {
-        return null;
-    }
-
-    const currentTrackId = getTrackIdFromUri(getLatestConnectStateTrackUri());
-    if (currentTrackId !== normalizedTrackId) {
-        return null;
-    }
-
-    const latestResolvedAsset = getLatestStorageResolveData();
-    if (!latestResolvedAsset) {
-        return null;
-    }
-
-    return {
-        ...latestResolvedAsset,
-        currentTrackUri: `spotify:track:${normalizedTrackId}`,
-    };
-}
-
 function getLatestConnectStateTrackUri() {
     const latest = getLatestCapturedJson(/connect-state\/v1\/devices\//i);
     return latest?.parsed?.player_state?.track?.uri || "";
@@ -1312,6 +1594,81 @@ function getTrackIdFromUri(trackUri) {
 
 function getCurrentTrackId() {
     return getTrackIdFromUri(getLatestConnectStateTrackUri());
+}
+
+function getTrackIdFromLocationPathname(pathname = location.pathname) {
+    const match = String(pathname || "").match(/\/(?:embed\/)?track\/([A-Za-z0-9]{22})(?:\/|$)/i);
+    return match?.[1] || "";
+}
+
+function isTrackPageForTrackId(trackId, pathname = location.pathname) {
+    const normalizedTrackId = normalizeTrackIdInput(trackId);
+    return normalizedTrackId
+        ? /^\/track\/[A-Za-z0-9]{22}(?:\/|$)/i.test(String(pathname || "")) &&
+            getTrackIdFromLocationPathname(pathname) === normalizedTrackId
+        : false;
+}
+
+function buildTrackPageUrl(trackId, autoRun = false, iframeRequestId = "") {
+    const normalizedTrackId = normalizeTrackIdInput(trackId);
+    if (!normalizedTrackId) {
+        throw new Error("Enter a valid Spotify track id.");
+    }
+
+    const url = new URL(`/track/${normalizedTrackId}`, location.origin);
+    if (iframeRequestId) {
+        url.searchParams.set(TRACK_PAGE_IFRAME_REQUEST_PARAM, iframeRequestId);
+    }
+    if (autoRun) {
+        url.hash = TRACK_PAGE_AUTORUN_HASH.slice(1);
+    }
+    return url.toString();
+}
+
+function buildTrackEmbedUrl(trackId, autoRun = false, iframeRequestId = "") {
+    const normalizedTrackId = normalizeTrackIdInput(trackId);
+    if (!normalizedTrackId) {
+        throw new Error("Enter a valid Spotify track id.");
+    }
+
+    const url = new URL(`/embed/track/${normalizedTrackId}`, location.origin);
+    if (iframeRequestId) {
+        url.searchParams.set(TRACK_PAGE_IFRAME_REQUEST_PARAM, iframeRequestId);
+    }
+    if (autoRun) {
+        url.hash = TRACK_PAGE_AUTORUN_HASH.slice(1);
+    }
+    return url.toString();
+}
+
+function hasTrackPageAutoRunHash() {
+    return location.hash === TRACK_PAGE_AUTORUN_HASH;
+}
+
+function getTrackPageIframeRequestId(urlLike = location.href) {
+    try {
+        return new URL(String(urlLike || location.href), location.href)
+            .searchParams
+            .get(TRACK_PAGE_IFRAME_REQUEST_PARAM) || "";
+    } catch (_error) {
+        return "";
+    }
+}
+
+function clearTrackPageAutoRunState() {
+    const iframeRequestId = getTrackPageIframeRequestId();
+    if (!hasTrackPageAutoRunHash() && !iframeRequestId) {
+        return;
+    }
+
+    const url = new URL(location.href);
+    url.hash = "";
+    url.searchParams.delete(TRACK_PAGE_IFRAME_REQUEST_PARAM);
+    history.replaceState(null, "", url.toString());
+}
+
+function navigateToTrackPage(trackId, autoRun = false, iframeRequestId = "") {
+    location.assign(buildTrackPageUrl(trackId, autoRun, iframeRequestId));
 }
 
 function normalizeTrackIdInput(value) {
@@ -1361,6 +1718,37 @@ function getLatestCapturedConnectState() {
 
 function getLatestCapturedConnectStateEntry() {
     return getLatestCapturedJson(/connect-state\/v1\/devices\//i);
+}
+
+function getLatestCapturedConnectStateEntryForDeviceId(deviceId) {
+    const normalizedDeviceId = String(deviceId || "").toLowerCase();
+    if (!normalizedDeviceId) {
+        return getLatestCapturedConnectStateEntry();
+    }
+
+    const captures = getNetworkCaptureStore();
+
+    for (let index = captures.length - 1; index >= 0; index -= 1) {
+        const capture = captures[index];
+        const capturedDeviceId =
+            (capture.url || "").match(/connect-state\/v1\/devices\/hobs_([a-f0-9]+)/i)?.[1] || "";
+
+        if (
+            !capturedDeviceId ||
+            (capturedDeviceId !== normalizedDeviceId &&
+                !normalizedDeviceId.startsWith(capturedDeviceId) &&
+                !capturedDeviceId.startsWith(normalizedDeviceId))
+        ) {
+            continue;
+        }
+
+        const parsed = capture.parsedData || safeJsonParse(capture.textPreview || "");
+        if (parsed) {
+            return { capture, parsed };
+        }
+    }
+
+    return getLatestCapturedConnectStateEntry();
 }
 
 function pickBestDeviceIdFromConnectState(connectStateEntry) {
@@ -1524,32 +1912,51 @@ function collectFileCandidatesFromObject(rootValue) {
 
         if (!Array.isArray(current)) {
             const fileIds = [
-                current.file_id,
-                current.fileid,
-                current.fileId,
-                current.audio_uuid,
-                current.audioUuid,
-                current.original_audio?.file_id,
-                current.original_audio?.audio_uuid,
-                current.original_audio?.audioUuid,
-                current.original_audio?.uuid,
-            ].filter(Boolean);
+                { explicit: true, sourceKey: "file_id", value: current.file_id },
+                { explicit: true, sourceKey: "fileid", value: current.fileid },
+                { explicit: true, sourceKey: "fileId", value: current.fileId },
+                { explicit: false, sourceKey: "audio_uuid", value: current.audio_uuid },
+                { explicit: false, sourceKey: "audioUuid", value: current.audioUuid },
+                {
+                    explicit: true,
+                    sourceKey: "original_audio.file_id",
+                    value: current.original_audio?.file_id,
+                },
+                {
+                    explicit: false,
+                    sourceKey: "original_audio.audio_uuid",
+                    value: current.original_audio?.audio_uuid,
+                },
+                {
+                    explicit: false,
+                    sourceKey: "original_audio.audioUuid",
+                    value: current.original_audio?.audioUuid,
+                },
+                {
+                    explicit: false,
+                    sourceKey: "original_audio.uuid",
+                    value: current.original_audio?.uuid,
+                },
+            ].filter((entry) => Boolean(entry.value));
             const formats = [
-                current.format,
-                current.file_format,
-                current.audio_format,
-                current.original_audio?.format,
-            ].filter(Boolean);
+                { sourceKey: "format", value: current.format },
+                { sourceKey: "file_format", value: current.file_format },
+                { sourceKey: "audio_format", value: current.audio_format },
+                { sourceKey: "original_audio.format", value: current.original_audio?.format },
+            ].filter((entry) => Boolean(entry.value));
 
             if (fileIds.length && formats.length) {
-                for (const fileId of fileIds) {
-                    for (const format of formats) {
+                for (const fileIdEntry of fileIds) {
+                    for (const formatEntry of formats) {
                         results.push({
                             averageBitrate:
                                 Number(current.average_bitrate || current.avg_bitrate || 0) || 0,
                             bitrate: Number(current.bitrate || 0) || 0,
-                            fileId,
-                            format,
+                            fileId: fileIdEntry.value,
+                            format: formatEntry.value,
+                            formatSourceKey: formatEntry.sourceKey,
+                            hasExplicitFileId: fileIdEntry.explicit,
+                            sourceKey: fileIdEntry.sourceKey,
                         });
                     }
                 }
@@ -1563,6 +1970,13 @@ function collectFileCandidatesFromObject(rootValue) {
                     bitrate: Number(current.bitrate || 0) || 0,
                     fileId: current.uuid,
                     format: current.format || current.file_format || current.audio_format,
+                    formatSourceKey: current.format
+                        ? "format"
+                        : current.file_format
+                            ? "file_format"
+                            : "audio_format",
+                    hasExplicitFileId: false,
+                    sourceKey: "uuid",
                 });
             }
         }
@@ -1613,6 +2027,9 @@ function collectFileCandidatesFromAudioFormatEntry(entry) {
                 bitrate: 0,
                 fileId,
                 format,
+                formatSourceKey: "nested.format",
+                hasExplicitFileId: true,
+                sourceKey: "nested.file_id",
             });
         }
     }
@@ -1647,8 +2064,8 @@ function rankFileCandidates(candidates) {
                 looksLikeResolvableAudioFormat(candidate.format),
         )
         .sort((left, right) => {
-            const rightExplicitFileId = /file(?:_|)id/i.test(String(right.sourceKey || "")) ? 1 : 0;
-            const leftExplicitFileId = /file(?:_|)id/i.test(String(left.sourceKey || "")) ? 1 : 0;
+            const rightExplicitFileId = right.hasExplicitFileId ? 1 : 0;
+            const leftExplicitFileId = left.hasExplicitFileId ? 1 : 0;
             if (rightExplicitFileId !== leftExplicitFileId) {
                 return rightExplicitFileId - leftExplicitFileId;
             }
@@ -1663,101 +2080,6 @@ function rankFileCandidates(candidates) {
             const leftScore = left.bitrate || left.averageBitrate || 0;
             return rightScore - leftScore;
         });
-}
-
-function buildAssetResolutionError(primaryError, fallbackError) {
-    if (primaryError && fallbackError) {
-        return new Error(
-            `Metadata resolution failed: ${primaryError.message} Playback fallback failed: ${fallbackError.message}`,
-        );
-    }
-
-    return primaryError || fallbackError || new Error("No resolved Spotify audio asset was available.");
-}
-
-async function resolveAssetFromMetadata(metadata) {
-    const fileCandidates = rankFileCandidates(collectFileCandidatesFromMetadata(metadata));
-    if (!fileCandidates.length) {
-        throw new Error("Spotify metadata was captured, but it did not expose a resolvable audio file candidate.");
-    }
-
-    const failures = [];
-
-    for (const fileCandidate of fileCandidates) {
-        const storageResolveUrl =
-            `https://gue1-spclient.spotify.com/storage-resolve/v2/files/audio/interactive/${fileCandidate.format}/${fileCandidate.fileId}?version=10000000&product=9&platform=39&alt=json`;
-        const response = await fetch(
-            storageResolveUrl,
-            buildSpotifyApiRequestInit(storageResolveUrl, "GET", {
-                exactUrlPattern:
-                    /storage-resolve\/v2\/files\/audio\/interactive\/[^/]+\/[a-f0-9]+/i,
-                familyUrlPattern: /storage-resolve\/v2\/files\/audio\/interactive/i,
-            }),
-        );
-
-        if (!response.ok) {
-            failures.push(
-                `${response.status}:${String(fileCandidate.format)}:${String(fileCandidate.fileId)}`,
-            );
-            continue;
-        }
-
-        const resolvedAsset = await response.json();
-        const assetUrl = Array.isArray(resolvedAsset.cdnurl)
-            ? resolvedAsset.cdnurl.find((url) => typeof url === "string" && url.length > 0)
-            : "";
-
-        if (!assetUrl) {
-            failures.push(
-                `no-cdnurl:${String(fileCandidate.format)}:${String(fileCandidate.fileId)}`,
-            );
-            continue;
-        }
-
-        return {
-            assetUrl,
-            currentTrackUri: metadata.canonical_uri || "",
-            fileId: fileCandidate.fileId,
-            format: fileCandidate.format,
-        };
-    }
-
-    const failureSummary = failures.slice(0, 5).join(", ");
-    throw new Error(
-        `Resolving the Spotify audio asset from metadata failed for ${fileCandidates.length} candidate(s). ${failureSummary ? `Tried ${failureSummary}.` : ""}`,
-    );
-}
-
-async function resolveAssetFromCapturedMetadata(trackInfo) {
-    const metadata = findLatestCapturedTrackMetadata(trackInfo);
-    if (!metadata) {
-        throw new Error("No captured Spotify track metadata was available for the current paused track.");
-    }
-
-    return resolveAssetFromMetadata(metadata);
-}
-
-async function fetchTrackMetadataByTrackId(trackId) {
-    const normalizedTrackId = normalizeTrackIdInput(trackId);
-    if (!normalizedTrackId) {
-        throw new Error("Enter a valid Spotify track id.");
-    }
-
-    const gid = spotifyIdToHexGid(normalizedTrackId);
-    const metadataUrl =
-        `https://spclient.wg.spotify.com/metadata/4/track/${gid}?market=from_token`;
-    const response = await fetch(
-        metadataUrl,
-        buildSpotifyApiRequestInit(metadataUrl, "GET", {
-            exactUrlPattern: /metadata\/4\/track\/[a-f0-9]+/i,
-            familyUrlPattern: /metadata\/4\/track/i,
-        }),
-    );
-    if (!response.ok) {
-        throw new Error(`Fetching Spotify track metadata failed with status ${response.status}.`);
-    }
-
-    return response.json();
 }
 
 function getLatestDeviceId() {
@@ -1797,34 +2119,7 @@ function getLatestDeviceId() {
 }
 
 function getLatestCapturedConnectStateForDeviceId(deviceId) {
-    const normalizedDeviceId = String(deviceId || "").toLowerCase();
-    if (!normalizedDeviceId) {
-        return getLatestCapturedConnectState();
-    }
-
-    const captures = getNetworkCaptureStore();
-
-    for (let index = captures.length - 1; index >= 0; index -= 1) {
-        const capture = captures[index];
-        const capturedDeviceId =
-            (capture.url || "").match(/connect-state\/v1\/devices\/hobs_([a-f0-9]+)/i)?.[1] || "";
-
-        if (
-            !capturedDeviceId ||
-            (capturedDeviceId !== normalizedDeviceId &&
-                !normalizedDeviceId.startsWith(capturedDeviceId) &&
-                !capturedDeviceId.startsWith(normalizedDeviceId))
-        ) {
-            continue;
-        }
-
-        const parsed = capture.parsedData || safeJsonParse(capture.textPreview || "");
-        if (parsed) {
-            return parsed;
-        }
-    }
-
-    return getLatestCapturedConnectState();
+    return getLatestCapturedConnectStateEntryForDeviceId(deviceId)?.parsed || null;
 }
 
 function getLatestCapturedTrackPlaybackStateForDeviceId(deviceId) {
@@ -1847,17 +2142,24 @@ function getLatestCapturedTrackPlaybackStateForDeviceId(deviceId) {
             continue;
         }
 
-        const parsed = capture.parsedData || safeJsonParse(capture.textPreview || "");
-        if (!parsed) {
-            continue;
+        const states = getTrackPlaybackStatesFromCapture(capture);
+        if (states.length > 0) {
+            return states[0];
         }
 
-        if (Array.isArray(parsed?.state_machine?.tracks) && parsed.state_machine.tracks.length) {
-            return parsed;
-        }
-
-        if (!latestParsedState) {
+        const parsed =
+            capture.parsedData ||
+            safeJsonParse(capture.textPreview || "") ||
+            safeJsonParse(typeof capture.payloadSummary === "string" ? capture.payloadSummary : "");
+        if (parsed && !latestParsedState) {
             latestParsedState = parsed;
+        }
+    }
+
+    for (let index = captures.length - 1; index >= 0; index -= 1) {
+        const states = getTrackPlaybackStatesFromCapture(captures[index]);
+        if (states.length > 0) {
+            return states[0];
         }
     }
 
@@ -1886,12 +2188,533 @@ async function fetchJsonWithMethods(url, methods, buildRequestInit = null) {
     throw lastError || new Error(`Fetching ${url} failed.`);
 }
 
-async function fetchCurrentConnectState(deviceId) {
+async function fetchSpotifyWebApi(path, method = "GET", body = null, query = {}) {
+    const accessToken = getLatestSpotifyAccessToken();
+    if (!accessToken) {
+        throw new Error("No captured Spotify access token was available for playback control.");
+    }
+
+    const url = new URL(path, "https://api.spotify.com");
+    for (const [key, value] of Object.entries(query || {})) {
+        if (value != null && value !== "") {
+            url.searchParams.set(key, String(value));
+        }
+    }
+
+    const init = {
+        credentials: "include",
+        headers: {
+            authorization: `Bearer ${accessToken}`,
+        },
+        method: String(method || "GET").toUpperCase(),
+        mode: "cors",
+    };
+
+    if (body != null) {
+        init.body = JSON.stringify(body);
+        init.headers["content-type"] = "application/json";
+    }
+
+    const response = await fetch(url.toString(), init);
+    if (!response.ok) {
+        const responseText = captureResponseText(await response.text().catch(() => ""));
+        throw new Error(
+            `Spotify Web API ${init.method} ${url.pathname} failed with status ${response.status}${responseText ? `: ${responseText}` : "."}`,
+        );
+    }
+
+    if (response.status === 204) {
+        return null;
+    }
+
+    const responseText = await response.text();
+    return responseText ? safeJsonParse(responseText) || responseText : null;
+}
+
+function clearSpotifyConnectStateCache(deviceId = "") {
+    const normalizedDeviceId = String(deviceId || "").toLowerCase();
+    if (!normalizedDeviceId) {
+        spotifyConnectStateCache.clear();
+        return;
+    }
+
+    for (const cachedDeviceId of spotifyConnectStateCache.keys()) {
+        if (
+            cachedDeviceId === normalizedDeviceId ||
+            cachedDeviceId.startsWith(normalizedDeviceId) ||
+            normalizedDeviceId.startsWith(cachedDeviceId)
+        ) {
+            spotifyConnectStateCache.delete(cachedDeviceId);
+        }
+    }
+}
+
+function normalizePlaybackPositionMs(value) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue) || numericValue < 0) {
+        return 0;
+    }
+
+    return Math.max(0, Math.floor(numericValue));
+}
+
+function getPlayerStatePositionMs(playerState) {
+    const candidates = [
+        playerState?.position_ms,
+        playerState?.positionMs,
+        playerState?.position_as_of_timestamp,
+        playerState?.position,
+    ];
+
+    for (const candidate of candidates) {
+        const normalizedCandidate = normalizePlaybackPositionMs(candidate);
+        if (normalizedCandidate > 0 || Number(candidate) === 0) {
+            return normalizedCandidate;
+        }
+    }
+
+    return 0;
+}
+
+function getTrackPlaybackStatePositionMs(trackPlaybackState) {
+    const candidates = [
+        trackPlaybackState?.sub_state?.position,
+        trackPlaybackState?.sub_state?.position_ms,
+        trackPlaybackState?.sub_state?.positionMs,
+        trackPlaybackState?.position,
+        trackPlaybackState?.position_ms,
+        trackPlaybackState?.positionMs,
+    ];
+
+    for (const candidate of candidates) {
+        if (candidate == null || candidate === "") {
+            continue;
+        }
+
+        const normalizedCandidate = normalizePlaybackPositionMs(candidate);
+        if (normalizedCandidate > 0 || Number(candidate) === 0) {
+            return normalizedCandidate;
+        }
+    }
+
+    return null;
+}
+
+function getTrackIdsFromTrackPlaybackState(trackPlaybackState) {
+    return (Array.isArray(trackPlaybackState?.state_machine?.tracks)
+        ? trackPlaybackState.state_machine.tracks
+        : []
+    )
+        .flatMap((track) => getTrackIdsFromTrackPlaybackTrack(track))
+        .filter(Boolean);
+}
+
+function getTrackUrisFromTrackPlaybackTrack(track) {
+    const directCandidates = [
+        track?.metadata?.uri,
+        track?.uri,
+        track?.playable_uri,
+        track?.playableUri,
+        track?.metadata?.playable_uri,
+        track?.metadata?.playableUri,
+        track?.metadata?.canonical_uri,
+        track?.metadata?.canonicalUri,
+    ];
+    const nestedCandidates = collectNestedStringValues(
+        track,
+        /(?:^uri$|track_uri|trackUri|playable_uri|playableUri|canonical_uri|canonicalUri)/i,
+    );
+
+    return [...new Set([...directCandidates, ...nestedCandidates])]
+        .map((value) => String(value || "").trim())
+        .filter((value) => /^spotify:track:[A-Za-z0-9]+$/i.test(value));
+}
+
+function getTrackIdsFromTrackPlaybackTrack(track) {
+    return getTrackUrisFromTrackPlaybackTrack(track)
+        .map((trackUri) => getTrackIdFromUri(trackUri))
+        .filter(Boolean);
+}
+
+function getHexGidsFromTrackPlaybackTrack(track) {
+    const directCandidates = [
+        track?.gid,
+        track?.metadata?.gid,
+        track?.track_gid,
+        track?.trackGid,
+        track?.metadata?.track_gid,
+        track?.metadata?.trackGid,
+    ];
+    const nestedCandidates = collectNestedStringValues(
+        track,
+        /(?:^gid$|track_gid|trackGid)/i,
+    );
+
+    return [...new Set([...directCandidates, ...nestedCandidates])]
+        .map((value) => String(value || "").trim().toLowerCase())
+        .filter((value) => /^[a-f0-9]{32}$/i.test(value));
+}
+
+function trackPlaybackTrackMatchesTrackId(track, trackId) {
+    const normalizedTrackId = normalizeTrackIdInput(trackId);
+    if (!normalizedTrackId) {
+        return false;
+    }
+
+    if (getTrackIdsFromTrackPlaybackTrack(track).includes(normalizedTrackId)) {
+        return true;
+    }
+
+    let expectedHexGid = "";
     try {
-        const url =
-            `https://gue1-spclient.spotify.com/connect-state/v1/devices/hobs_${deviceId}`;
-        return await fetchJsonWithMethods(
-            url,
+        expectedHexGid = spotifyIdToHexGid(normalizedTrackId).toLowerCase();
+    } catch (_error) {
+        expectedHexGid = "";
+    }
+
+    return expectedHexGid
+        ? getHexGidsFromTrackPlaybackTrack(track).includes(expectedHexGid)
+        : false;
+}
+
+function getLatestCapturedPlaybackPositionMsForDevice(deviceId, expectedTrackId = "") {
+    const trackPlaybackState = getLatestCapturedTrackPlaybackStateForDeviceId(deviceId);
+    if (!trackPlaybackState) {
+        return null;
+    }
+
+    const normalizedExpectedTrackId = normalizeTrackIdInput(expectedTrackId);
+    if (normalizedExpectedTrackId) {
+        const capturedTrackIds = getTrackIdsFromTrackPlaybackState(trackPlaybackState);
+        if (capturedTrackIds.length && !capturedTrackIds.includes(normalizedExpectedTrackId)) {
+            return null;
+        }
+    }
+
+    return getTrackPlaybackStatePositionMs(trackPlaybackState);
+}
+
+function getBestKnownPlaybackPositionMs(connectState, deviceId, expectedTrackId = "") {
+    const capturedPositionMs = getLatestCapturedPlaybackPositionMsForDevice(
+        deviceId,
+        expectedTrackId,
+    );
+    if (capturedPositionMs != null) {
+        return capturedPositionMs;
+    }
+
+    return getPlayerStatePositionMs(connectState?.player_state);
+}
+
+function getStrongestKnownPlaybackPositionMs(connectState, deviceId, expectedTrackId = "") {
+    const positionCandidates = [
+        getPlayerStatePositionMs(connectState?.player_state),
+        getLatestCapturedPlaybackPositionMsForDevice(deviceId, expectedTrackId),
+    ];
+
+    let strongestPositionMs = null;
+    for (const candidate of positionCandidates) {
+        if (candidate == null) {
+            continue;
+        }
+
+        if (strongestPositionMs == null) {
+            strongestPositionMs = candidate;
+            continue;
+        }
+
+        strongestPositionMs = Math.max(strongestPositionMs, candidate);
+    }
+
+    return strongestPositionMs ?? 0;
+}
+
+function getCurrentTrackIdFromConnectState(connectState) {
+    return getTrackIdFromUri(connectState?.player_state?.track?.uri || "");
+}
+
+function getSpotifyPlayerControlsRoot() {
+    return (
+        document.querySelector('[data-testid="player-controls"]') ||
+        document.querySelector('aside[data-testid="now-playing-bar"]')
+    );
+}
+
+function getSpotifyPlayerControlButton(controlName) {
+    const exactSelectorsByControl = {
+        next: '[data-testid="control-button-skip-forward"]',
+        playpause: '[data-testid="control-button-playpause"]',
+        previous: '[data-testid="control-button-skip-back"]',
+    };
+    const fallbackSelectorsByControl = {
+        next: ['button[aria-label*="Next"]', 'button[aria-label*="next"]', 'button[title*="Next"]'],
+        playpause: [
+            'button[aria-label*="Play"]',
+            'button[aria-label*="Pause"]',
+            'button[title*="Play"]',
+            'button[title*="Pause"]',
+        ],
+        previous: [
+            'button[aria-label*="Previous"]',
+            'button[aria-label*="previous"]',
+            'button[title*="Previous"]',
+        ],
+    };
+    const exactSelector = exactSelectorsByControl[controlName] || "";
+    const fallbackSelectors = fallbackSelectorsByControl[controlName] || [];
+    const playerControlsRoot = getSpotifyPlayerControlsRoot();
+
+    if (exactSelector) {
+        const exactMatch = document.querySelector(exactSelector);
+        if (exactMatch instanceof HTMLButtonElement && !exactMatch.disabled) {
+            return exactMatch;
+        }
+    }
+
+    if (!playerControlsRoot) {
+        return null;
+    }
+
+    for (const selector of fallbackSelectors) {
+        const element = playerControlsRoot.querySelector(selector);
+        if (element instanceof HTMLButtonElement && !element.disabled) {
+            return element;
+        }
+    }
+
+    return null;
+}
+
+function clickSpotifyPlayerControl(controlName) {
+    const button = getSpotifyPlayerControlButton(controlName);
+    if (!button) {
+        throw new Error(`Could not find Spotify's ${controlName} control button.`);
+    }
+
+    button.click();
+}
+
+function isElementVisible(element) {
+    if (!(element instanceof Element)) {
+        return false;
+    }
+
+    const computedStyle = getComputedStyle(element);
+    if (
+        computedStyle.display === "none" ||
+        computedStyle.visibility === "hidden" ||
+        computedStyle.opacity === "0"
+    ) {
+        return false;
+    }
+
+    return element.getClientRects().length > 0;
+}
+
+function getTrackPagePlayButton(rootDocument = document) {
+    const root =
+        rootDocument.querySelector("main") ||
+        rootDocument.querySelector('[role="main"]') ||
+        rootDocument.querySelector('[data-testid="main-view"]');
+    if (!root) {
+        return null;
+    }
+
+    const candidates = Array.from(root.querySelectorAll('[data-testid="play-button"]'));
+    return (
+        candidates.find((candidate) => {
+            if (!(candidate instanceof HTMLElement)) {
+                return false;
+            }
+
+            if (!isElementVisible(candidate)) {
+                return false;
+            }
+
+            if ("disabled" in candidate && candidate.disabled) {
+                return false;
+            }
+
+            return !candidate.closest('[data-testid="now-playing-bar"]');
+        }) || null
+    );
+}
+
+function getIframeContentDocument(iframe) {
+    try {
+        return iframe?.contentDocument || iframe?.contentWindow?.document || null;
+    } catch (_error) {
+        return null;
+    }
+}
+
+function getIframeLocationPathname(iframe) {
+    try {
+        return String(iframe?.contentWindow?.location?.pathname || "");
+    } catch (_error) {
+        return "";
+    }
+}
+
+async function waitForSpotifyDeviceId(timeoutMs = 10000) {
+    return waitForAsyncValue(() => getLatestDeviceId(), timeoutMs, "Spotify did not expose a playable device id in time.");
+}
+
+async function waitForTrackPagePlayButton(trackId, timeoutMs = TRACK_PAGE_PLAY_BUTTON_TIMEOUT_MS) {
+    const normalizedTrackId = normalizeTrackIdInput(trackId);
+    if (!normalizedTrackId) {
+        throw new Error("Enter a valid Spotify track id.");
+    }
+
+    return waitForAsyncValue(() => {
+        if (!isTrackPageForTrackId(normalizedTrackId)) {
+            return null;
+        }
+
+        return getTrackPagePlayButton();
+    }, timeoutMs, "Spotify did not finish rendering the track page play button in time.");
+}
+
+async function waitForTrackPageIframePlayButton(
+    iframe,
+    trackId,
+    timeoutMs = TRACK_PAGE_PLAY_BUTTON_TIMEOUT_MS,
+) {
+    const normalizedTrackId = normalizeTrackIdInput(trackId);
+    if (!normalizedTrackId) {
+        throw new Error("Enter a valid Spotify track id.");
+    }
+
+    return waitForAsyncValue(() => {
+        const iframeDocument = getIframeContentDocument(iframe);
+        if (!iframeDocument) {
+            return null;
+        }
+
+        if (!isTrackPageForTrackId(normalizedTrackId, getIframeLocationPathname(iframe))) {
+            return null;
+        }
+
+        return getTrackPagePlayButton(iframeDocument);
+    }, timeoutMs, "Spotify did not finish rendering the hidden track page iframe in time.");
+}
+
+async function waitForAsyncValue(
+    getter,
+    timeoutMs,
+    timeoutMessage,
+    pollMs = SPOTIFY_POLL_MS,
+) {
+    const startMs = performance.now();
+    let lastError = null;
+
+    while (performance.now() - startMs < timeoutMs) {
+        try {
+            const value = await getter();
+            if (value) {
+                return value;
+            }
+        } catch (error) {
+            lastError = error;
+        }
+
+        await sleep(pollMs);
+    }
+
+    if (lastError?.message) {
+        throw new Error(`${timeoutMessage} Last error: ${lastError.message}`);
+    }
+
+    throw new Error(timeoutMessage);
+}
+
+async function waitForCurrentTrackId(deviceId, expectedTrackId, timeoutMs, timeoutMessage) {
+    const normalizedTrackId = normalizeTrackIdInput(expectedTrackId);
+
+    return waitForAsyncValue(async () => {
+        const connectState = await fetchCurrentConnectState(deviceId);
+        const currentTrackId = getTrackIdFromUri(connectState?.player_state?.track?.uri || "");
+        return currentTrackId === normalizedTrackId ? connectState : null;
+    }, timeoutMs, timeoutMessage);
+}
+
+async function resolveAssetFromTrackPagePlayback(trackId) {
+    const normalizedTrackId = normalizeTrackIdInput(trackId);
+    if (!normalizedTrackId) {
+        throw new Error("Enter a valid Spotify track id.");
+    }
+
+    if (!isTrackPageForTrackId(normalizedTrackId)) {
+        throw new Error("Spotify was not on the requested track page when playback resolution started.");
+    }
+
+    const playButton = await waitForTrackPagePlayButton(normalizedTrackId);
+    const deviceId = await waitForSpotifyDeviceId();
+    let connectState = await fetchCurrentConnectState(deviceId);
+    let currentTrackId = getCurrentTrackIdFromConnectState(connectState);
+
+    if (currentTrackId !== normalizedTrackId) {
+        playButton.click();
+        clearSpotifyConnectStateCache(deviceId);
+        connectState = await waitForCurrentTrackId(
+            deviceId,
+            normalizedTrackId,
+            SPOTIFY_ASSET_RESOLUTION_TIMEOUT_MS,
+            "Spotify did not start the requested track from the track page in time.",
+        );
+    }
+
+    return waitForAsyncValue(async () => {
+        const liveConnectState = await fetchCurrentConnectState(deviceId);
+        if (getCurrentTrackIdFromConnectState(liveConnectState) !== normalizedTrackId) {
+            return null;
+        }
+
+        const playbackResolvedAsset = await resolveAssetFromPlaybackState(deviceId);
+        return getTrackIdFromUri(playbackResolvedAsset?.currentTrackUri || "") ===
+            normalizedTrackId
+            ? playbackResolvedAsset
+            : null;
+    }, SPOTIFY_ASSET_RESOLUTION_TIMEOUT_MS, "Spotify loaded the requested track page, but no manifest-backed audio asset was captured.");
+}
+
+async function fetchCurrentConnectState(deviceId) {
+    const normalizedDeviceId = String(deviceId || "").toLowerCase();
+    const cacheEntry = spotifyConnectStateCache.get(normalizedDeviceId) || {
+        data: null,
+        fetchedAtMs: 0,
+        pendingPromise: null,
+    };
+    spotifyConnectStateCache.set(normalizedDeviceId, cacheEntry);
+
+    if (cacheEntry.pendingPromise) {
+        return cacheEntry.pendingPromise;
+    }
+
+    const capturedConnectStateEntry =
+        getLatestCapturedConnectStateEntryForDeviceId(deviceId);
+    const capturedAtMs = Date.parse(capturedConnectStateEntry?.capture?.capturedAt || "");
+    if (
+        capturedConnectStateEntry?.parsed &&
+        Number.isFinite(capturedAtMs) &&
+        Date.now() - capturedAtMs <= SPOTIFY_CAPTURED_CONNECT_STATE_MAX_AGE_MS
+    ) {
+        cacheEntry.data = capturedConnectStateEntry.parsed;
+        cacheEntry.fetchedAtMs = Date.now();
+        return cacheEntry.data;
+    }
+
+    if (
+        cacheEntry.data &&
+        Date.now() - cacheEntry.fetchedAtMs <= SPOTIFY_CONNECT_STATE_CACHE_MS
+    ) {
+        return cacheEntry.data;
+    }
+
+    let pendingPromise = null;
+    try {
+        pendingPromise = fetchJsonWithMethods(
+            `https://gue1-spclient.spotify.com/connect-state/v1/devices/hobs_${deviceId}`,
             ["PUT", "GET"],
             (requestUrl, method) =>
                 buildSpotifyApiRequestInit(requestUrl, method, {
@@ -1899,15 +2722,27 @@ async function fetchCurrentConnectState(deviceId) {
                     familyUrlPattern: /connect-state\/v1\/devices\//i,
                 }),
         );
+        cacheEntry.pendingPromise = pendingPromise;
+
+        const liveConnectState = await pendingPromise;
+        cacheEntry.data = liveConnectState;
+        cacheEntry.fetchedAtMs = Date.now();
+        return liveConnectState;
     } catch (error) {
         const capturedConnectState =
             getLatestCapturedConnectStateForDeviceId(deviceId) ||
             getLatestCapturedConnectState();
         if (capturedConnectState) {
+            cacheEntry.data = capturedConnectState;
+            cacheEntry.fetchedAtMs = Date.now();
             return capturedConnectState;
         }
 
         throw error;
+    } finally {
+        if (cacheEntry.pendingPromise === pendingPromise) {
+            cacheEntry.pendingPromise = null;
+        }
     }
 }
 
@@ -1961,7 +2796,12 @@ function pickCurrentTrackFromState(trackPlaybackState, currentTrackUri) {
     }
 
     if (currentTrackUri) {
-        const exactMatch = tracks.find((track) => track?.metadata?.uri === currentTrackUri);
+        const currentTrackId = getTrackIdFromUri(currentTrackUri);
+        const exactMatch = tracks.find((track) =>
+            currentTrackId
+                ? trackPlaybackTrackMatchesTrackId(track, currentTrackId)
+                : getTrackUrisFromTrackPlaybackTrack(track).includes(currentTrackUri),
+        );
         if (exactMatch) {
             return exactMatch;
         }
@@ -1970,61 +2810,12 @@ function pickCurrentTrackFromState(trackPlaybackState, currentTrackUri) {
     return tracks.find((track) => track?.metadata?.name) || null;
 }
 
-function findLatestCapturedTrackPlaybackTrackByTrackId(trackId, deviceId = "") {
-    const normalizedTrackId = normalizeTrackIdInput(trackId);
-    if (!normalizedTrackId) {
-        return null;
-    }
-
-    const normalizedDeviceId = String(deviceId || "").toLowerCase();
-    const expectedTrackUri = `spotify:track:${normalizedTrackId}`;
-    const captures = getNetworkCaptureStore();
-
-    for (let index = captures.length - 1; index >= 0; index -= 1) {
-        const capture = captures[index];
-        const captureUrl = capture.url || "";
-        if (!/track-playback\/v1\/devices\/[a-f0-9]+\/state/i.test(captureUrl)) {
-            continue;
-        }
-
-        const capturedDeviceId =
-            captureUrl.match(/track-playback\/v1\/devices\/([a-f0-9]+)\/state/i)?.[1] || "";
-        if (
-            normalizedDeviceId &&
-            capturedDeviceId &&
-            capturedDeviceId !== normalizedDeviceId &&
-            !normalizedDeviceId.startsWith(capturedDeviceId) &&
-            !capturedDeviceId.startsWith(normalizedDeviceId)
-        ) {
-            continue;
-        }
-
-        const parsed = capture.parsedData || safeJsonParse(capture.textPreview || "");
-        const tracks = parsed?.state_machine?.tracks;
-        if (!Array.isArray(tracks) || !tracks.length) {
-            continue;
-        }
-
-        const matchingTrack = tracks.find(
-            (track) =>
-                track?.metadata?.uri === expectedTrackUri ||
-                track?.uri === expectedTrackUri,
-        );
-        if (matchingTrack?.manifest) {
-            return {
-                capture,
-                track: matchingTrack,
-            };
-        }
-    }
-
-    return null;
-}
-
 function pickBestManifestFile(manifest) {
     const candidates = [
         ...(Array.isArray(manifest?.file_ids_mp4_dual) ? manifest.file_ids_mp4_dual : []),
         ...(Array.isArray(manifest?.file_ids_mp4) ? manifest.file_ids_mp4 : []),
+        ...(Array.isArray(manifest?.file_ids_mp4_cbcs) ? manifest.file_ids_mp4_cbcs : []),
+        ...(Array.isArray(manifest?.file_ids_mp4flac) ? manifest.file_ids_mp4flac : []),
     ]
         .filter((entry) => entry?.file_id && entry?.format)
         .sort((left, right) => (right?.bitrate || 0) - (left?.bitrate || 0));
@@ -2038,19 +2829,52 @@ async function resolveAssetFromManifest(manifest, currentTrackUri) {
         throw new Error("Spotify returned a manifest, but no hashable audio file entry was available.");
     }
 
-    const storageResolveUrl =
-        `https://gue1-spclient.spotify.com/storage-resolve/v2/files/audio/interactive/${manifestFile.format}/${manifestFile.file_id}?version=10000000&product=9&platform=39&alt=json`;
-    const response = await fetch(
-        storageResolveUrl,
-        buildSpotifyApiRequestInit(storageResolveUrl, "GET", {
-            exactUrlPattern:
-                /storage-resolve\/v2\/files\/audio\/interactive\/[^/]+\/[a-f0-9]+/i,
-            familyUrlPattern: /storage-resolve\/v2\/files\/audio\/interactive/i,
-        }),
+    const storageResolveUrls = buildSpotifyStorageResolveUrls(
+        manifestFile.format,
+        manifestFile.file_id,
     );
-    if (!response.ok) {
+    let response = null;
+    const failures = [];
+
+    for (const storageResolveUrl of storageResolveUrls) {
+        try {
+            response = await fetch(
+                storageResolveUrl,
+                buildSpotifyApiRequestInit(storageResolveUrl, "GET", {
+                    exactUrlPattern:
+                        /storage-resolve\/v2\/files\/audio\/interactive\/[^/]+\/[a-f0-9]+/i,
+                    familyUrlPattern: /storage-resolve\/v2\/files\/audio\/interactive/i,
+                }),
+            );
+        } catch (error) {
+            let hostname = "";
+            try {
+                hostname = new URL(storageResolveUrl).hostname;
+            } catch (_innerError) {}
+
+            failures.push(
+                `fetch-error:${hostname || "unknown-host"}:${error?.message || "unknown-error"}`,
+            );
+            continue;
+        }
+
+        if (response.ok) {
+            break;
+        }
+
+        let hostname = "";
+        try {
+            hostname = new URL(storageResolveUrl).hostname;
+        } catch (_innerError) {}
+
+        failures.push(`${response.status}:${hostname || "unknown-host"}`);
+        response = null;
+    }
+
+    if (!response) {
+        const failureSummary = failures.slice(0, 5).join(", ");
         throw new Error(
-            `Resolving the Spotify audio asset failed with status ${response.status}.`,
+            `Resolving the Spotify audio asset failed${failureSummary ? ` (${failureSummary})` : ""}.`,
         );
     }
 
@@ -2071,141 +2895,125 @@ async function resolveAssetFromManifest(manifest, currentTrackUri) {
     };
 }
 
-async function resolveAssetFromPlaybackState(deviceId) {
-    const connectState = await fetchCurrentConnectState(deviceId);
-    const currentTrackUri = connectState?.player_state?.track?.uri || "";
-    const trackPlaybackState = await fetchCurrentTrackPlaybackState(deviceId);
-    const currentTrack = pickCurrentTrackFromState(trackPlaybackState, currentTrackUri);
-
-    if (!currentTrack?.manifest) {
-        throw new Error("Spotify returned track state, but not a playable manifest for the current track.");
-    }
-
-    return resolveAssetFromManifest(currentTrack.manifest, currentTrackUri);
-}
-
-async function resolveAssetFromCapturedPlaybackHistory(trackId, deviceId) {
-    const capturedTrackState = findLatestCapturedTrackPlaybackTrackByTrackId(trackId, deviceId);
-    if (!capturedTrackState?.track?.manifest) {
-        throw new Error("No captured Spotify playback manifest was available for that track id.");
-    }
-
-    return resolveAssetFromManifest(
-        capturedTrackState.track.manifest,
-        capturedTrackState.track.metadata?.uri ||
-            capturedTrackState.track.uri ||
-            `spotify:track:${normalizeTrackIdInput(trackId)}`,
-    );
-}
-
-async function computeCurrentTrackAssetMd5(trackInfo) {
-    let resolvedAsset = null;
-
-    try {
-        resolvedAsset = await resolveAssetFromCapturedMetadata(trackInfo);
-    } catch (_error) {
-        resolvedAsset = null;
-    }
-
-    if (!resolvedAsset) {
-        resolvedAsset = getLatestStorageResolveData();
-    }
-
-    const deviceId = getLatestDeviceId();
-    if (!resolvedAsset) {
-        if (deviceId) {
-            try {
-                resolvedAsset = await resolveAssetFromPlaybackState(deviceId);
-            } catch (_error) {
-                resolvedAsset = null;
-            }
-        }
-    }
-
-    if (!resolvedAsset) {
-        throw new Error(
-            "No resolved Spotify audio asset was available yet. Refresh the page so ktv420 can recapture Spotify metadata, wait a moment, then click again.",
-        );
-    }
-
-    const response = await fetch(resolvedAsset.assetUrl);
-    if (!response.ok) {
-        throw new Error(
-            `Fetching the resolved Spotify audio asset failed with status ${response.status}.`,
-        );
-    }
-
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (!bytes.length) {
-        throw new Error("The resolved Spotify audio asset returned no bytes.");
-    }
-
-    return {
-        assetUrl: resolvedAsset.assetUrl,
-        byteLength: bytes.length,
-        currentTrackUri:
-            resolvedAsset.currentTrackUri || getLatestConnectStateTrackUri(),
-        fallbackIdentifier: trackInfo.fallbackIdentifier,
-        fileId: resolvedAsset.fileId,
-        md5: md5Hex(bytes),
-        trackId: getTrackIdFromUri(
-            resolvedAsset.currentTrackUri || getLatestConnectStateTrackUri(),
-        ),
-    };
-}
-
-async function computeTrackAssetMd5FromTrackId(trackId) {
+async function fetchTrackMetadataByTrackId(trackId) {
     const normalizedTrackId = normalizeTrackIdInput(trackId);
     if (!normalizedTrackId) {
         throw new Error("Enter a valid Spotify track id.");
     }
 
-    let resolvedAsset = getLatestStorageResolveDataForTrackId(normalizedTrackId);
-    let metadataResolutionError = null;
-    let playbackResolutionError = null;
-
-    if (!resolvedAsset) {
-        try {
-            const metadata =
-                findLatestCapturedTrackMetadataByTrackId(normalizedTrackId) ||
-                (await fetchTrackMetadataByTrackId(normalizedTrackId));
-            resolvedAsset = await resolveAssetFromMetadata(metadata);
-        } catch (error) {
-            metadataResolutionError = error;
-        }
+    const gid = spotifyIdToHexGid(normalizedTrackId);
+    const metadataUrl =
+        `https://spclient.wg.spotify.com/metadata/4/track/${gid}?market=from_token`;
+    const response = await fetch(
+        metadataUrl,
+        buildSpotifyApiRequestInit(metadataUrl, "GET", {
+            exactUrlPattern: /metadata\/4\/track\/[a-f0-9]+/i,
+            familyUrlPattern: /metadata\/4\/track/i,
+        }),
+    );
+    if (!response.ok) {
+        throw new Error(`Fetching Spotify track metadata failed with status ${response.status}.`);
     }
 
-    if (!resolvedAsset) {
-        const currentTrackId = getTrackIdFromUri(getLatestConnectStateTrackUri());
-        const deviceId = getLatestDeviceId();
+    return response.json();
+}
 
-        if (deviceId) {
-            try {
-                resolvedAsset = await resolveAssetFromCapturedPlaybackHistory(
-                    normalizedTrackId,
-                    deviceId,
-                );
-            } catch (_error) {
-                resolvedAsset = null;
-            }
-        }
-
-        if (deviceId && currentTrackId === normalizedTrackId) {
-            try {
-                resolvedAsset = await resolveAssetFromPlaybackState(deviceId);
-            } catch (error) {
-                playbackResolutionError = error;
-            }
-        }
+async function resolveAssetFromMetadata(metadata) {
+    const fileCandidates = rankFileCandidates(collectFileCandidatesFromMetadata(metadata));
+    if (!fileCandidates.length) {
+        throw new Error("Spotify metadata was captured, but it did not expose a resolvable audio file candidate.");
     }
 
-    if (!resolvedAsset) {
-        throw buildAssetResolutionError(
-            metadataResolutionError,
-            playbackResolutionError,
+    const failures = [];
+
+    for (const fileCandidate of fileCandidates) {
+        const storageResolveUrls = buildSpotifyStorageResolveUrls(
+            fileCandidate.format,
+            fileCandidate.fileId,
         );
+
+        for (const storageResolveUrl of storageResolveUrls) {
+            let response = null;
+
+            try {
+                response = await fetch(
+                    storageResolveUrl,
+                    buildSpotifyApiRequestInit(storageResolveUrl, "GET", {
+                        exactUrlPattern:
+                            /storage-resolve\/v2\/files\/audio\/interactive\/[^/]+\/[a-f0-9]+/i,
+                        familyUrlPattern: /storage-resolve\/v2\/files\/audio\/interactive/i,
+                    }),
+                );
+            } catch (error) {
+                let hostname = "";
+                try {
+                    hostname = new URL(storageResolveUrl).hostname;
+                } catch (_innerError) {}
+
+                failures.push(
+                    `fetch-error:${hostname || "unknown-host"}:${String(fileCandidate.format)}:${String(fileCandidate.fileId)}:${error?.message || "unknown-error"}`,
+                );
+                continue;
+            }
+
+            if (!response.ok) {
+                let hostname = "";
+                try {
+                    hostname = new URL(storageResolveUrl).hostname;
+                } catch (_innerError) {}
+
+                failures.push(
+                    `${response.status}:${hostname || "unknown-host"}:${String(fileCandidate.format)}:${String(fileCandidate.fileId)}`,
+                );
+                continue;
+            }
+
+            const resolvedAsset = await response.json();
+            const assetUrl = Array.isArray(resolvedAsset.cdnurl)
+                ? resolvedAsset.cdnurl.find((url) => typeof url === "string" && url.length > 0)
+                : "";
+
+            if (!assetUrl) {
+                let hostname = "";
+                try {
+                    hostname = new URL(storageResolveUrl).hostname;
+                } catch (_innerError) {}
+
+                failures.push(
+                    `no-cdnurl:${hostname || "unknown-host"}:${String(fileCandidate.format)}:${String(fileCandidate.fileId)}`,
+                );
+                continue;
+            }
+
+            return {
+                assetUrl,
+                currentTrackUri: metadata.canonical_uri || "",
+                fileId: fileCandidate.fileId,
+                format: fileCandidate.format,
+            };
+        }
     }
 
+    const failureSummary = failures.slice(0, 5).join(", ");
+    throw new Error(
+        `Resolving the Spotify audio asset from metadata failed for ${fileCandidates.length} candidate(s). ${failureSummary ? `Tried ${failureSummary}.` : ""}`,
+    );
+}
+
+async function resolveAssetFromTrackMetadata(trackId) {
+    const normalizedTrackId = normalizeTrackIdInput(trackId);
+    if (!normalizedTrackId) {
+        throw new Error("Enter a valid Spotify track id.");
+    }
+
+    const metadata =
+        findLatestCapturedTrackMetadataByTrackId(normalizedTrackId) ||
+        (await fetchTrackMetadataByTrackId(normalizedTrackId));
+
+    return resolveAssetFromMetadata(metadata);
+}
+
+async function computeTrackAssetMd5FromResolvedAsset(resolvedAsset, normalizedTrackId) {
     const response = await fetch(resolvedAsset.assetUrl);
     if (!response.ok) {
         throw new Error(
@@ -2228,13 +3036,87 @@ async function computeTrackAssetMd5FromTrackId(trackId) {
     };
 }
 
+async function resolveAssetFromPlaybackState(deviceId) {
+    const connectState = await fetchCurrentConnectState(deviceId);
+    const currentTrackUri = connectState?.player_state?.track?.uri || "";
+    const trackPlaybackState = await fetchCurrentTrackPlaybackState(deviceId);
+    const currentTrack = pickCurrentTrackFromState(trackPlaybackState, currentTrackUri);
+
+    if (!currentTrack?.manifest) {
+        throw new Error("Spotify returned track state, but not a playable manifest for the current track.");
+    }
+
+    return resolveAssetFromManifest(currentTrack.manifest, currentTrackUri);
+}
+
+async function computeTrackAssetMd5FromTrackId(trackId) {
+    const normalizedTrackId = normalizeTrackIdInput(trackId);
+    if (!normalizedTrackId) {
+        throw new Error("Enter a valid Spotify track id.");
+    }
+
+    const resolvedAsset = await resolveAssetFromTrackPagePlayback(normalizedTrackId);
+    return computeTrackAssetMd5FromResolvedAsset(resolvedAsset, normalizedTrackId);
+}
+
+async function computeTrackAssetMd5FromTrackMetadata(trackId) {
+    const normalizedTrackId = normalizeTrackIdInput(trackId);
+    if (!normalizedTrackId) {
+        throw new Error("Enter a valid Spotify track id.");
+    }
+
+    const resolvedAsset = await resolveAssetFromTrackMetadata(normalizedTrackId);
+    return computeTrackAssetMd5FromResolvedAsset(resolvedAsset, normalizedTrackId);
+}
+
+async function resolveAssetFromHiddenIframeTrackPagePlayback(trackId, iframe) {
+    const normalizedTrackId = normalizeTrackIdInput(trackId);
+    if (!normalizedTrackId) {
+        throw new Error("Enter a valid Spotify track id.");
+    }
+
+    const playButton = await waitForTrackPageIframePlayButton(iframe, normalizedTrackId);
+    const deviceId = await waitForSpotifyDeviceId();
+    let connectState = await fetchCurrentConnectState(deviceId);
+    let currentTrackId = getCurrentTrackIdFromConnectState(connectState);
+
+    if (currentTrackId !== normalizedTrackId) {
+        playButton.click();
+        clearSpotifyConnectStateCache(deviceId);
+        connectState = await waitForCurrentTrackId(
+            deviceId,
+            normalizedTrackId,
+            SPOTIFY_ASSET_RESOLUTION_TIMEOUT_MS,
+            "Spotify did not start the requested track from the hidden iframe in time.",
+        );
+        currentTrackId = getCurrentTrackIdFromConnectState(connectState);
+    }
+
+    if (currentTrackId !== normalizedTrackId) {
+        throw new Error("Spotify loaded the hidden iframe track page, but did not switch to the requested track.");
+    }
+
+    return waitForAsyncValue(async () => {
+        const liveConnectState = await fetchCurrentConnectState(deviceId);
+        if (getCurrentTrackIdFromConnectState(liveConnectState) !== normalizedTrackId) {
+            return null;
+        }
+
+        const playbackResolvedAsset = await resolveAssetFromPlaybackState(deviceId);
+        return getTrackIdFromUri(playbackResolvedAsset?.currentTrackUri || "") ===
+            normalizedTrackId
+            ? playbackResolvedAsset
+            : null;
+    }, SPOTIFY_ASSET_RESOLUTION_TIMEOUT_MS, "Spotify loaded the hidden iframe track page, but no manifest-backed audio asset was captured.");
+}
+
 function formatTrackIdAlert(trackId, md5) {
     return md5 ? `${trackId}:${md5}` : `trackId:${trackId}`;
 }
 
-async function copyTrackIdIssueToClipboard(error, trackIdInput, normalizedTrackId) {
+function buildTrackIdIssuePayload(error, trackIdInput, normalizedTrackId) {
     const debugSnapshot = buildDebugSnapshot();
-    const payload = {
+    return {
         error: {
             message: error?.message || String(error),
             name: error?.name || "",
@@ -2245,10 +3127,30 @@ async function copyTrackIdIssueToClipboard(error, trackIdInput, normalizedTrackI
         timestamp: new Date().toISOString(),
         debugSnapshot,
     };
+}
+
+async function copyTrackIdIssueToClipboard(error, trackIdInput, normalizedTrackId) {
+    const payload =
+        error?.ktv420IssuePayload ||
+        buildTrackIdIssuePayload(error, trackIdInput, normalizedTrackId);
 
     const debugJson = JSON.stringify(payload, null, 2);
-    await copyTextToClipboard(debugJson);
-    return payload;
+    window.__ktv420LastTrackIdIssuePayload = payload;
+    console.error("KTV420 track issue payload", payload);
+
+    try {
+        await copyTextToClipboard(debugJson);
+        return {
+            copied: true,
+            payload,
+        };
+    } catch (copyError) {
+        return {
+            copied: false,
+            copyError,
+            payload,
+        };
+    }
 }
 
 function summarizeWindowHints() {
@@ -2441,6 +3343,7 @@ function buildDebugSnapshot() {
               }
             : null,
         networkCaptures: summarizeNetworkCaptures(),
+        requestReplays: summarizeRequestReplays(),
         performanceEntries: summarizePerformanceEntries(),
         reactDebug: summarizeReactDebug(),
         shadowRootHosts: Array.from(document.querySelectorAll("*"))
@@ -2459,25 +3362,49 @@ function buildDebugSnapshot() {
 initializeNetworkInstrumentation();
 
 async function copyTextToClipboard(text) {
-    if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-        return;
-    }
-
     const textArea = document.createElement("textarea");
     textArea.value = text;
     textArea.setAttribute("readonly", "true");
     textArea.style.position = "fixed";
     textArea.style.top = "-9999px";
-    document.body.appendChild(textArea);
+    textArea.style.left = "-9999px";
+    textArea.style.opacity = "0";
+
+    const root = document.body || document.documentElement;
+    const previousActiveElement =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    root.appendChild(textArea);
+
+    try {
+        window.focus();
+    } catch (_error) {}
+
+    textArea.focus({ preventScroll: true });
     textArea.select();
+    textArea.setSelectionRange(0, textArea.value.length);
 
     const copied = document.execCommand("copy");
     textArea.remove();
 
-    if (!copied) {
-        throw new Error("Clipboard write failed.");
+    if (previousActiveElement) {
+        try {
+            previousActiveElement.focus({ preventScroll: true });
+        } catch (_error) {}
     }
+
+    if (copied) {
+        return;
+    }
+
+    if (navigator.clipboard?.writeText) {
+        try {
+            await navigator.clipboard.writeText(text);
+            return;
+        } catch (_error) {}
+    }
+
+    throw new Error("Clipboard write failed.");
 }
 
 function generateRequestId() {
@@ -2486,6 +3413,56 @@ function generateRequestId() {
     }
 
     return `ktv420-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function cleanupTrackPageIframeRequest(requestId) {
+    const pendingRequest = pendingTrackPageIframeRequests.get(requestId);
+    if (!pendingRequest) {
+        return null;
+    }
+
+    clearTimeout(pendingRequest.timeoutId);
+    pendingTrackPageIframeRequests.delete(requestId);
+    pendingRequest.iframe?.remove();
+    return pendingRequest;
+}
+
+function createHiddenTrackPageIframe(trackId) {
+    const iframe = document.createElement("iframe");
+    iframe.setAttribute(TRACK_PAGE_IFRAME_REQUEST_ATTRIBUTE, generateRequestId());
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.tabIndex = -1;
+    iframe.src = buildTrackPageUrl(trackId, false);
+    iframe.style.position = "fixed";
+    iframe.style.left = "-99999px";
+    iframe.style.top = "0";
+    iframe.style.width = "1280px";
+    iframe.style.height = "900px";
+    iframe.style.opacity = "0";
+    iframe.style.pointerEvents = "none";
+    iframe.style.border = "0";
+    iframe.style.zIndex = "-1";
+    return iframe;
+}
+
+async function requestTrackAssetHashFromHiddenIframe(trackId) {
+    const normalizedTrackId = normalizeTrackIdInput(trackId);
+    if (!normalizedTrackId) {
+        throw new Error("Enter a valid Spotify track id.");
+    }
+
+    const iframe = createHiddenTrackPageIframe(normalizedTrackId);
+    (document.body || document.documentElement).appendChild(iframe);
+
+    try {
+        const resolvedAsset = await resolveAssetFromHiddenIframeTrackPagePlayback(
+            normalizedTrackId,
+            iframe,
+        );
+        return computeTrackAssetMd5FromResolvedAsset(resolvedAsset, normalizedTrackId);
+    } finally {
+        iframe.remove();
+    }
 }
 
 function getChildWindows() {
@@ -2588,6 +3565,39 @@ function initializeFrameMessaging() {
             return;
         }
 
+        if (data.type === TRACK_PAGE_IFRAME_RESPONSE_TYPE) {
+            const pendingRequest = pendingTrackPageIframeRequests.get(data.requestId);
+            if (!pendingRequest) {
+                return;
+            }
+
+            if (
+                pendingRequest.iframe?.contentWindow &&
+                event.source !== pendingRequest.iframe.contentWindow
+            ) {
+                return;
+            }
+
+            const settledRequest = cleanupTrackPageIframeRequest(data.requestId);
+            if (!settledRequest) {
+                return;
+            }
+
+            if (data.ok) {
+                settledRequest.resolve(data.assetHash);
+                return;
+            }
+
+            const error = new Error(
+                data.error || "The hidden Spotify track page iframe could not resolve the track asset.",
+            );
+            if (data.issuePayload) {
+                error.ktv420IssuePayload = data.issuePayload;
+            }
+            settledRequest.reject(error);
+            return;
+        }
+
         if (data.type === HASH_RESPONSE_TYPE) {
             const pendingRequest = pendingFrameHashRequests.get(data.requestId);
             if (!pendingRequest) {
@@ -2649,6 +3659,73 @@ function initializeFrameMessaging() {
 
 initializeFrameMessaging();
 
+async function runTrackPageAutoRunInIframe(trackId, requestId) {
+    const normalizedTrackId = normalizeTrackIdInput(trackId);
+    if (!normalizedTrackId) {
+        return;
+    }
+
+    activeHashCapture = (async () => {
+        try {
+            const assetHash = await computeTrackAssetMd5FromTrackId(normalizedTrackId);
+            window.parent?.postMessage(
+                {
+                    assetHash,
+                    ok: true,
+                    requestId,
+                    type: TRACK_PAGE_IFRAME_RESPONSE_TYPE,
+                },
+                "*",
+            );
+        } catch (error) {
+            window.parent?.postMessage(
+                {
+                    error: error?.message || String(error),
+                    issuePayload: buildTrackIdIssuePayload(
+                        error,
+                        normalizedTrackId,
+                        normalizedTrackId,
+                    ),
+                    ok: false,
+                    requestId,
+                    type: TRACK_PAGE_IFRAME_RESPONSE_TYPE,
+                },
+                "*",
+            );
+        } finally {
+            activeHashCapture = null;
+        }
+    })();
+
+    await activeHashCapture;
+}
+
+async function maybeResumeTrackPageAutoRun() {
+    if (!hasTrackPageAutoRunHash()) {
+        return;
+    }
+
+    const routeTrackId = getTrackIdFromLocationPathname();
+    const iframeRequestId = getTrackPageIframeRequestId();
+    clearTrackPageAutoRunState();
+    if (!routeTrackId) {
+        return;
+    }
+
+    if (iframeRequestId && window.parent && window.parent !== window) {
+        if (!activeHashCapture) {
+            void runTrackPageAutoRunInIframe(routeTrackId, iframeRequestId);
+        }
+        return;
+    }
+
+    if (!activeHashCapture) {
+        void submitTrackId(routeTrackId);
+    }
+}
+
+void maybeResumeTrackPageAutoRun();
+
 async function submitTrackId(trackIdInput) {
     if (activeHashCapture) {
         alert("A Spotify audio hash capture is already running.");
@@ -2656,7 +3733,8 @@ async function submitTrackId(trackIdInput) {
     }
 
     const rawTrackIdInput = String(trackIdInput || "").trim();
-    const normalizedTrackId = normalizeTrackIdInput(rawTrackIdInput);
+    const routeTrackId = getTrackIdFromLocationPathname();
+    const normalizedTrackId = normalizeTrackIdInput(rawTrackIdInput || routeTrackId);
     const effectiveTrackId = normalizedTrackId || rawTrackIdInput;
 
     activeHashCapture = (async () => {
@@ -2666,21 +3744,37 @@ async function submitTrackId(trackIdInput) {
                 return;
             }
 
+            if (
+                normalizedTrackId &&
+                !isTrackPageForTrackId(normalizedTrackId)
+            ) {
+                const iframeAssetHash = await requestTrackAssetHashFromHiddenIframe(
+                    normalizedTrackId,
+                );
+                alert(
+                    formatTrackIdAlert(
+                        iframeAssetHash.trackId || effectiveTrackId,
+                        iframeAssetHash.md5 || "",
+                    ),
+                );
+                return;
+            }
+
             const assetHash = await computeTrackAssetMd5FromTrackId(effectiveTrackId);
             alert(formatTrackIdAlert(assetHash.trackId || effectiveTrackId, assetHash.md5 || ""));
         } catch (error) {
-            try {
-                await copyTrackIdIssueToClipboard(
-                    error,
-                    rawTrackIdInput,
-                    normalizedTrackId,
-                );
+            const issueResult = await copyTrackIdIssueToClipboard(
+                error,
+                rawTrackIdInput,
+                normalizedTrackId,
+            );
+            if (issueResult.copied) {
                 alert(`Copied issue details to clipboard for trackId:${effectiveTrackId}`);
-            } catch (clipboardError) {
+            } else {
                 alert(
                     [
-                        `Failed to copy issue details to clipboard for trackId:${effectiveTrackId}`,
-                        clipboardError?.message || String(clipboardError),
+                        `Saved issue details on window.__ktv420LastTrackIdIssuePayload for trackId:${effectiveTrackId}`,
+                        issueResult.copyError?.message || String(issueResult.copyError || ""),
                         error?.message || String(error),
                     ].join("\n"),
                 );
