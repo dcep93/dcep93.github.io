@@ -4,7 +4,11 @@
 
   async function startCapture() {
     if (activeRun) {
-      alert("Busy.");
+      try {
+        app.playbackCapture.stopCurrentSession();
+      } catch (error) {
+        console.error("KTV420 could not stop active capture.", error);
+      }
       return activeRun;
     }
 

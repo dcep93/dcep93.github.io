@@ -3,6 +3,7 @@
   const STARTUP_SEEK_GRACE_MS = 3000;
   const SEEK_JUMP_TOLERANCE_SECONDS = 1;
   const USER_PAUSE_INTENT_WINDOW_MS = 2500;
+  let activeCapture = null;
 
   function requireExactlyOneCaptureTarget() {
     const targets = app.mediaElements.getCaptureTargetsAcrossFrames();
@@ -20,6 +21,20 @@
     }
 
     return captureApi.captureMediaElement(target.mediaElement, timings);
+  }
+
+  function stopCurrentSession() {
+    for (const frameWindow of getAccessibleFrameWindows()) {
+      const stopped = frameWindow.KTV420?.playbackCapture?.stopActiveCapture?.();
+      if (stopped) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function stopActiveCapture() {
+    return Boolean(activeCapture?.requestUserStop());
   }
 
   async function captureMediaElement(mediaElement, timings = app.timing.createTimingRecorder()) {
@@ -54,6 +69,10 @@
       resolveCapture = resolve;
       rejectCapture = reject;
     });
+
+    activeCapture = {
+      requestUserStop,
+    };
 
     const cleanupCallbacks = [
       listen(mediaElement, "pause", () => handlePause()),
@@ -111,6 +130,9 @@
       clearTransitionTimer();
       cleanupCallbacks.forEach((cleanup) => cleanup());
       recorder.finish();
+      if (activeCapture?.requestUserStop === requestUserStop) {
+        activeCapture = null;
+      }
     }
 
     function handleTrackChange(track) {
@@ -207,6 +229,30 @@
         return;
       }
       schedulePauseCompletion(hasRecentUserPauseIntent());
+    }
+
+    function requestUserStop() {
+      if (!active) {
+        return false;
+      }
+
+      pauseWasUserInitiated = true;
+      rememberUserInput();
+      timings.mark("button_stop_requested");
+
+      if (mediaElement.paused) {
+        schedulePauseCompletion(true);
+        return true;
+      }
+
+      try {
+        mediaElement.pause();
+        schedulePauseCompletion(true);
+        return true;
+      } catch (error) {
+        fail(new Error(`Spotify refused to pause playback: ${error.message}`));
+        return true;
+      }
     }
 
     function handleRateChange() {
@@ -511,6 +557,48 @@
     }
   }
 
+  function getAccessibleFrameWindows(rootWindow = getRootWindow()) {
+    const frames = [rootWindow];
+    const seen = new Set(frames);
+
+    for (let index = 0; index < frames.length; index += 1) {
+      const currentWindow = frames[index];
+      let iframes = [];
+
+      try {
+        iframes = Array.from(currentWindow.document.querySelectorAll("iframe"));
+      } catch (_error) {
+        continue;
+      }
+
+      for (const iframe of iframes) {
+        const childWindow = iframe.contentWindow;
+        if (!childWindow || seen.has(childWindow)) {
+          continue;
+        }
+
+        try {
+          void childWindow.document;
+        } catch (_error) {
+          continue;
+        }
+
+        seen.add(childWindow);
+        frames.push(childWindow);
+      }
+    }
+
+    return frames;
+  }
+
+  function getRootWindow() {
+    try {
+      return window.top || window;
+    } catch (_error) {
+      return window;
+    }
+  }
+
   function getPlaybackStateApi() {
     const stateApi = getRootApp().playbackState || app.playbackState;
     if (!stateApi?.requireCurrentTrack || !stateApi?.onTrackChange) {
@@ -618,5 +706,7 @@
     captureMediaElement,
     describeMediaAcrossFrames: app.mediaElements.describeMediaAcrossFrames,
     requireExactlyOneCaptureTarget,
+    stopActiveCapture,
+    stopCurrentSession,
   };
 })();
