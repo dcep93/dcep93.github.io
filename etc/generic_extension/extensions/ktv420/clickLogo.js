@@ -451,6 +451,28 @@ function concatenateChunks(chunks, totalLength) {
     return combined;
 }
 
+function bytesToBase64(bytes) {
+    if (!(bytes instanceof Uint8Array) || !bytes.length) {
+        return "";
+    }
+
+    const chunkSize = 0x8000;
+    let binary = "";
+
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+        const chunk = bytes.subarray(offset, offset + chunkSize);
+        let chunkBinary = "";
+
+        for (let index = 0; index < chunk.length; index += 1) {
+            chunkBinary += String.fromCharCode(chunk[index]);
+        }
+
+        binary += chunkBinary;
+    }
+
+    return btoa(binary);
+}
+
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -2172,6 +2194,14 @@ function getTrackHashCacheStore() {
     return cacheStore && typeof cacheStore === "object" ? cacheStore : {};
 }
 
+function getTrackHashRawAudioCacheStore() {
+    if (!window.__ktv420TrackHashRawAudioCache || typeof window.__ktv420TrackHashRawAudioCache !== "object") {
+        window.__ktv420TrackHashRawAudioCache = {};
+    }
+
+    return window.__ktv420TrackHashRawAudioCache;
+}
+
 function getCachedTrackHashResult(trackId) {
     const normalizedTrackId = normalizeTrackIdInput(trackId);
     if (!normalizedTrackId) {
@@ -2187,8 +2217,13 @@ function getCachedTrackHashResult(trackId) {
         return null;
     }
 
+    const rawAudioEntry = getTrackHashRawAudioCacheStore()[normalizedTrackId] || null;
+
     return {
         assetUrl: String(cacheEntry.assetUrl || ""),
+        audioByteLength: Number(rawAudioEntry?.audioByteLength || 0) || 0,
+        audioDataBase64: String(rawAudioEntry?.audioDataBase64 || ""),
+        audioDataEncoding: String(rawAudioEntry?.audioDataEncoding || ""),
         capturedAt: String(cacheEntry.capturedAt || ""),
         fileId: normalizeSpotifyFileId(cacheEntry.fileId),
         format: String(cacheEntry.format || ""),
@@ -2196,6 +2231,15 @@ function getCachedTrackHashResult(trackId) {
         source: "cache",
         trackId: normalizedTrackId,
     };
+}
+
+function hasCompleteCachedTrackHashResult(result) {
+    return Boolean(
+        result?.md5 &&
+            result?.audioDataEncoding === "base64" &&
+            result?.audioDataBase64 &&
+            Number(result?.audioByteLength || 0) > 0,
+    );
 }
 
 function cacheTrackHashResult(result) {
@@ -2215,6 +2259,14 @@ function cacheTrackHashResult(result) {
         trackId: normalizedTrackId,
     };
     writeJsonToSessionStorage(TRACK_HASH_CACHE_STORAGE_KEY, cacheStore);
+
+    if (result?.audioDataBase64) {
+        getTrackHashRawAudioCacheStore()[normalizedTrackId] = {
+            audioByteLength: Number(result.audioByteLength || 0) || 0,
+            audioDataBase64: String(result.audioDataBase64 || ""),
+            audioDataEncoding: String(result.audioDataEncoding || "base64"),
+        };
+    }
 }
 
 function getResolvedTrackAssetCacheStore() {
@@ -3794,6 +3846,9 @@ async function computeTrackAssetMd5FromResolvedAsset(
 
         return {
             assetUrl,
+            audioByteLength: bytes.length,
+            audioDataBase64: bytesToBase64(bytes),
+            audioDataEncoding: "base64",
             byteLength: bytes.length,
             currentTrackUri:
                 resolvedAsset.currentTrackUri || `spotify:track:${normalizedTrackId}`,
@@ -3854,6 +3909,9 @@ async function computeTrackAssetMd5FromResolvedAsset(
                         );
                         return {
                             assetUrl: byteRangePlan.assetUrl,
+                            audioByteLength: bytes.length,
+                            audioDataBase64: bytesToBase64(bytes),
+                            audioDataEncoding: "base64",
                             byteLength: bytes.length,
                             currentTrackUri:
                                 resolvedAsset.currentTrackUri || `spotify:track:${normalizedTrackId}`,
@@ -3875,6 +3933,9 @@ async function computeTrackAssetMd5FromResolvedAsset(
                 const format = inferTrackHashFormat(resolvedAsset?.format, byteRangePlan.assetUrl);
                 return {
                     assetUrl: byteRangePlan.assetUrl,
+                    audioByteLength: bytes.length,
+                    audioDataBase64: bytesToBase64(bytes),
+                    audioDataEncoding: "base64",
                     byteLength: bytes.length,
                     currentTrackUri:
                         resolvedAsset.currentTrackUri || `spotify:track:${normalizedTrackId}`,
@@ -4272,6 +4333,9 @@ function formatSuccessfulTrackHashAlert(result) {
 
 function buildSuccessfulTrackHashClipboardPayload(result) {
     return {
+        audioByteLength: Number(result?.audioByteLength || 0) || 0,
+        audioDataBase64: String(result?.audioDataBase64 || ""),
+        audioDataEncoding: String(result?.audioDataEncoding || ""),
         format: inferTrackHashFormat(result?.format, result?.assetUrl || ""),
         md5: String(result?.md5 || ""),
         source: normalizeTrackHashSource(result?.source),
@@ -5021,7 +5085,7 @@ async function submitTrackId(trackIdInput, options = {}) {
             const cachedResult = normalizedTrackId
                 ? getCachedTrackHashResult(normalizedTrackId)
                 : null;
-            if (cachedResult) {
+            if (hasCompleteCachedTrackHashResult(cachedResult)) {
                 await reportSuccessfulTrackHashResult({
                     ...cachedResult,
                     timings: buildCachedTrackHashTimings(),
