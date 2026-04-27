@@ -283,12 +283,12 @@
   }
 
   function formatCrop(startTimeSeconds, endTimeSeconds, durationSeconds, endedAtEnd) {
-    const startsAtBeginning = startTimeSeconds <= app.config.capture.edgeToleranceSeconds;
+    const startsAtBeginning = startTimeSeconds === 0;
     const finishesAtEnd = endedAtEnd ||
       (
         Number.isFinite(durationSeconds) &&
         Number.isFinite(endTimeSeconds) &&
-        durationSeconds - endTimeSeconds <= app.config.capture.edgeToleranceSeconds
+        endTimeSeconds >= durationSeconds
       );
 
     const start = startsAtBeginning ? "" : formatSeconds(startTimeSeconds);

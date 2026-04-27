@@ -156,26 +156,15 @@
 
       try {
         const sourceChanged = currentSegmentSourceChanged();
-        const naturalSourceAdvance = sourceChanged && !hasRecentUserPauseIntent();
-        const trackEnded =
-          waitingForAutoAdvance ||
-          mediaIsAtEnd(mediaElement) ||
-          (sourceChanged && lastStableMediaTimeIsAtEnd()) ||
-          naturalSourceAdvance;
-        if (sourceChanged && !trackEnded) {
-          throw new Error("Spotify changed tracks before the previous capture segment reached its end.");
-        }
-
         const nextTrack = requireHookTrack(track);
         const previousSource = currentSegmentSource;
         if (!waitingForAutoAdvance && !pendingTrackStart) {
-          finishCurrentSegment(trackEnded, trackEnded ? currentSegmentDuration : lastStableMediaTime);
+          finishCurrentSegment(false, lastStableMediaTime);
         }
 
         currentTrack = nextTrack;
         timings.mark("track_changed");
         pendingTrackStart = {
-          expectBeginning: trackEnded,
           previousSource,
           track: currentTrack,
         };
@@ -259,12 +248,6 @@
       try {
         void getSpotifyPageApi()
           .clickPlayPauseButton()
-          .then(() => waitForPause(mediaElement))
-          .then(() => {
-            if (active) {
-              schedulePauseCompletion(true);
-            }
-          })
           .catch((error) => {
             fail(new Error(`Spotify refused to pause playback: ${error.message}`));
           });
@@ -372,21 +355,11 @@
           source &&
           pending.previousSource !== source,
       );
-      const nearBeginning = currentTime <= app.config.capture.edgeToleranceSeconds;
-      const stillAtPreviousEnd =
-        !sourceChanged &&
-        currentTime > app.config.capture.edgeToleranceSeconds &&
-        duration - currentTime <= app.config.capture.edgeToleranceSeconds;
+      const timeReset = Number.isFinite(lastStableMediaTime) && currentTime < lastStableMediaTime;
 
-      if (stillAtPreviousEnd || (!sourceChanged && !nearBeginning)) {
+      if (!sourceChanged && !timeReset) {
         return { wait: true };
       }
-      if (pending.expectBeginning && currentTime > app.config.capture.edgeToleranceSeconds) {
-        return {
-          error: new Error("Spotify started the next track before KTV420 opened its capture segment."),
-        };
-      }
-
       return { wait: false };
     }
 
@@ -547,13 +520,6 @@
       return Boolean(currentSegmentSource && source && source !== currentSegmentSource);
     }
 
-    function lastStableMediaTimeIsAtEnd() {
-      return Boolean(
-        Number.isFinite(currentSegmentDuration) &&
-          Number.isFinite(lastStableMediaTime) &&
-          currentSegmentDuration - lastStableMediaTime <= app.config.capture.edgeToleranceSeconds,
-      );
-    }
   }
 
   function requireCurrentTrack() {
@@ -651,7 +617,7 @@
         (
           Number.isFinite(duration) &&
           Number.isFinite(currentTime) &&
-          duration - currentTime <= app.config.capture.edgeToleranceSeconds
+          currentTime >= duration
         ),
     );
   }

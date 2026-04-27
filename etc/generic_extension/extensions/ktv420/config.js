@@ -10,7 +10,6 @@
       trackTransitionMs: 10000,
     }),
     capture: Object.freeze({
-      edgeToleranceSeconds: 0.25,
       maxBytes: 1024 * 1024 * 1024,
     }),
   });
