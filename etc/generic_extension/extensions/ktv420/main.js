@@ -11,18 +11,52 @@
       }
       return activeRun;
     }
+    const preparedCapture = await prepareCaptureStart();
+    if (!preparedCapture) {
+      return null;
+    }
 
-    activeRun = runCapture().finally(() => {
+    activeRun = runCapture(preparedCapture).finally(() => {
       activeRun = null;
     });
 
     return activeRun;
   }
 
-  async function runCapture() {
+  async function prepareCaptureStart() {
     const timings = app.timing.createTimingRecorder();
     try {
-      const results = await app.playbackCapture.captureCurrentSession(timings);
+      let target = getSingleCaptureTarget();
+      if (!target) {
+        timings.mark("play_button_clicked");
+        await app.spotifyPage.clickPlayPauseButton();
+        target = await waitForSinglePlayingCaptureTarget();
+        timings.mark("playback_observed");
+        return { target, timings, allowAlreadyPlaying: true };
+      }
+      if (target.mediaElement.paused) {
+        return { timings };
+      }
+
+      timings.mark("playback_pause_requested");
+      await app.spotifyPage.clickPlayPauseButton();
+      await waitForPause(target.mediaElement);
+      await showAlert("Click again to begin capture.");
+      return null;
+    } catch (error) {
+      await reportFailure(error, { timings });
+      return null;
+    }
+  }
+
+  async function runCapture(preparedCapture) {
+    const timings = preparedCapture.timings || app.timing.createTimingRecorder();
+    try {
+      const results = preparedCapture.target
+        ? await app.playbackCapture.captureTargetSession(preparedCapture.target, timings, {
+            allowAlreadyPlaying: preparedCapture.allowAlreadyPlaying,
+          })
+        : await app.playbackCapture.captureCurrentSession(timings);
       await reportSuccess(results);
     } catch (error) {
       await reportFailure(error, { timings });
@@ -71,6 +105,48 @@
 
   function waitForNextTask() {
     return new Promise((resolve) => window.setTimeout(resolve, 0));
+  }
+
+  function waitMilliseconds(milliseconds) {
+    return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+  }
+
+  async function waitForPause(mediaElement) {
+    const startedAt = performance.now();
+    while (performance.now() - startedAt <= app.config.timeouts.playStartMs) {
+      if (mediaElement.paused) {
+        await waitMilliseconds(app.config.timeouts.pausePollIntervalMs);
+        if (mediaElement.paused) {
+          return;
+        }
+      }
+      await waitMilliseconds(app.config.timeouts.pausePollIntervalMs);
+    }
+    throw new Error("Spotify did not pause the playback media element after the play/pause button was clicked.");
+  }
+
+  async function waitForSinglePlayingCaptureTarget() {
+    const startedAt = performance.now();
+    while (performance.now() - startedAt <= app.config.timeouts.playStartMs) {
+      const target = getSingleCaptureTarget();
+      if (target && target.frameWindow.KTV420.mediaElements.isActivelyPlaying(target.mediaElement)) {
+        return target;
+      }
+      await waitAnimationFrame();
+    }
+    throw new Error("Spotify did not expose one playing capture target after the play/pause button was clicked.");
+  }
+
+  function getSingleCaptureTarget() {
+    const targets = app.mediaElements.getCaptureTargetsAcrossFrames();
+    if (targets.length > 1) {
+      throw new Error(`Expected one Spotify playback media element, found ${targets.length}.`);
+    }
+    return targets[0] || null;
+  }
+
+  function waitAnimationFrame() {
+    return new Promise((resolve) => requestAnimationFrame(resolve));
   }
 
   function buildFailureLog(error, context) {

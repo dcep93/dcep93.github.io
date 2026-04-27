@@ -4,14 +4,14 @@
   app.config = Object.freeze({
     buttonId: "ktv420-capture-button",
     timeouts: Object.freeze({
-      firstAudioMs: 5000,
-      pauseSettleMs: 1500,
-      playStartMs: 10000,
+      firstAudioMs: 1000,
+      pausePollIntervalMs: 100,
+      playStartMs: 1000,
       trackTransitionMs: 10000,
     }),
     capture: Object.freeze({
       edgeToleranceSeconds: 0.25,
-      maxBytes: 150 * 1024 * 1024,
+      maxBytes: 1024 * 1024 * 1024,
     }),
   });
 })();

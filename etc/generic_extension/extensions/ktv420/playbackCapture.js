@@ -15,12 +15,16 @@
 
   function captureCurrentSession(timings) {
     const target = requireExactlyOneCaptureTarget();
+    return captureTargetSession(target, timings);
+  }
+
+  function captureTargetSession(target, timings, options) {
     const captureApi = target.frameWindow.KTV420?.playbackCapture;
     if (!captureApi?.captureMediaElement) {
       throw new Error("KTV420 session capture is not available in the playback frame.");
     }
 
-    return captureApi.captureMediaElement(target.mediaElement, timings);
+    return captureApi.captureMediaElement(target.mediaElement, timings, options);
   }
 
   function stopCurrentSession() {
@@ -37,11 +41,16 @@
     return Boolean(activeCapture?.requestUserStop());
   }
 
-  async function captureMediaElement(mediaElement, timings = app.timing.createTimingRecorder()) {
+  async function captureMediaElement(
+    mediaElement,
+    timings = app.timing.createTimingRecorder(),
+    options = {},
+  ) {
     if (!app.mediaElements.isMediaElement(mediaElement)) {
       throw new Error("The selected playback target is not an HTML media element.");
     }
-    if (!mediaElement.paused) {
+    const startsPaused = mediaElement.paused;
+    if (!startsPaused && !options.allowAlreadyPlaying) {
       throw createPauseToStartError();
     }
 
@@ -116,10 +125,12 @@
     try {
       await recorder.resumeAudioContext();
       startCurrentSegment(currentTrack);
-      await playFromPausedPosition(mediaElement);
+      if (startsPaused) {
+        await clickPlayPauseFromPausedPosition(mediaElement);
+      }
       playbackStartedAt = performance.now();
       rememberStablePlaybackTime();
-      timings.mark("playback_started");
+      timings.mark(startsPaused ? "playback_started" : "playback_already_started");
       return await completion;
     } catch (error) {
       fail(error);
@@ -246,8 +257,17 @@
       }
 
       try {
-        mediaElement.pause();
-        schedulePauseCompletion(true);
+        void getSpotifyPageApi()
+          .clickPlayPauseButton()
+          .then(() => waitForPause(mediaElement))
+          .then(() => {
+            if (active) {
+              schedulePauseCompletion(true);
+            }
+          })
+          .catch((error) => {
+            fail(new Error(`Spotify refused to pause playback: ${error.message}`));
+          });
         return true;
       } catch (error) {
         fail(new Error(`Spotify refused to pause playback: ${error.message}`));
@@ -473,7 +493,7 @@
           return;
         }
         fail(new Error("Spotify paused during capture without a recent user pause action."));
-      }, app.config.timeouts.pauseSettleMs);
+      }, app.config.timeouts.pausePollIntervalMs);
     }
 
     function clearPauseCompletionTimer() {
@@ -609,8 +629,8 @@
 
   function getSpotifyPageApi() {
     const spotifyPageApi = getRootApp().spotifyPage || app.spotifyPage;
-    if (!spotifyPageApi?.requireMediaSessionTrackMetadata) {
-      throw new Error("KTV420 Media Session helpers are not available.");
+    if (!spotifyPageApi?.requireMediaSessionTrackMetadata || !spotifyPageApi?.clickPlayPauseButton) {
+      throw new Error("KTV420 Spotify page helpers are not available.");
     }
     return spotifyPageApi;
   }
@@ -640,7 +660,7 @@
     return String(mediaElement.currentSrc || mediaElement.src || "");
   }
 
-  async function playFromPausedPosition(mediaElement) {
+  async function clickPlayPauseFromPausedPosition(mediaElement) {
     let timeoutId = 0;
     let cleanup = () => {};
 
@@ -666,21 +686,12 @@
       mediaElement.addEventListener("error", onError, { once: true });
     });
 
-    let playAttempt;
     try {
-      playAttempt = Promise.resolve(mediaElement.play());
+      await getSpotifyPageApi().clickPlayPauseButton();
     } catch (error) {
       cleanup();
       throw new Error(`Spotify refused to start playback: ${error.message}`);
     }
-
-    playAttempt = playAttempt.catch((error) => {
-      cleanup();
-      throw new Error(`Spotify refused to start playback: ${error.message}`);
-    });
-    playAttempt.catch(() => {});
-
-    await Promise.race([started, playAttempt]);
 
     if (!mediaElement.paused) {
       cleanup();
@@ -695,6 +706,20 @@
     return () => target.removeEventListener(eventName, listener, options);
   }
 
+  async function waitForPause(mediaElement) {
+    const startedAt = performance.now();
+    while (performance.now() - startedAt <= app.config.timeouts.playStartMs) {
+      if (mediaElement.paused) {
+        await new Promise((resolve) => window.setTimeout(resolve, app.config.timeouts.pausePollIntervalMs));
+        if (mediaElement.paused) {
+          return;
+        }
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, app.config.timeouts.pausePollIntervalMs));
+    }
+    throw new Error("Spotify did not pause the playback media element after pause was requested.");
+  }
+
   function createPauseToStartError() {
     const error = new Error("Pause playback to start.");
     error.ktv420Alert = "Pause playback to start.";
@@ -704,6 +729,7 @@
   app.playbackCapture = {
     captureCurrentSession,
     captureMediaElement,
+    captureTargetSession,
     describeMediaAcrossFrames: app.mediaElements.describeMediaAcrossFrames,
     requireExactlyOneCaptureTarget,
     stopActiveCapture,

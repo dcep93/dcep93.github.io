@@ -71,11 +71,39 @@
 
   app.spotifyPage = {
     buildElementPath,
+    clickPlayPauseButton,
     getMediaSessionMetadata,
     normalizeText,
     requireMediaSessionTrackMetadata,
     textMatches,
   };
+
+  async function clickPlayPauseButton() {
+    requirePlayPauseButton().click();
+    await waitForNextTask();
+  }
+
+  function requirePlayPauseButton() {
+    const button = document.querySelector('[data-testid="control-button-playpause"]');
+    if (!(button instanceof HTMLButtonElement) || button.disabled || !isElementVisible(button)) {
+      throw new Error("Spotify did not expose one enabled play/pause control.");
+    }
+    return button;
+  }
+
+  function isElementVisible(element) {
+    const style = getComputedStyle(element);
+    return Boolean(
+      style.display !== "none" &&
+        style.visibility !== "hidden" &&
+        style.opacity !== "0" &&
+        element.getClientRects().length,
+    );
+  }
+
+  function waitForNextTask() {
+    return new Promise((resolve) => window.setTimeout(resolve, 0));
+  }
 
   installPlaybackStateHooks();
 
