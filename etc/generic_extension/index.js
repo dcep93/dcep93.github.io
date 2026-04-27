@@ -1,7 +1,7 @@
 function execute() {
   const paths = [
     {
-      p: /https:\/\/open\.spotify\.com\/.*/,
+      p: /https:\/\/deprecated\.open\.spotify\.com\/.*/,
       jss: [
         "ktv420/config.js",
         "ktv420/trackId.js",

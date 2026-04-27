@@ -1,5 +1,5 @@
 notify = ["/bin/zsh", "/Users/danielcepeda/repos/dcep93.github.io/mac/notify_codex_turn.sh"]
-model = "gpt-5.4"
+model = "gpt-5.5"
 model_reasoning_effort = "xhigh"
 
 [plugins."github@openai-curated"]
