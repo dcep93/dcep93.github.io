@@ -1,6 +1,6 @@
 notify = ["/bin/zsh", "/Users/danielcepeda/repos/dcep93.github.io/mac/notify_codex_turn.sh"]
 model = "gpt-5.4"
-model_reasoning_effort = "high"
+model_reasoning_effort = "medium"
 
 [plugins."github@openai-curated"]
 enabled = true

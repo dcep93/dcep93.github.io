@@ -97,6 +97,7 @@
   }
 
   async function reportSuccess(result) {
+    const trackMetadata = app.spotifyPage.requireMediaSessionTrackMetadata();
     const metadata = {
       audioChannelCount: Number(result.audioChannelCount || 0) || 0,
       audioChannelLayout: "interleaved",
@@ -105,7 +106,9 @@
       audioSampleRate: Number(result.audioSampleRate || 0) || 0,
       md5: String(result.md5 || ""),
       timings: Array.isArray(result.timings) ? result.timings : [],
+      trackArtist: trackMetadata.trackArtist,
       trackId: app.trackId.requireTrackId(result.trackId),
+      trackName: trackMetadata.trackName,
     };
     const payload = {
       audioDataBase64: String(result.audioDataBase64 || ""),

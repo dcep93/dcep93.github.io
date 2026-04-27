@@ -189,10 +189,33 @@
   }
 
   function getMediaSessionTrack() {
+    const metadata = getMediaSessionMetadata();
+    return {
+      artist: normalizeText(metadata.artist),
+      title: normalizeText(metadata.title),
+    };
+  }
+
+  function getMediaSessionMetadata() {
     const metadata = navigator.mediaSession?.metadata;
     return {
-      artist: normalizeText(metadata?.artist || ""),
-      title: normalizeText(metadata?.title || ""),
+      artist: String(metadata?.artist || "").trim(),
+      title: String(metadata?.title || "").trim(),
+    };
+  }
+
+  function requireMediaSessionTrackMetadata() {
+    const metadata = getMediaSessionMetadata();
+    if (!metadata.title) {
+      throw new Error("Spotify did not expose Media Session track title.");
+    }
+    if (!metadata.artist) {
+      throw new Error("Spotify did not expose Media Session track artist.");
+    }
+
+    return {
+      trackArtist: metadata.artist,
+      trackName: metadata.title,
     };
   }
 
@@ -308,6 +331,7 @@
     describeCurrentPlayButton,
     ensureRequestedTrackPlayback,
     getExpectedTrackFromPageTitle,
+    getMediaSessionMetadata,
     getMediaSessionTrack,
     getPlayButtonIntent,
     getSpotifyAppRoot,
@@ -315,6 +339,7 @@
     isVisible,
     mediaSessionMatchesTrack,
     normalizeText,
+    requireMediaSessionTrackMetadata,
     sleep,
     waitForValue,
   };
