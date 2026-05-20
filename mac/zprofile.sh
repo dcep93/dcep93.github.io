@@ -1,5 +1,7 @@
 # ln -s ~/repos/dcep93.github.io/mac/zprofile.sh ~/.zprofile
 
+eval "$(pyenv init --path)"
+
 x() {
 	git pull && com x && git push
 }

@@ -50,6 +50,8 @@
   "search.useParentIgnoreFiles": true,
   "search.useExcludeSettingsAndIgnoreFiles": true,
   "search.exclude": {
+    "**/.mypy_cache": true,
+    "**/__pycache__": true,
     "**/build/**": true,
     "**/dist/**": true
   },
