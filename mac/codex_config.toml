@@ -1,9 +1,11 @@
-notify = ["/bin/zsh", "/Users/danielcepeda/repos/dcep93.github.io/mac/notify_codex_turn.sh"]
 model = "gpt-5.5"
 model_reasoning_effort = "high"
 
 approval_policy = "never"
 sandbox_mode = "danger-full-access"
+service_tier = "priority"
+
+notify = ["/Users/danielcepeda/.codex/computer-use/Codex Computer Use.app/Contents/SharedSupport/SkyComputerUseClient.app/Contents/MacOS/SkyComputerUseClient", "turn-ended", "--previous-notify", "[\"\\/bin\\/zsh\",\"\\/Users\\/danielcepeda\\/repos\\/dcep93.github.io\\/mac\\/notify_codex_turn.sh\"]"]
 
 [sandbox_workspace_write]
 network_access = true
@@ -11,5 +13,60 @@ network_access = true
 [plugins."github@openai-curated"]
 enabled = true
 
+[plugins."documents@openai-primary-runtime"]
+enabled = true
+
+[plugins."spreadsheets@openai-primary-runtime"]
+enabled = true
+
+[plugins."presentations@openai-primary-runtime"]
+enabled = true
+
+[plugins."browser@openai-bundled"]
+enabled = true
+
 [projects."/Users/danielcepeda/repos"]
 trust_level = "trusted"
+
+[projects."/Users/danielcepeda/Documents/Codex/2026-06-11/run-hostname-pwd-ls"]
+trust_level = "trusted"
+
+[projects."/Users/danielcepeda/Documents/Codex/2026-06-11/run-ls"]
+trust_level = "trusted"
+
+[desktop]
+default-service-tier = "fast"
+appearanceTheme = "system"
+preventSleepWhileRunning = true
+
+[marketplaces.openai-bundled]
+last_updated = "2026-06-11T05:19:38Z"
+source_type = "local"
+source = "/Users/danielcepeda/.codex/.tmp/bundled-marketplaces/openai-bundled"
+
+[marketplaces.openai-primary-runtime]
+last_updated = "2026-06-11T03:58:01Z"
+source_type = "local"
+source = "/Users/danielcepeda/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime"
+
+[features]
+js_repl = false
+
+[mcp_servers.node_repl]
+args = []
+command = "/Applications/Codex.app/Contents/Resources/cua_node/bin/node_repl"
+startup_timeout_sec = 120
+
+[mcp_servers.node_repl.env]
+NODE_REPL_NATIVE_PIPE_CONNECT_TIMEOUT_MS = "1000"
+NODE_REPL_NODE_MODULE_DIRS = "/Applications/Codex.app/Contents/Resources/cua_node/lib/node_modules"
+NODE_REPL_NODE_PATH = "/Applications/Codex.app/Contents/Resources/cua_node/bin/node"
+NODE_REPL_TRUSTED_CODE_PATHS = "/Users/danielcepeda/.codex"
+CODEX_HOME = "/Users/danielcepeda/.codex"
+NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S = "72614174f4dad67a58d46a3ac759cffb45c92fa48a293af4c4ea35102ba391ba"
+BROWSER_USE_AVAILABLE_BACKENDS = "chrome,iab"
+NODE_REPL_INSTRUCTIONS_USE_CASE_BROWSER = "Control the in-app browser in conjunction with the Browser Plugin."
+NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME = "Control the Chrome browser in conjunction with the Chrome Plugin. Prefer this method of controlling Chrome over alternatives (such as Computer Use) unless the user explicitly mentions an alternative."
+BROWSER_USE_CODEX_APP_BUILD_FLAVOR = "prod"
+BROWSER_USE_CODEX_APP_VERSION = "26.608.12217"
+CODEX_CLI_PATH = "/Applications/Codex.app/Contents/Resources/codex"

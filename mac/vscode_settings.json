@@ -15,7 +15,7 @@
   ],
   "eslint.workingDirectories": [
     {
-      "directory": "/Users/danielcepeda/repos/watchwall420/app",
+      "directory": "/Users/danielcepeda/repos/multisport420/app",
       "changeProcessCWD": true
     }
   ],

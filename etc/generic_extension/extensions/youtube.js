@@ -82,6 +82,11 @@ function init_scroll_button(reason = "manual") {
     thresholdFrac: 0.02, // 2% of duration (helps for very short clips)
     maxThresholdSec: 0.4, // absolute ceiling
     minProgressFrac: 0.995, // avoid early advances when duration metadata shifts
+    minLikeCount: 1000,
+    lowLikeInitialDelayMs: 700,
+    lowLikeRetryMs: 300,
+    lowLikeMaxAttempts: 5,
+    autoAdvanceLikeCheckWindowMs: 3000,
   };
 
   const STATE = {
@@ -94,6 +99,8 @@ function init_scroll_button(reason = "manual") {
     lastRemaining: null,
     toggleBtn: null,
     lastVideo: null,
+    lastLikeCheckedSig: "",
+    autoAdvanceLikeCheckUntil: 0,
   };
 
   function now() {
@@ -300,6 +307,174 @@ function init_scroll_button(reason = "manual") {
     }
   }
 
+  function parse_compact_count(text) {
+    try {
+      const normalized = String(text || "")
+        .toLowerCase()
+        .replace(/,/g, "")
+        .trim();
+      const match = normalized.match(
+        /(\d+(?:\.\d+)?)\s*(k|m|b|thousand|million|billion)?\b/,
+      );
+      if (!match) return null;
+
+      const value = Number.parseFloat(match[1]);
+      if (!Number.isFinite(value)) return null;
+
+      const suffix = match[2] || "";
+      const multiplier =
+        suffix === "k" || suffix === "thousand"
+          ? 1000
+          : suffix === "m" || suffix === "million"
+            ? 1000000
+            : suffix === "b" || suffix === "billion"
+              ? 1000000000
+              : 1;
+
+      return Math.round(value * multiplier);
+    } catch {
+      return null;
+    }
+  }
+
+  function viewport_center_distance(el) {
+    try {
+      const rect = el.getBoundingClientRect();
+      if (
+        rect.width <= 0 ||
+        rect.height <= 0 ||
+        rect.bottom < 0 ||
+        rect.top > innerHeight
+      ) {
+        return Infinity;
+      }
+
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      return Math.abs(y - innerHeight / 2) + Math.abs(x - innerWidth / 2) * 0.1;
+    } catch {
+      return Infinity;
+    }
+  }
+
+  function find_like_button_root(shortItem) {
+    try {
+      const roots = shortItem ? [shortItem, document] : [document];
+      for (const root of roots) {
+        const buttons = Array.from(
+          root.querySelectorAll(
+            [
+              'button[aria-label*="like this video" i]',
+              'button[title*="like this video" i]',
+              'button-view-model[aria-label*="like this video" i]',
+              'ytd-toggle-button-renderer[aria-label*="like this video" i]',
+            ].join(","),
+          ),
+        ).sort(
+          (first, second) =>
+            viewport_center_distance(first) - viewport_center_distance(second),
+        );
+
+        for (const button of buttons) {
+          if (root === document && viewport_center_distance(button) === Infinity) {
+            continue;
+          }
+          const label = [
+            button.getAttribute("aria-label"),
+            button.getAttribute("title"),
+            button.textContent,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+          if (!label.includes("like this video") || label.includes("dislike")) {
+            continue;
+          }
+          return (
+            button.closest("button-view-model") ||
+            button.closest("ytd-toggle-button-renderer") ||
+            button.closest("label") ||
+            button
+          );
+        }
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  function get_like_count(shortItem = get_active_short_item()) {
+    try {
+      const root = find_like_button_root(shortItem);
+      if (!root) return null;
+
+      const candidates = [
+        root.getAttribute("aria-label"),
+        root.getAttribute("title"),
+        root.querySelector("button")?.getAttribute("aria-label"),
+        root.querySelector("button")?.getAttribute("title"),
+        root.querySelector(".ytSpecButtonShapeWithLabelLabel")?.textContent,
+        root.querySelector("#text")?.textContent,
+        root.textContent,
+      ].filter(Boolean);
+
+      for (const text of candidates) {
+        const count = parse_compact_count(text);
+        if (count !== null) return count;
+      }
+      return null;
+    } catch (e) {
+      warn("get_like_count failed", e);
+      return null;
+    }
+  }
+
+  function maybe_skip_low_like_video(v = get_active_video()) {
+    try {
+      if (!STATE.enabled || !is_shorts_url() || !v) return;
+
+      const sig = video_sig(v);
+      if (!sig || sig === STATE.lastLikeCheckedSig) return;
+      STATE.lastLikeCheckedSig = sig;
+
+      const check = (attempt = 0) => {
+        try {
+          if (!STATE.enabled || !is_shorts_url() || video_sig(get_active_video()) !== sig) return;
+
+          const likes = get_like_count(get_active_short_item(v));
+          if (likes === null) {
+            if (attempt < CFG.lowLikeMaxAttempts) {
+              setTimeout(() => check(attempt + 1), CFG.lowLikeRetryMs);
+            }
+            return;
+          }
+          if (likes >= CFG.minLikeCount) return;
+
+          log("skip low-like short", likes, sig);
+          advance_next(`low-likes(${likes})`, { force: true });
+        } catch (e) {
+          warn("maybe_skip_low_like_video delayed check failed", e);
+        }
+      };
+
+      setTimeout(check, CFG.lowLikeInitialDelayMs);
+    } catch (e) {
+      warn("maybe_skip_low_like_video failed", e);
+    }
+  }
+
+  function mark_auto_advance_for_like_check() {
+    STATE.autoAdvanceLikeCheckUntil = now() + CFG.autoAdvanceLikeCheckWindowMs;
+  }
+
+  function consume_auto_advance_like_check() {
+    if (!STATE.autoAdvanceLikeCheckUntil) return false;
+    const shouldCheck = now() <= STATE.autoAdvanceLikeCheckUntil;
+    STATE.autoAdvanceLikeCheckUntil = 0;
+    return shouldCheck;
+  }
+
   function click_next_button() {
     try {
       const selectors = [
@@ -352,9 +527,10 @@ function init_scroll_button(reason = "manual") {
     }
   }
 
-  function can_advance() {
+  function can_advance({ force = false } = {}) {
     if (!STATE.enabled) return false;
     if (STATE.inAdvance) return false;
+    if (force) return true;
     return now() - STATE.lastAdvanceAt >= CFG.cooldownMs;
   }
 
@@ -377,8 +553,8 @@ function init_scroll_button(reason = "manual") {
     }
   }
 
-  function advance_next(reason) {
-    if (!can_advance()) return;
+  function advance_next(reason, options = {}) {
+    if (!can_advance(options)) return;
     if (!is_shorts_url()) {
       log("skip advance; not on shorts url");
       return;
@@ -386,6 +562,7 @@ function init_scroll_button(reason = "manual") {
 
     STATE.inAdvance = true;
     STATE.lastAdvanceAt = now();
+    mark_auto_advance_for_like_check();
     log("advancing...", reason);
 
     const startPath = window.location.pathname;
@@ -428,6 +605,9 @@ function init_scroll_button(reason = "manual") {
         STATE.lastSig = sig;
         STATE.lastRemaining = null;
         log("video changed", sig, "playbackRate=", v.playbackRate);
+        if (consume_auto_advance_like_check()) {
+          maybe_skip_low_like_video(v);
+        }
       }
 
       const remaining = dur - t;
