@@ -77,6 +77,8 @@ The current inventory contains 40 plans:
 
 The `chess420` plan lives under `app/docs`, but its enclosing Git worktree and origin correctly map it to `chess420/dcep93`.
 
+The implementation plan for this rollout is a bootstrap exception: because the archive does not exist yet, write it to the current ignored `docs/superpowers/plans` directory in `dcep93.github.io`. Discover migration inputs again during implementation so this bootstrap plan is included in addition to the 40 plans in the initial inventory.
+
 ## Testing
 
 Add a shell test that uses temporary source, archive, and bare-remote repositories. Verify:
@@ -87,7 +89,6 @@ Add a shell test that uses temporary source, archive, and bare-remote repositori
 - a second synchronization call with the same `CODEX_THREAD_ID` performs no commit or push;
 - a later task can push a commit left behind by an earlier failed push.
 
-After migration, compare the archived files with their source files and confirm all 40 source plans have corresponding byte-identical archive copies.
+After migration, compare the archived files with their source files and confirm every plan discovered at migration time has a corresponding byte-identical archive copy.
 
 Finally, verify through GitHub that `dcep93/brainstorming-plans` is private and that the initial archive commit is present.
-
