@@ -27,11 +27,16 @@ Treat consent to use the visual companion as already granted. Do not ask for con
 
 ## Generated implementation plans
 
-Before invoking writing-plans, ensure `docs/superpowers/plans/.gitignore` exists in the current project with:
+Before invoking writing-plans, run:
 
-```gitignore
-*
-!.gitignore
-```
+`$HOME/repos/dcep93.github.io/mac/brainstorm_plan_archive.sh path <source-repository-directory> <YYYY-MM-DD-feature-name>`
 
-Include that `.gitignore` with the design-document commit when it is created or changed. Never commit generated plan files under `docs/superpowers/plans/`.
+Treat the returned absolute Markdown path as a user preference that overrides writing-plans' default save location. Write and self-review the plan there.
+
+After the plan is complete, invoke:
+
+`$HOME/repos/dcep93.github.io/mac/brainstorm_plan_archive.sh sync-once`
+
+Invoke `sync-once` at most once per Codex task. It is best effort: do not retry a failed commit or push during the same task, and do not block implementation when a complete local plan exists. A later task will include unsynchronized files or commits.
+
+Never overwrite an existing archived plan or create a new generated plan under a source repository's `docs/superpowers/plans/` directory.
