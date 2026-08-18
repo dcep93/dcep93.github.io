@@ -4,12 +4,12 @@
 
 Add this response convention to `mac/codex/AGENTS.md` in the `dcep93.github.io` repository:
 
-> If you identify a bug in a response, prepend that response with `bug identified`.
+> Begin the final response with `bug identified` only when that response newly identifies a user-relevant bug. Do not use the prefix when fixing a bug identified in an earlier response or for an incidental bug introduced and resolved during implementation.
 
 ## Scope
 
-Append one bullet to the existing Codex workspace instructions. Preserve the file's current untracked status. Remove the mistakenly added rule and design artifact from `lottaendgames`.
+Keep one bullet in the existing Codex workspace instructions. Preserve the file's current untracked status. The prefix applies to the final diagnostic response that first tells the user a bug exists, not subsequent implementation updates or delivery.
 
 ## Verification
 
-Confirm the exact instruction appears once in `dcep93.github.io/mac/codex/AGENTS.md`, does not appear in `lottaendgames/AGENTS.md`, and both Markdown files remain valid.
+Confirm the refined instruction appears once in `dcep93.github.io/mac/codex/AGENTS.md`, covers both exclusions, does not appear in `lottaendgames/AGENTS.md`, and both Markdown files remain valid.
