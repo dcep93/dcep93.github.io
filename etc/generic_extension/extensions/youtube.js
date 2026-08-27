@@ -55,13 +55,14 @@ function get_like_count_from_button(button) {
   }
 }
 
-function create_auto_advance_like_gate({
+function create_shorts_auto_flow({
   now = () => Date.now(),
-  transitionTtlMs = 1500,
+  advanceAttemptIntervalMs = 500,
   onDiagnostic = null,
 } = {}) {
-  let pendingTransition = null;
-  let eligibleDestinationSig = "";
+  let mode = "watching";
+  let identity = "";
+  let lastAdvanceAttemptAt = null;
 
   function diagnose(event, details = {}) {
     try {
@@ -69,70 +70,85 @@ function create_auto_advance_like_gate({
     } catch {}
   }
 
-  function clear_expired_transition() {
-    if (pendingTransition && now() > pendingTransition.expiresAt) {
-      const expiredTransition = pendingTransition;
-      pendingTransition = null;
-      diagnose("transition-expired", {
-        sourceSig: expiredTransition.sourceSig,
-        expiresAt: expiredTransition.expiresAt,
-      });
-    }
+  function start_advance(sourceIdentity, reason) {
+    if (!sourceIdentity) return false;
+    mode = "advancing";
+    identity = sourceIdentity;
+    lastAdvanceAttemptAt = null;
+    diagnose("advance-started", { sourceIdentity, reason });
+    return true;
   }
 
   return {
-    mark_advance(sourceSig) {
-      eligibleDestinationSig = "";
-      pendingTransition = sourceSig
-        ? {
-            sourceSig,
-            expiresAt: now() + transitionTtlMs,
-          }
-        : null;
-      if (pendingTransition) {
-        diagnose("transition-pending", { ...pendingTransition });
+    start_advance,
+
+    observe(activeIdentity) {
+      if (!activeIdentity) return false;
+
+      if (mode === "watching") {
+        identity = activeIdentity;
+        return false;
       }
-    },
 
-    observe(activeSig) {
-      if (!activeSig) return false;
-      clear_expired_transition();
-
-      if (pendingTransition) {
-        if (activeSig === pendingTransition.sourceSig) return false;
-
-        const sourceSig = pendingTransition.sourceSig;
-        pendingTransition = null;
-        eligibleDestinationSig = activeSig;
-        diagnose("destination-eligible", {
-          sourceSig,
-          destinationSig: activeSig,
+      if (mode === "advancing") {
+        if (activeIdentity === identity) return false;
+        const sourceIdentity = identity;
+        mode = "checking";
+        identity = activeIdentity;
+        lastAdvanceAttemptAt = null;
+        diagnose("destination-observed", {
+          sourceIdentity,
+          destinationIdentity: activeIdentity,
         });
         return true;
       }
 
-      if (eligibleDestinationSig && activeSig !== eligibleDestinationSig) {
-        const destinationSig = eligibleDestinationSig;
-        eligibleDestinationSig = "";
-        diagnose("eligibility-invalidated", { destinationSig, activeSig });
+      if (mode === "checking" && activeIdentity !== identity) {
+        const destinationIdentity = identity;
+        mode = "watching";
+        identity = activeIdentity;
+        diagnose("check-invalidated", {
+          destinationIdentity,
+          activeIdentity,
+        });
       }
-      return activeSig === eligibleDestinationSig;
+      return false;
     },
 
-    is_eligible(activeSig) {
-      return Boolean(activeSig && activeSig === eligibleDestinationSig);
-    },
-
-    consume(activeSig) {
-      if (!activeSig || activeSig !== eligibleDestinationSig) return false;
-      eligibleDestinationSig = "";
-      diagnose("eligibility-consumed", { destinationSig: activeSig });
+    should_attempt_advance(activeIdentity) {
+      if (mode !== "advancing" || activeIdentity !== identity) return false;
+      const currentTime = now();
+      if (
+        lastAdvanceAttemptAt !== null &&
+        currentTime - lastAdvanceAttemptAt < advanceAttemptIntervalMs
+      ) {
+        return false;
+      }
+      lastAdvanceAttemptAt = currentTime;
+      diagnose("advance-attempt", { sourceIdentity: identity });
       return true;
     },
 
-    clear() {
-      pendingTransition = null;
-      eligibleDestinationSig = "";
+    complete_check(destinationIdentity, { skip }) {
+      if (mode !== "checking" || destinationIdentity !== identity) return false;
+      diagnose("check-completed", { destinationIdentity, skip: Boolean(skip) });
+      if (skip) return start_advance(destinationIdentity, "low-likes");
+      mode = "watching";
+      lastAdvanceAttemptAt = null;
+      return true;
+    },
+
+    cancel(reason) {
+      if (mode !== "watching" || identity) {
+        diagnose("cancelled", { mode, identity, reason });
+      }
+      mode = "watching";
+      identity = "";
+      lastAdvanceAttemptAt = null;
+    },
+
+    get_state() {
+      return { mode, identity };
     },
   };
 }
@@ -145,49 +161,7 @@ function main() {
 function installShortsAutoNextBootstrap() {
   if (window.__shortsAutoNextBootstrapInstalled) return;
   window.__shortsAutoNextBootstrapInstalled = true;
-
-  let initTimer = null;
-  let settledTimer = null;
-
-  function queueInit(reason, delay = 0) {
-    try {
-      if (initTimer) clearTimeout(initTimer);
-    } catch {}
-
-    initTimer = setTimeout(() => {
-      initTimer = null;
-      init_scroll_button(reason);
-    }, delay);
-  }
-
-  function scheduleNavigationRefresh(reason) {
-    queueInit(`${reason}:soon`, 200);
-    try {
-      if (settledTimer) clearTimeout(settledTimer);
-    } catch {}
-    settledTimer = setTimeout(() => {
-      settledTimer = null;
-      init_scroll_button(`${reason}:settled`);
-    }, 1200);
-  }
-
-  queueInit("startup", 0);
-  setTimeout(() => {
-    init_scroll_button("startup:settled");
-  }, 5000);
-
-  document.addEventListener(
-    "yt-navigate-finish",
-    () => scheduleNavigationRefresh("yt-navigate-finish"),
-    true,
-  );
-  document.addEventListener(
-    "yt-page-data-updated",
-    () => scheduleNavigationRefresh("yt-page-data-updated"),
-    true,
-  );
-  window.addEventListener("pageshow", () => scheduleNavigationRefresh("pageshow"));
-  window.addEventListener("popstate", () => scheduleNavigationRefresh("popstate"));
+  init_scroll_button("startup");
 }
 
 function init_scroll_button(reason = "manual") {
@@ -216,7 +190,7 @@ function init_scroll_button(reason = "manual") {
   const CFG = {
     pollMs: 120, // steady poll cadence
     uiPollMs: 1500, // slow UI poll for toggle insertion
-    cooldownMs: 1200, // anti double-trigger
+    advanceAttemptIntervalMs: 500,
     minThresholdSec: 0.15, // absolute floor
     thresholdFrac: 0.02, // 2% of duration (helps for very short clips)
     maxThresholdSec: 0.4, // absolute ceiling
@@ -225,19 +199,15 @@ function init_scroll_button(reason = "manual") {
     lowLikeInitialDelayMs: 700,
     lowLikeRetryMs: 300,
     lowLikeMaxAttempts: 5,
-    autoAdvanceTransitionTtlMs: 1500,
   };
 
   const STATE = {
     enabled: true,
-    lastAdvanceAt: 0,
     pollId: null,
     uiPollId: null,
-    inAdvance: false,
     lastSig: "",
     lastRemaining: null,
     toggleBtn: null,
-    lastVideo: null,
     likeCheckInFlightSig: "",
     stopped: false,
   };
@@ -246,11 +216,11 @@ function init_scroll_button(reason = "manual") {
     return Date.now();
   }
 
-  const autoAdvanceLikeGate = create_auto_advance_like_gate({
+  const flow = create_shorts_auto_flow({
     now,
-    transitionTtlMs: CFG.autoAdvanceTransitionTtlMs,
+    advanceAttemptIntervalMs: CFG.advanceAttemptIntervalMs,
     onDiagnostic(event, details) {
-      log("like-gate", event, details);
+      log("flow", event, details);
     },
   });
 
@@ -327,6 +297,7 @@ function init_scroll_button(reason = "manual") {
             e.stopPropagation();
           } catch {}
           STATE.enabled = !STATE.enabled;
+          if (!STATE.enabled) flow.cancel("disabled");
           style_toggle(btn);
           log("toggle", STATE.enabled ? "ENABLED" : "DISABLED");
         });
@@ -361,30 +332,12 @@ function init_scroll_button(reason = "manual") {
     }
   }
 
-  function video_sig(v) {
+  function short_identity() {
     try {
-      return `${v.currentSrc || ""}::${Number(v.duration) || 0}`;
+      if (!is_shorts_url()) return "";
+      return window.location.pathname;
     } catch {
       return "";
-    }
-  }
-
-  function on_video_ended() {
-    advance_next("ended");
-  }
-
-  function ensure_video_listener(v) {
-    if (!v || v === STATE.lastVideo) return;
-    try {
-      if (STATE.lastVideo) {
-        STATE.lastVideo.removeEventListener("ended", on_video_ended);
-      }
-    } catch {}
-    try {
-      v.addEventListener("ended", on_video_ended);
-      STATE.lastVideo = v;
-    } catch (e) {
-      warn("ensure_video_listener failed", e);
     }
   }
 
@@ -396,50 +349,6 @@ function init_scroll_button(reason = "manual") {
       Math.min(CFG.maxThresholdSec, duration * CFG.thresholdFrac),
     );
     return t;
-  }
-
-  function send_arrow_down() {
-    try {
-      const keyboardEventInit = {
-        key: "ArrowDown",
-        code: "ArrowDown",
-        keyCode: 40,
-        which: 40,
-        bubbles: true,
-        cancelable: true,
-      };
-      const targets = [
-        document.activeElement,
-        document.querySelector("ytd-reel-video-renderer[is-active]"),
-        document.body,
-        document.documentElement,
-        document,
-      ].filter(Boolean);
-
-      targets.forEach((target) => {
-        target.dispatchEvent(new KeyboardEvent("keydown", keyboardEventInit));
-        target.dispatchEvent(new KeyboardEvent("keyup", keyboardEventInit));
-      });
-      return true;
-    } catch (e) {
-      warn("send_arrow_down failed", e);
-      return false;
-    }
-  }
-
-  function get_scroll_parent(node) {
-    try {
-      for (let el = node?.parentElement; el; el = el.parentElement) {
-        const style = window.getComputedStyle(el);
-        const canScroll =
-          /(auto|scroll|overlay)/.test(style.overflowY) &&
-          el.scrollHeight > el.clientHeight + 16;
-        if (canScroll) return el;
-      }
-      return null;
-    } catch {
-      return null;
-    }
   }
 
   function get_active_short_item(v = get_active_video()) {
@@ -542,14 +451,16 @@ function init_scroll_button(reason = "manual") {
 
   function maybe_skip_low_like_video(v = get_active_video()) {
     try {
-      const sig = video_sig(v);
+      const sig = short_identity();
+      const flowState = flow.get_state();
       if (
         STATE.stopped ||
         !STATE.enabled ||
         !is_shorts_url() ||
         !v ||
         !sig ||
-        !autoAdvanceLikeGate.is_eligible(sig) ||
+        flowState.mode !== "checking" ||
+        flowState.identity !== sig ||
         sig === STATE.likeCheckInFlightSig
       ) {
         return;
@@ -563,10 +474,7 @@ function init_scroll_button(reason = "manual") {
       const check = (attempt = 0) => {
         try {
           const activeVideo = get_active_video();
-          const cancellationReason = like_check_cancellation_reason(
-            sig,
-            activeVideo,
-          );
+          const cancellationReason = like_check_cancellation_reason(sig);
           if (cancellationReason) {
             log_like_check("cancelled", {
               sig,
@@ -590,6 +498,7 @@ function init_scroll_button(reason = "manual") {
                 attempts: attempt + 1,
               });
               STATE.likeCheckInFlightSig = "";
+              flow.complete_check(sig, { skip: false });
             }
             return;
           }
@@ -600,12 +509,12 @@ function init_scroll_button(reason = "manual") {
             threshold: CFG.minLikeCount,
             action: likes < CFG.minLikeCount ? "skip" : "keep",
           });
-          autoAdvanceLikeGate.consume(sig);
           STATE.likeCheckInFlightSig = "";
-          if (likes >= CFG.minLikeCount) return;
+          const skip = likes < CFG.minLikeCount;
+          flow.complete_check(sig, { skip });
+          if (!skip) return;
 
           log("skip low-like short", likes, sig);
-          advance_next(`low-likes(${likes})`, { force: true });
         } catch (e) {
           warn("maybe_skip_low_like_video delayed check failed", e);
         }
@@ -621,74 +530,46 @@ function init_scroll_button(reason = "manual") {
     log("like-check", event, details);
   }
 
-  function like_check_cancellation_reason(sig, activeVideo) {
+  function like_check_cancellation_reason(sig) {
     if (STATE.stopped) return "stopped";
     if (!STATE.enabled) return "disabled";
     if (!is_shorts_url()) return "not-shorts-url";
-    if (!activeVideo) return "no-active-video";
-    if (video_sig(activeVideo) !== sig) return "active-video-changed";
-    if (!autoAdvanceLikeGate.is_eligible(sig)) return "eligibility-lost";
+    if (short_identity() !== sig) return "active-video-changed";
+    const flowState = flow.get_state();
+    if (flowState.mode !== "checking" || flowState.identity !== sig) {
+      return "eligibility-lost";
+    }
     return "";
   }
 
   function click_next_button() {
     try {
-      const selectors = [
-        "ytd-reel-player-overlay-renderer #navigation-button-down button",
-        "ytd-reel-player-overlay-renderer #navigation-button-down",
-        'button[aria-label*="Next"]',
-        'button[title*="Next"]',
-      ];
-      for (const selector of selectors) {
-        const btn = document.querySelector(selector);
-        if (!btn) continue;
-        btn.click();
-        return true;
-      }
-      return false;
+      const button = Array.from(
+        document.querySelectorAll('button[aria-label="Next video" i]'),
+      )
+        .filter(
+          (candidate) =>
+            !candidate.disabled &&
+            viewport_center_distance(candidate) !== Infinity,
+        )
+        .sort(
+          (first, second) =>
+            viewport_center_distance(first) -
+            viewport_center_distance(second),
+        )[0];
+      if (!button) return false;
+      button.click();
+      return true;
     } catch (e) {
       warn("click_next_button failed", e);
       return false;
     }
   }
 
-  function scroll_fallback() {
-    try {
-      const activeItem = get_active_short_item();
-      const items = Array.from(
-        document.querySelectorAll("ytd-reel-video-renderer, ytd-reel-item-renderer"),
-      );
-      const currentIndex = activeItem ? items.indexOf(activeItem) : -1;
-      const nextItem =
-        currentIndex >= 0 && currentIndex + 1 < items.length
-          ? items[currentIndex + 1]
-          : null;
-
-      if (nextItem?.scrollIntoView) {
-        nextItem.scrollIntoView({ block: "start", behavior: "smooth" });
-        return true;
-      }
-
-      const scrollParent = get_scroll_parent(activeItem);
-      if (scrollParent?.scrollBy) {
-        scrollParent.scrollBy({ top: innerHeight * 1.1, behavior: "smooth" });
-        return true;
-      }
-
-      window.scrollBy({ top: innerHeight * 1.1, behavior: "smooth" });
-      return true;
-    } catch (e) {
-      warn("scroll_fallback failed", e);
-      return false;
-    }
-  }
-
-  function can_advance({ force = false } = {}) {
-    if (STATE.stopped) return false;
-    if (!STATE.enabled) return false;
-    if (STATE.inAdvance) return false;
-    if (force) return true;
-    return now() - STATE.lastAdvanceAt >= CFG.cooldownMs;
+  function attempt_advance(sig) {
+    if (!flow.should_attempt_advance(sig)) return;
+    const clicked = click_next_button();
+    log("advance-attempt", { sig, clicked });
   }
 
   function is_shorts_url() {
@@ -699,73 +580,52 @@ function init_scroll_button(reason = "manual") {
     }
   }
 
-  function did_advance(startPath, startSig) {
-    try {
-      if (window.location.pathname !== startPath) return true;
-
-      const currentSig = video_sig(get_active_video());
-      return Boolean(startSig && currentSig && currentSig !== startSig);
-    } catch {
-      return false;
-    }
-  }
-
-  function advance_next(reason, options = {}) {
-    if (!can_advance(options)) return;
-    if (!is_shorts_url()) {
-      log("skip advance; not on shorts url");
-      return;
-    }
-
-    STATE.inAdvance = true;
-    STATE.lastAdvanceAt = now();
-    log("advancing...", reason);
-
-    const startPath = window.location.pathname;
-    const startSig = video_sig(get_active_video());
-    autoAdvanceLikeGate.mark_advance(startSig);
-    const ok = send_arrow_down();
-
-    setTimeout(() => {
-      if (!STATE.enabled || did_advance(startPath, startSig)) return;
-      click_next_button();
-    }, ok ? 180 : 0);
-
-    setTimeout(
-      () => {
-        try {
-          if (!STATE.enabled || did_advance(startPath, startSig)) return;
-          scroll_fallback();
-        } finally {
-          STATE.inAdvance = false;
-        }
-      },
-      ok ? 520 : 220,
-    );
-  }
-
   function poll_tick() {
     try {
-      if (!STATE.enabled) return;
+      if (STATE.stopped) return;
+      if (!STATE.enabled) {
+        flow.cancel("disabled");
+        return;
+      }
+      if (!is_shorts_url()) {
+        flow.cancel("left-shorts");
+        STATE.lastSig = "";
+        STATE.lastRemaining = null;
+        return;
+      }
 
+      const sig = short_identity();
+      if (!sig) return;
       const v = get_active_video();
+
+      if (flow.observe(sig)) {
+        STATE.lastSig = sig;
+        STATE.lastRemaining = null;
+        log("auto-advanced destination", sig);
+      }
+
+      const flowState = flow.get_state();
+      if (flowState.mode === "advancing") {
+        attempt_advance(sig);
+        return;
+      }
+      if (flowState.mode === "checking") {
+        maybe_skip_low_like_video(v);
+        return;
+      }
+
+      if (sig !== STATE.lastSig) {
+        STATE.lastSig = sig;
+        STATE.lastRemaining = null;
+        log("video changed", sig, "playbackRate=", v?.playbackRate);
+      }
+
       if (!v) return;
-      ensure_video_listener(v);
 
       const dur = Number(v.duration);
       const t = Number(v.currentTime);
       if (!isFinite(dur) || dur <= 0) return;
       if (!isFinite(t) || t <= 0) return;
-
-      const sig = video_sig(v);
-      if (sig && sig !== STATE.lastSig) {
-        STATE.lastSig = sig;
-        STATE.lastRemaining = null;
-        log("video changed", sig, "playbackRate=", v.playbackRate);
-        if (autoAdvanceLikeGate.observe(sig)) {
-          maybe_skip_low_like_video(v);
-        }
-      }
 
       const remaining = dur - t;
       const threshold = dynamic_threshold_sec(dur);
@@ -783,11 +643,13 @@ function init_scroll_button(reason = "manual") {
         (v.ended || (remaining <= threshold && trendingDown)) &&
         progress >= CFG.minProgressFrac
       ) {
-        advance_next(
-          `near-end(poll) rem=${remaining.toFixed(3)} thr=${threshold.toFixed(
-            3,
-          )} rate=${v.playbackRate}`,
-        );
+        const reason = `near-end(poll) rem=${remaining.toFixed(
+          3,
+        )} thr=${threshold.toFixed(3)} rate=${v.playbackRate}`;
+        if (flow.start_advance(sig, reason)) {
+          log("advancing...", reason);
+          attempt_advance(sig);
+        }
       }
     } catch (e) {
       warn("poll_tick crashed", e);
@@ -797,7 +659,6 @@ function init_scroll_button(reason = "manual") {
   function poll_ui() {
     try {
       ensure_toggle_once();
-      maybe_skip_low_like_video();
     } catch (e) {
       warn("poll_ui crashed", e);
     }
@@ -805,7 +666,7 @@ function init_scroll_button(reason = "manual") {
 
   function stop_all() {
     STATE.stopped = true;
-    autoAdvanceLikeGate.clear();
+    flow.cancel("stopped");
     try {
       if (STATE.pollId) clearInterval(STATE.pollId);
     } catch {}
@@ -837,7 +698,7 @@ function init_scroll_button(reason = "manual") {
     stop_all();
   }
 
-  window.__shortsAutoNextSafe2 = { stop: stop_all, state: STATE };
+  window.__shortsAutoNextSafe2 = { stop: stop_all, state: STATE, flow };
   log("running; stop with __shortsAutoNextSafe2.stop()");
 }
 
@@ -868,7 +729,7 @@ function enableShortsBulkOpen() {
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
-    create_auto_advance_like_gate,
+    create_shorts_auto_flow,
     parse_compact_count,
     get_like_count_from_button,
   };
