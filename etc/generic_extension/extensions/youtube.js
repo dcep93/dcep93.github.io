@@ -55,6 +55,65 @@ function get_like_count_from_button(button) {
   }
 }
 
+function create_auto_advance_like_gate({
+  now = () => Date.now(),
+  transitionTtlMs = 1500,
+} = {}) {
+  let pendingTransition = null;
+  let eligibleDestinationSig = "";
+
+  function clear_expired_transition() {
+    if (pendingTransition && now() > pendingTransition.expiresAt) {
+      pendingTransition = null;
+    }
+  }
+
+  return {
+    mark_advance(sourceSig) {
+      eligibleDestinationSig = "";
+      pendingTransition = sourceSig
+        ? {
+            sourceSig,
+            expiresAt: now() + transitionTtlMs,
+          }
+        : null;
+    },
+
+    observe(activeSig) {
+      if (!activeSig) return false;
+      clear_expired_transition();
+
+      if (pendingTransition) {
+        if (activeSig === pendingTransition.sourceSig) return false;
+
+        pendingTransition = null;
+        eligibleDestinationSig = activeSig;
+        return true;
+      }
+
+      if (eligibleDestinationSig && activeSig !== eligibleDestinationSig) {
+        eligibleDestinationSig = "";
+      }
+      return activeSig === eligibleDestinationSig;
+    },
+
+    is_eligible(activeSig) {
+      return Boolean(activeSig && activeSig === eligibleDestinationSig);
+    },
+
+    consume(activeSig) {
+      if (!activeSig || activeSig !== eligibleDestinationSig) return false;
+      eligibleDestinationSig = "";
+      return true;
+    },
+
+    clear() {
+      pendingTransition = null;
+      eligibleDestinationSig = "";
+    },
+  };
+}
+
 function main() {
   installShortsAutoNextBootstrap();
   enableShortsBulkOpen();
@@ -143,6 +202,7 @@ function init_scroll_button(reason = "manual") {
     lowLikeInitialDelayMs: 700,
     lowLikeRetryMs: 300,
     lowLikeMaxAttempts: 5,
+    autoAdvanceTransitionTtlMs: 1500,
   };
 
   const STATE = {
@@ -155,7 +215,6 @@ function init_scroll_button(reason = "manual") {
     lastRemaining: null,
     toggleBtn: null,
     lastVideo: null,
-    lastLikeCheckedSig: "",
     likeCheckInFlightSig: "",
     stopped: false,
   };
@@ -163,6 +222,11 @@ function init_scroll_button(reason = "manual") {
   function now() {
     return Date.now();
   }
+
+  const autoAdvanceLikeGate = create_auto_advance_like_gate({
+    now,
+    transitionTtlMs: CFG.autoAdvanceTransitionTtlMs,
+  });
 
   function get_button_bar() {
     try {
@@ -459,7 +523,7 @@ function init_scroll_button(reason = "manual") {
         !is_shorts_url() ||
         !v ||
         !sig ||
-        sig === STATE.lastLikeCheckedSig ||
+        !autoAdvanceLikeGate.is_eligible(sig) ||
         sig === STATE.likeCheckInFlightSig
       ) {
         return;
@@ -473,7 +537,8 @@ function init_scroll_button(reason = "manual") {
             STATE.stopped ||
             !STATE.enabled ||
             !is_shorts_url() ||
-            video_sig(activeVideo) !== sig
+            video_sig(activeVideo) !== sig ||
+            !autoAdvanceLikeGate.is_eligible(sig)
           ) {
             if (STATE.likeCheckInFlightSig === sig) {
               STATE.likeCheckInFlightSig = "";
@@ -491,7 +556,7 @@ function init_scroll_button(reason = "manual") {
             return;
           }
 
-          STATE.lastLikeCheckedSig = sig;
+          autoAdvanceLikeGate.consume(sig);
           STATE.likeCheckInFlightSig = "";
           if (likes >= CFG.minLikeCount) return;
 
@@ -600,6 +665,7 @@ function init_scroll_button(reason = "manual") {
 
     const startPath = window.location.pathname;
     const startSig = video_sig(get_active_video());
+    autoAdvanceLikeGate.mark_advance(startSig);
     const ok = send_arrow_down();
 
     setTimeout(() => {
@@ -638,7 +704,9 @@ function init_scroll_button(reason = "manual") {
         STATE.lastSig = sig;
         STATE.lastRemaining = null;
         log("video changed", sig, "playbackRate=", v.playbackRate);
-        maybe_skip_low_like_video(v);
+        if (autoAdvanceLikeGate.observe(sig)) {
+          maybe_skip_low_like_video(v);
+        }
       }
 
       const remaining = dur - t;
@@ -679,6 +747,7 @@ function init_scroll_button(reason = "manual") {
 
   function stop_all() {
     STATE.stopped = true;
+    autoAdvanceLikeGate.clear();
     try {
       if (STATE.pollId) clearInterval(STATE.pollId);
     } catch {}
@@ -740,7 +809,11 @@ function enableShortsBulkOpen() {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { parse_compact_count, get_like_count_from_button };
+  module.exports = {
+    create_auto_advance_like_gate,
+    parse_compact_count,
+    get_like_count_from_button,
+  };
 }
 
 if (typeof window !== "undefined" && typeof document !== "undefined") {
