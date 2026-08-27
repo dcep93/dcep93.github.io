@@ -1,3 +1,60 @@
+function parse_compact_count(text) {
+  try {
+    const normalized = String(text || "")
+      .toLowerCase()
+      .replace(/,/g, "")
+      .trim();
+    const match = normalized.match(
+      /(\d+(?:\.\d+)?)\s*(k|m|b|thousand|million|billion)?\b/,
+    );
+    if (!match) return null;
+
+    const value = Number.parseFloat(match[1]);
+    if (!Number.isFinite(value)) return null;
+
+    const suffix = match[2] || "";
+    const multiplier =
+      suffix === "k" || suffix === "thousand"
+        ? 1000
+        : suffix === "m" || suffix === "million"
+          ? 1000000
+          : suffix === "b" || suffix === "billion"
+            ? 1000000000
+            : 1;
+
+    return Math.round(value * multiplier);
+  } catch {
+    return null;
+  }
+}
+
+function get_like_count_from_button(button) {
+  try {
+    if (!button) return null;
+
+    const root =
+      button.closest?.("button-view-model") ||
+      button.closest?.("ytd-toggle-button-renderer") ||
+      button.closest?.("label") ||
+      button;
+    const candidates = [
+      button.getAttribute?.("aria-label"),
+      button.getAttribute?.("title"),
+      root.querySelector?.(".ytSpecButtonShapeWithLabelLabel")?.textContent,
+      root.querySelector?.("#text")?.textContent,
+      root.textContent,
+    ].filter(Boolean);
+
+    for (const text of candidates) {
+      const count = parse_compact_count(text);
+      if (count !== null) return count;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function main() {
   installShortsAutoNextBootstrap();
   enableShortsBulkOpen();
@@ -86,7 +143,6 @@ function init_scroll_button(reason = "manual") {
     lowLikeInitialDelayMs: 700,
     lowLikeRetryMs: 300,
     lowLikeMaxAttempts: 5,
-    autoAdvanceLikeCheckWindowMs: 3000,
   };
 
   const STATE = {
@@ -100,7 +156,8 @@ function init_scroll_button(reason = "manual") {
     toggleBtn: null,
     lastVideo: null,
     lastLikeCheckedSig: "",
-    autoAdvanceLikeCheckUntil: 0,
+    likeCheckInFlightSig: "",
+    stopped: false,
   };
 
   function now() {
@@ -109,18 +166,11 @@ function init_scroll_button(reason = "manual") {
 
   function get_button_bar() {
     try {
-      const selectors = [
-        "#button-bar",
-        "ytd-reel-player-overlay-renderer #actions",
-        "#actions.ytd-reel-player-overlay-renderer",
-        "ytd-reel-player-overlay-renderer #actions #top-level-buttons-computed",
-        "#actions",
-      ];
-      for (const selector of selectors) {
-        const el = document.querySelector(selector);
-        if (el) return el;
-      }
-      return null;
+      if (!is_shorts_url()) return null;
+
+      const shortItem = get_active_short_item();
+      const bar = shortItem?.querySelector("reel-action-bar-view-model");
+      return bar && viewport_center_distance(bar) !== Infinity ? bar : null;
     } catch {
       return null;
     }
@@ -159,7 +209,21 @@ function init_scroll_button(reason = "manual") {
   function ensure_toggle_once() {
     try {
       const bar = get_button_bar();
-      if (!bar) return false;
+      const buttons = Array.from(
+        document.querySelectorAll(
+          "button[data-shorts-auto-next-toggle='1']",
+        ),
+      );
+
+      if (!bar) {
+        buttons.forEach((button) => button.remove());
+        STATE.toggleBtn = null;
+        return false;
+      }
+
+      buttons.forEach((button) => {
+        if (!bar.contains(button)) button.remove();
+      });
 
       let btn = bar.querySelector("button[data-shorts-auto-next-toggle='1']");
       if (!btn) {
@@ -307,36 +371,6 @@ function init_scroll_button(reason = "manual") {
     }
   }
 
-  function parse_compact_count(text) {
-    try {
-      const normalized = String(text || "")
-        .toLowerCase()
-        .replace(/,/g, "")
-        .trim();
-      const match = normalized.match(
-        /(\d+(?:\.\d+)?)\s*(k|m|b|thousand|million|billion)?\b/,
-      );
-      if (!match) return null;
-
-      const value = Number.parseFloat(match[1]);
-      if (!Number.isFinite(value)) return null;
-
-      const suffix = match[2] || "";
-      const multiplier =
-        suffix === "k" || suffix === "thousand"
-          ? 1000
-          : suffix === "m" || suffix === "million"
-            ? 1000000
-            : suffix === "b" || suffix === "billion"
-              ? 1000000000
-              : 1;
-
-      return Math.round(value * multiplier);
-    } catch {
-      return null;
-    }
-  }
-
   function viewport_center_distance(el) {
     try {
       const rect = el.getBoundingClientRect();
@@ -357,7 +391,7 @@ function init_scroll_button(reason = "manual") {
     }
   }
 
-  function find_like_button_root(shortItem) {
+  function find_like_button(shortItem) {
     try {
       const roots = shortItem ? [shortItem, document] : [document];
       for (const root of roots) {
@@ -375,8 +409,16 @@ function init_scroll_button(reason = "manual") {
             viewport_center_distance(first) - viewport_center_distance(second),
         );
 
-        for (const button of buttons) {
-          if (root === document && viewport_center_distance(button) === Infinity) {
+        for (const candidate of buttons) {
+          const button =
+            candidate.matches?.("button") === true
+              ? candidate
+              : candidate.querySelector?.("button");
+          if (!button) continue;
+          if (
+            root === document &&
+            viewport_center_distance(button) === Infinity
+          ) {
             continue;
           }
           const label = [
@@ -390,12 +432,7 @@ function init_scroll_button(reason = "manual") {
           if (!label.includes("like this video") || label.includes("dislike")) {
             continue;
           }
-          return (
-            button.closest("button-view-model") ||
-            button.closest("ytd-toggle-button-renderer") ||
-            button.closest("label") ||
-            button
-          );
+          return button;
         }
       }
       return null;
@@ -406,24 +443,7 @@ function init_scroll_button(reason = "manual") {
 
   function get_like_count(shortItem = get_active_short_item()) {
     try {
-      const root = find_like_button_root(shortItem);
-      if (!root) return null;
-
-      const candidates = [
-        root.getAttribute("aria-label"),
-        root.getAttribute("title"),
-        root.querySelector("button")?.getAttribute("aria-label"),
-        root.querySelector("button")?.getAttribute("title"),
-        root.querySelector(".ytSpecButtonShapeWithLabelLabel")?.textContent,
-        root.querySelector("#text")?.textContent,
-        root.textContent,
-      ].filter(Boolean);
-
-      for (const text of candidates) {
-        const count = parse_compact_count(text);
-        if (count !== null) return count;
-      }
-      return null;
+      return get_like_count_from_button(find_like_button(shortItem));
     } catch (e) {
       warn("get_like_count failed", e);
       return null;
@@ -432,23 +452,47 @@ function init_scroll_button(reason = "manual") {
 
   function maybe_skip_low_like_video(v = get_active_video()) {
     try {
-      if (!STATE.enabled || !is_shorts_url() || !v) return;
-
       const sig = video_sig(v);
-      if (!sig || sig === STATE.lastLikeCheckedSig) return;
-      STATE.lastLikeCheckedSig = sig;
+      if (
+        STATE.stopped ||
+        !STATE.enabled ||
+        !is_shorts_url() ||
+        !v ||
+        !sig ||
+        sig === STATE.lastLikeCheckedSig ||
+        sig === STATE.likeCheckInFlightSig
+      ) {
+        return;
+      }
+      STATE.likeCheckInFlightSig = sig;
 
       const check = (attempt = 0) => {
         try {
-          if (!STATE.enabled || !is_shorts_url() || video_sig(get_active_video()) !== sig) return;
-
-          const likes = get_like_count(get_active_short_item(v));
-          if (likes === null) {
-            if (attempt < CFG.lowLikeMaxAttempts) {
-              setTimeout(() => check(attempt + 1), CFG.lowLikeRetryMs);
+          const activeVideo = get_active_video();
+          if (
+            STATE.stopped ||
+            !STATE.enabled ||
+            !is_shorts_url() ||
+            video_sig(activeVideo) !== sig
+          ) {
+            if (STATE.likeCheckInFlightSig === sig) {
+              STATE.likeCheckInFlightSig = "";
             }
             return;
           }
+
+          const likes = get_like_count(get_active_short_item(activeVideo));
+          if (likes === null) {
+            if (attempt < CFG.lowLikeMaxAttempts) {
+              setTimeout(() => check(attempt + 1), CFG.lowLikeRetryMs);
+            } else if (STATE.likeCheckInFlightSig === sig) {
+              STATE.likeCheckInFlightSig = "";
+            }
+            return;
+          }
+
+          STATE.lastLikeCheckedSig = sig;
+          STATE.likeCheckInFlightSig = "";
           if (likes >= CFG.minLikeCount) return;
 
           log("skip low-like short", likes, sig);
@@ -462,17 +506,6 @@ function init_scroll_button(reason = "manual") {
     } catch (e) {
       warn("maybe_skip_low_like_video failed", e);
     }
-  }
-
-  function mark_auto_advance_for_like_check() {
-    STATE.autoAdvanceLikeCheckUntil = now() + CFG.autoAdvanceLikeCheckWindowMs;
-  }
-
-  function consume_auto_advance_like_check() {
-    if (!STATE.autoAdvanceLikeCheckUntil) return false;
-    const shouldCheck = now() <= STATE.autoAdvanceLikeCheckUntil;
-    STATE.autoAdvanceLikeCheckUntil = 0;
-    return shouldCheck;
   }
 
   function click_next_button() {
@@ -528,6 +561,7 @@ function init_scroll_button(reason = "manual") {
   }
 
   function can_advance({ force = false } = {}) {
+    if (STATE.stopped) return false;
     if (!STATE.enabled) return false;
     if (STATE.inAdvance) return false;
     if (force) return true;
@@ -562,7 +596,6 @@ function init_scroll_button(reason = "manual") {
 
     STATE.inAdvance = true;
     STATE.lastAdvanceAt = now();
-    mark_auto_advance_for_like_check();
     log("advancing...", reason);
 
     const startPath = window.location.pathname;
@@ -605,9 +638,7 @@ function init_scroll_button(reason = "manual") {
         STATE.lastSig = sig;
         STATE.lastRemaining = null;
         log("video changed", sig, "playbackRate=", v.playbackRate);
-        if (consume_auto_advance_like_check()) {
-          maybe_skip_low_like_video(v);
-        }
+        maybe_skip_low_like_video(v);
       }
 
       const remaining = dur - t;
@@ -640,12 +671,14 @@ function init_scroll_button(reason = "manual") {
   function poll_ui() {
     try {
       ensure_toggle_once();
+      maybe_skip_low_like_video();
     } catch (e) {
       warn("poll_ui crashed", e);
     }
   }
 
   function stop_all() {
+    STATE.stopped = true;
     try {
       if (STATE.pollId) clearInterval(STATE.pollId);
     } catch {}
@@ -706,4 +739,10 @@ function enableShortsBulkOpen() {
   });
 }
 
-main();
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { parse_compact_count, get_like_count_from_button };
+}
+
+if (typeof window !== "undefined" && typeof document !== "undefined") {
+  main();
+}
