@@ -63,15 +63,36 @@ test("gates low-like checks on extension-observed destinations", () => {
   assert.match(source, /autoAdvanceLikeGate\.consume\(sig\)/);
 });
 
+test("logs the bounded Like-check lifecycle", () => {
+  const source = fs.readFileSync(require.resolve("./youtube.js"), "utf8");
+
+  for (const event of [
+    "scheduled",
+    "attempt",
+    "cancelled",
+    "retry-exhausted",
+    "decision",
+  ]) {
+    assert.match(source, new RegExp(`log_like_check\\("${event}"`));
+  }
+  assert.match(source, /threshold: CFG\.minLikeCount/);
+  assert.match(source, /action: likes < CFG\.minLikeCount \? "skip" : "keep"/);
+});
+
 function makeGate() {
   let currentTime = 1000;
+  const diagnostics = [];
   const gate = create_auto_advance_like_gate({
     now: () => currentTime,
     transitionTtlMs: 1500,
+    onDiagnostic(event, details) {
+      diagnostics.push({ event, details });
+    },
   });
 
   return {
     gate,
+    diagnostics,
     advanceTime(milliseconds) {
       currentTime += milliseconds;
     },
@@ -114,7 +135,7 @@ test("supports chained extension low-like skips", () => {
 });
 
 test("does not authorize a destination after transition expiry", () => {
-  const { gate, advanceTime } = makeGate();
+  const { gate, diagnostics, advanceTime } = makeGate();
 
   gate.observe("source");
   gate.mark_advance("source");
@@ -122,4 +143,51 @@ test("does not authorize a destination after transition expiry", () => {
 
   assert.equal(gate.observe("manual-later"), false);
   assert.equal(gate.is_eligible("manual-later"), false);
+  assert.deepEqual(
+    diagnostics.map(({ event }) => event),
+    ["transition-pending", "transition-expired"],
+  );
+});
+
+test("reports eligibility gate lifecycle diagnostics", () => {
+  const { gate, diagnostics } = makeGate();
+
+  gate.mark_advance("source");
+  gate.observe("destination");
+  gate.consume("destination");
+  gate.mark_advance("destination");
+  gate.observe("next-destination");
+  gate.observe("manual-replacement");
+
+  assert.deepEqual(
+    diagnostics.map(({ event }) => event),
+    [
+      "transition-pending",
+      "destination-eligible",
+      "eligibility-consumed",
+      "transition-pending",
+      "destination-eligible",
+      "eligibility-invalidated",
+    ],
+  );
+  assert.deepEqual(diagnostics[1].details, {
+    sourceSig: "source",
+    destinationSig: "destination",
+  });
+  assert.deepEqual(diagnostics[5].details, {
+    destinationSig: "next-destination",
+    activeSig: "manual-replacement",
+  });
+});
+
+test("diagnostic callback failures do not affect gate behavior", () => {
+  const gate = create_auto_advance_like_gate({
+    onDiagnostic() {
+      throw new Error("diagnostic failed");
+    },
+  });
+
+  assert.doesNotThrow(() => gate.mark_advance("source"));
+  assert.equal(gate.observe("destination"), true);
+  assert.equal(gate.consume("destination"), true);
 });

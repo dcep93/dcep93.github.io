@@ -58,13 +58,25 @@ function get_like_count_from_button(button) {
 function create_auto_advance_like_gate({
   now = () => Date.now(),
   transitionTtlMs = 1500,
+  onDiagnostic = null,
 } = {}) {
   let pendingTransition = null;
   let eligibleDestinationSig = "";
 
+  function diagnose(event, details = {}) {
+    try {
+      onDiagnostic?.(event, details);
+    } catch {}
+  }
+
   function clear_expired_transition() {
     if (pendingTransition && now() > pendingTransition.expiresAt) {
+      const expiredTransition = pendingTransition;
       pendingTransition = null;
+      diagnose("transition-expired", {
+        sourceSig: expiredTransition.sourceSig,
+        expiresAt: expiredTransition.expiresAt,
+      });
     }
   }
 
@@ -77,6 +89,9 @@ function create_auto_advance_like_gate({
             expiresAt: now() + transitionTtlMs,
           }
         : null;
+      if (pendingTransition) {
+        diagnose("transition-pending", { ...pendingTransition });
+      }
     },
 
     observe(activeSig) {
@@ -86,13 +101,20 @@ function create_auto_advance_like_gate({
       if (pendingTransition) {
         if (activeSig === pendingTransition.sourceSig) return false;
 
+        const sourceSig = pendingTransition.sourceSig;
         pendingTransition = null;
         eligibleDestinationSig = activeSig;
+        diagnose("destination-eligible", {
+          sourceSig,
+          destinationSig: activeSig,
+        });
         return true;
       }
 
       if (eligibleDestinationSig && activeSig !== eligibleDestinationSig) {
+        const destinationSig = eligibleDestinationSig;
         eligibleDestinationSig = "";
+        diagnose("eligibility-invalidated", { destinationSig, activeSig });
       }
       return activeSig === eligibleDestinationSig;
     },
@@ -104,6 +126,7 @@ function create_auto_advance_like_gate({
     consume(activeSig) {
       if (!activeSig || activeSig !== eligibleDestinationSig) return false;
       eligibleDestinationSig = "";
+      diagnose("eligibility-consumed", { destinationSig: activeSig });
       return true;
     },
 
@@ -226,6 +249,9 @@ function init_scroll_button(reason = "manual") {
   const autoAdvanceLikeGate = create_auto_advance_like_gate({
     now,
     transitionTtlMs: CFG.autoAdvanceTransitionTtlMs,
+    onDiagnostic(event, details) {
+      log("like-gate", event, details);
+    },
   });
 
   function get_button_bar() {
@@ -529,17 +555,24 @@ function init_scroll_button(reason = "manual") {
         return;
       }
       STATE.likeCheckInFlightSig = sig;
+      log_like_check("scheduled", {
+        sig,
+        delayMs: CFG.lowLikeInitialDelayMs,
+      });
 
       const check = (attempt = 0) => {
         try {
           const activeVideo = get_active_video();
-          if (
-            STATE.stopped ||
-            !STATE.enabled ||
-            !is_shorts_url() ||
-            video_sig(activeVideo) !== sig ||
-            !autoAdvanceLikeGate.is_eligible(sig)
-          ) {
+          const cancellationReason = like_check_cancellation_reason(
+            sig,
+            activeVideo,
+          );
+          if (cancellationReason) {
+            log_like_check("cancelled", {
+              sig,
+              attempt,
+              reason: cancellationReason,
+            });
             if (STATE.likeCheckInFlightSig === sig) {
               STATE.likeCheckInFlightSig = "";
             }
@@ -547,15 +580,26 @@ function init_scroll_button(reason = "manual") {
           }
 
           const likes = get_like_count(get_active_short_item(activeVideo));
+          log_like_check("attempt", { sig, attempt, likes });
           if (likes === null) {
             if (attempt < CFG.lowLikeMaxAttempts) {
               setTimeout(() => check(attempt + 1), CFG.lowLikeRetryMs);
             } else if (STATE.likeCheckInFlightSig === sig) {
+              log_like_check("retry-exhausted", {
+                sig,
+                attempts: attempt + 1,
+              });
               STATE.likeCheckInFlightSig = "";
             }
             return;
           }
 
+          log_like_check("decision", {
+            sig,
+            likes,
+            threshold: CFG.minLikeCount,
+            action: likes < CFG.minLikeCount ? "skip" : "keep",
+          });
           autoAdvanceLikeGate.consume(sig);
           STATE.likeCheckInFlightSig = "";
           if (likes >= CFG.minLikeCount) return;
@@ -571,6 +615,20 @@ function init_scroll_button(reason = "manual") {
     } catch (e) {
       warn("maybe_skip_low_like_video failed", e);
     }
+  }
+
+  function log_like_check(event, details) {
+    log("like-check", event, details);
+  }
+
+  function like_check_cancellation_reason(sig, activeVideo) {
+    if (STATE.stopped) return "stopped";
+    if (!STATE.enabled) return "disabled";
+    if (!is_shorts_url()) return "not-shorts-url";
+    if (!activeVideo) return "no-active-video";
+    if (video_sig(activeVideo) !== sig) return "active-video-changed";
+    if (!autoAdvanceLikeGate.is_eligible(sig)) return "eligibility-lost";
+    return "";
   }
 
   function click_next_button() {
