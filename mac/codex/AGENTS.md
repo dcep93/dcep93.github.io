@@ -11,7 +11,19 @@ following:
 
 ## Response Formatting
 
-- Begin the final response with `bug identified` only when that response newly identifies a user-relevant bug. Do not use the prefix when fixing a bug identified in an earlier response or for an incidental bug introduced and resolved during implementation.
+- Begin the final response with `bug identified` only when newly reporting a
+  user-relevant defect supported by evidence that actual behavior violates an
+  explicit requirement, documented contract, established expected behavior, or
+  a clear correctness constraint. Explain the expected behavior, the observed
+  violation, and the practical impact.
+- A surprising result, differently behaving options, a naming ambiguity, a
+  design tradeoff, or a feature limitation is not by itself evidence of a bug.
+  When explaining how something works, describe its behavior without assuming
+  that an alternative behavior was intended.
+- If intent or correctness is uncertain, state the uncertainty and describe
+  the behavior neutrally; do not label it a confirmed bug or use the prefix.
+  Do not use the prefix when fixing a bug identified in an earlier response
+  or for an incidental bug introduced and resolved during implementation.
 
 ## Repository Update Defaults
 
