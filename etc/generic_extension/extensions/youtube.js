@@ -153,6 +153,186 @@ function create_shorts_auto_flow({
   };
 }
 
+function short_visibility(element, viewport) {
+  if (
+    element.checkVisibility?.({
+      checkOpacity: true,
+      checkVisibilityCSS: true,
+    }) === false
+  ) {
+    return null;
+  }
+  const { left, top, right, bottom, width, height } =
+    element.getBoundingClientRect();
+  if (width <= 0 || height <= 0) return null;
+  const visibleWidth = Math.max(
+    0,
+    Math.min(right, viewport.width) - Math.max(left, 0),
+  );
+  const visibleHeight = Math.max(
+    0,
+    Math.min(bottom, viewport.height) - Math.max(top, 0),
+  );
+  const fraction = (visibleWidth * visibleHeight) / (width * height);
+  if (fraction <= 0.5) return null;
+  return {
+    fraction,
+    centerDistance: Math.abs(top + height / 2 - viewport.height / 2),
+    rect: { left, top, width, height },
+  };
+}
+
+function select_visible_short(doc, viewport, expectedPath) {
+  const renderers = Array.from(
+    doc.querySelectorAll("ytd-reel-video-renderer,ytd-reel-item-renderer"),
+  );
+  const candidates = renderers
+    .map((item) => ({ item, visibility: short_visibility(item, viewport) }))
+    .filter(({ visibility }) => visibility)
+    .sort((a, b) => a.visibility.centerDistance - b.visibility.centerDistance);
+  if (!candidates.length) return null;
+  // During a split transition, wait instead of choosing arbitrarily.
+  if (
+    candidates[1] &&
+    Math.abs(
+      candidates[0].visibility.centerDistance -
+        candidates[1].visibility.centerDistance,
+    ) < 1
+  ) {
+    return null;
+  }
+  const { item } = candidates[0];
+  const paths = Array.from(item.querySelectorAll('a[href*="/shorts/"]'))
+    .map((link) => {
+      try {
+        const path = new URL(
+          link.getAttribute("href"),
+          "https://www.youtube.com",
+        ).pathname;
+        return /^\/shorts\/[^/]+$/.test(path) ? path : null;
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+  if (paths.length && !paths.includes(expectedPath)) return null;
+  const videos = Array.from(item.querySelectorAll("video"))
+    .map((video) => ({ video, visibility: short_visibility(video, viewport) }))
+    .filter(({ visibility }) => visibility)
+    .sort((a, b) => a.visibility.centerDistance - b.visibility.centerDistance);
+  // Multiple visible players are ambiguous; never fall back to a neighboring Short.
+  if (videos.length !== 1 || videos[0].video.readyState < 2) return null;
+  return {
+    ...videos[0],
+    item,
+    rendererPath: paths.includes(expectedPath) ? expectedPath : null,
+  };
+}
+
+function create_short_timing_recorder({
+  now = () => Date.now(),
+  emit = () => {},
+} = {}) {
+  const ids = new WeakMap();
+  let nextId = 1;
+  let previous = null;
+  let history = [];
+  let lastLogAt = -Infinity;
+  return {
+    observe(selection, path, threshold) {
+      if (!selection) {
+        if (previous)
+          emit("selection-lost", {
+            timestamp: new Date(now()).toISOString(),
+            path,
+            previous,
+          });
+        previous = null;
+        history = [];
+        return null;
+      }
+      const { video, rendererPath, visibility } = selection;
+      if (!ids.has(video)) ids.set(video, nextId++);
+      const capturedAt = now();
+      const duration = Number.isFinite(video.duration) ? video.duration : null;
+      const currentTime = Number.isFinite(video.currentTime)
+        ? video.currentTime
+        : null;
+      const remaining =
+        duration !== null && currentTime !== null
+          ? duration - currentTime
+          : null;
+      const sample = {
+        timestamp: new Date(capturedAt).toISOString(),
+        capturedAt,
+        path,
+        rendererPath,
+        videoId: ids.get(video),
+        source: video.currentSrc || video.getAttribute("src") || "",
+        currentTime,
+        duration,
+        remaining,
+        threshold,
+        progress:
+          duration > 0 && currentTime !== null ? currentTime / duration : null,
+        playbackRate: video.playbackRate,
+        wallRemaining:
+          remaining !== null && video.playbackRate > 0
+            ? remaining / video.playbackRate
+            : null,
+        paused: video.paused,
+        seeking: video.seeking,
+        ended: video.ended,
+        loop: video.loop,
+        readyState: video.readyState,
+        visibility,
+      };
+      const changed =
+        !previous ||
+        previous.videoId !== sample.videoId ||
+        previous.source !== sample.source ||
+        previous.path !== path;
+      const previousSample = changed ? null : previous;
+      if (changed) history = [];
+      const durationChanged =
+        previousSample && previousSample.duration !== duration;
+      const stateChanged =
+        previousSample &&
+        ["paused", "seeking", "ended", "readyState", "playbackRate"].some(
+          (key) => previousSample[key] !== sample[key],
+        );
+      const event = changed
+        ? "selection-changed"
+        : durationChanged
+          ? "duration-changed"
+          : stateChanged
+            ? "state-changed"
+            : null;
+      if (
+        event ||
+        capturedAt - (history.at(-1)?.capturedAt ?? -Infinity) >= 1000
+      ) {
+        history.push(sample);
+        history = history.slice(-15);
+      }
+      if (event || capturedAt - lastLogAt >= 5000) {
+        emit(event || "sample", {
+          ...sample,
+          previous: event ? previous : undefined,
+        });
+        lastLogAt = capturedAt;
+      }
+      previous = sample;
+      return {
+        sample,
+        previous: previousSample,
+        history: history.slice(),
+        changed,
+      };
+    },
+  };
+}
+
 function main() {
   installShortsAutoNextBootstrap();
   enableShortsBulkOpen();
@@ -171,7 +351,12 @@ function init_scroll_button(reason = "manual") {
   function log(...a) {
     if (DEBUG)
       try {
-        console.log(TAG, ...a);
+        console.log(
+          TAG,
+          ...a.map((value) =>
+            value && typeof value === "object" ? JSON.stringify(value) : value,
+          ),
+        );
       } catch {}
   }
   function warn(...a) {
@@ -210,7 +395,12 @@ function init_scroll_button(reason = "manual") {
     toggleBtn: null,
     likeCheckInFlightSig: "",
     stopped: false,
+    timing: null,
   };
+
+  const timingRecorder = create_short_timing_recorder({
+    emit: (event, details) => log("timing", event, details),
+  });
 
   function now() {
     return Date.now();
@@ -220,6 +410,7 @@ function init_scroll_button(reason = "manual") {
     now,
     advanceAttemptIntervalMs: CFG.advanceAttemptIntervalMs,
     onDiagnostic(event, details) {
+      if (event === "advance-started") STATE.advanceReason = details.reason;
       log("flow", event, details);
     },
   });
@@ -270,9 +461,7 @@ function init_scroll_button(reason = "manual") {
     try {
       const bar = get_button_bar();
       const buttons = Array.from(
-        document.querySelectorAll(
-          "button[data-shorts-auto-next-toggle='1']",
-        ),
+        document.querySelectorAll("button[data-shorts-auto-next-toggle='1']"),
       );
 
       if (!bar) {
@@ -317,19 +506,19 @@ function init_scroll_button(reason = "manual") {
 
   function get_active_video() {
     try {
-      const vids = Array.from(document.querySelectorAll("video"));
-      if (!vids.length) return null;
-
-      return (
-        vids.find((v) => v && !v.paused && v.readyState >= 2) ||
-        vids.find((v) => v && v.readyState >= 2) ||
-        vids[0] ||
-        null
-      );
+      return get_visible_selection()?.video || null;
     } catch (e) {
       warn("get_active_video failed", e);
       return null;
     }
+  }
+
+  function get_visible_selection() {
+    return select_visible_short(
+      document,
+      { width: innerWidth, height: innerHeight },
+      short_identity(),
+    );
   }
 
   function short_identity() {
@@ -392,7 +581,7 @@ function init_scroll_button(reason = "manual") {
 
   function find_like_button(shortItem) {
     try {
-      const roots = shortItem ? [shortItem, document] : [document];
+      const roots = shortItem ? [shortItem] : [];
       for (const root of roots) {
         const buttons = Array.from(
           root.querySelectorAll(
@@ -414,10 +603,7 @@ function init_scroll_button(reason = "manual") {
               ? candidate
               : candidate.querySelector?.("button");
           if (!button) continue;
-          if (
-            root === document &&
-            viewport_center_distance(button) === Infinity
-          ) {
+          if (viewport_center_distance(button) === Infinity) {
             continue;
           }
           const label = [
@@ -554,8 +740,7 @@ function init_scroll_button(reason = "manual") {
         )
         .sort(
           (first, second) =>
-            viewport_center_distance(first) -
-            viewport_center_distance(second),
+            viewport_center_distance(first) - viewport_center_distance(second),
         )[0];
       if (!button) return false;
       button.click();
@@ -568,6 +753,7 @@ function init_scroll_button(reason = "manual") {
 
   function attempt_advance(sig) {
     if (!flow.should_attempt_advance(sig)) return;
+    log("advance-timing", { reason: STATE.advanceReason, ...STATE.timing });
     const clicked = click_next_button();
     log("advance-attempt", { sig, clicked });
   }
@@ -596,7 +782,14 @@ function init_scroll_button(reason = "manual") {
 
       const sig = short_identity();
       if (!sig) return;
-      const v = get_active_video();
+      const selection = get_visible_selection();
+      const v = selection?.video;
+      const threshold =
+        v && Number.isFinite(v.duration)
+          ? dynamic_threshold_sec(v.duration)
+          : null;
+      STATE.timing = timingRecorder.observe(selection, sig, threshold);
+      if (!STATE.timing || STATE.timing.changed) STATE.lastRemaining = null;
 
       if (flow.observe(sig)) {
         STATE.lastSig = sig;
@@ -605,7 +798,12 @@ function init_scroll_button(reason = "manual") {
       }
 
       const flowState = flow.get_state();
+      if (!v) return;
       if (flowState.mode === "advancing") {
+        if (STATE.timing.changed) {
+          flow.cancel("visible-player-changed");
+          return;
+        }
         attempt_advance(sig);
         return;
       }
@@ -620,7 +818,10 @@ function init_scroll_button(reason = "manual") {
         log("video changed", sig, "playbackRate=", v?.playbackRate);
       }
 
-      if (!v) return;
+      if (v.paused || v.seeking) {
+        STATE.lastRemaining = null;
+        return;
+      }
 
       const dur = Number(v.duration);
       const t = Number(v.currentTime);
@@ -628,7 +829,6 @@ function init_scroll_button(reason = "manual") {
       if (!isFinite(t) || t <= 0) return;
 
       const remaining = dur - t;
-      const threshold = dynamic_threshold_sec(dur);
       const progress = t / dur;
 
       // Key part for playbackRate changes:
@@ -732,6 +932,8 @@ if (typeof module !== "undefined" && module.exports) {
     create_shorts_auto_flow,
     parse_compact_count,
     get_like_count_from_button,
+    select_visible_short,
+    create_short_timing_recorder,
   };
 }
 

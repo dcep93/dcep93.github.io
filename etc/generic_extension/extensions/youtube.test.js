@@ -1,12 +1,290 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const vm = require("node:vm");
 
 const {
   create_shorts_auto_flow,
   parse_compact_count,
   get_like_count_from_button,
+  select_visible_short,
+  create_short_timing_recorder,
 } = require("./youtube.js");
+
+const viewport = { width: 1000, height: 800 };
+const shortPath = "/shorts/current";
+
+function makeElement({
+  top = 100,
+  left = 300,
+  width = 400,
+  height = 600,
+  hidden = false,
+} = {}) {
+  return {
+    checkVisibility: () => !hidden,
+    getBoundingClientRect: () => ({
+      top,
+      left,
+      width,
+      height,
+      right: left + width,
+      bottom: top + height,
+    }),
+  };
+}
+
+function makeShort({
+  path = shortPath,
+  layout = {},
+  videoLayout = layout,
+  videoProps = {},
+} = {}) {
+  const video = {
+    ...makeElement(videoLayout),
+    currentTime: 48,
+    duration: 58,
+    paused: false,
+    seeking: false,
+    ended: false,
+    loop: true,
+    playbackRate: 1,
+    readyState: 4,
+    currentSrc: "blob:visible",
+    getAttribute: () => null,
+    ...videoProps,
+  };
+  const item = {
+    ...makeElement(layout),
+    querySelectorAll(selector) {
+      if (selector === "video") return [video];
+      if (selector === 'a[href*="/shorts/"]')
+        return path ? [{ getAttribute: () => path }] : [];
+      return [];
+    },
+    querySelector: () => null,
+  };
+  video.closest = () => item;
+  return { item, video };
+}
+
+function makeDocument(shorts, extraVideos = []) {
+  return {
+    querySelectorAll(selector) {
+      if (selector === "ytd-reel-video-renderer,ytd-reel-item-renderer")
+        return shorts.map((s) => s.item);
+      if (selector === "video")
+        return [...extraVideos, ...shorts.map((s) => s.video)];
+      return [];
+    },
+    addEventListener() {},
+  };
+}
+
+test("selects the visible Short even when offscreen and unrelated videos are playing first", () => {
+  const offscreen = makeShort({
+    layout: { top: -700 },
+    videoProps: { currentTime: 57.9 },
+  });
+  const visible = makeShort();
+  const unrelated = makeShort({ videoProps: { currentTime: 57.9 } });
+  const result = select_visible_short(
+    makeDocument([offscreen, visible], [unrelated.video]),
+    viewport,
+    shortPath,
+  );
+  assert.equal(result.video, visible.video);
+});
+
+test("does not fall back when the visible Short is unready or its video is hidden", () => {
+  const neighbor = makeShort({ layout: { top: 700 } });
+  for (const options of [
+    { videoProps: { readyState: 0 } },
+    { videoLayout: { hidden: true } },
+  ]) {
+    assert.equal(
+      select_visible_short(
+        makeDocument([neighbor, makeShort(options)]),
+        viewport,
+        shortPath,
+      ),
+      null,
+    );
+  }
+});
+
+test("rejects hidden, horizontally offscreen, and half-visible renderers", () => {
+  for (const layout of [{ hidden: true }, { left: 1100 }, { top: -300 }]) {
+    assert.equal(
+      select_visible_short(
+        makeDocument([makeShort({ layout })]),
+        viewport,
+        shortPath,
+      ),
+      null,
+    );
+  }
+});
+
+test("rejects a stale renderer identity and accepts the live markup without is-active", () => {
+  assert.equal(
+    select_visible_short(
+      makeDocument([makeShort({ path: "/shorts/old" })]),
+      viewport,
+      shortPath,
+    ),
+    null,
+  );
+  const visible = makeShort();
+  assert.equal(
+    select_visible_short(makeDocument([visible]), viewport, shortPath).video,
+    visible.video,
+  );
+});
+
+test("waits on equally centered renderers and multiple visible videos", () => {
+  assert.equal(
+    select_visible_short(
+      makeDocument([makeShort(), makeShort()]),
+      viewport,
+      shortPath,
+    ),
+    null,
+  );
+  const short = makeShort();
+  const originalQuery = short.item.querySelectorAll;
+  short.item.querySelectorAll = (selector) =>
+    selector === "video"
+      ? [short.video, makeShort().video]
+      : originalQuery(selector);
+  assert.equal(
+    select_visible_short(makeDocument([short]), viewport, shortPath),
+    null,
+  );
+});
+
+test("timing recorder retains bounded history and records duration and source changes", () => {
+  let clock = 1000;
+  const events = [];
+  const recorder = create_short_timing_recorder({
+    now: () => clock,
+    emit: (event, data) => events.push({ event, data }),
+  });
+  const short = makeShort();
+  const selection = select_visible_short(
+    makeDocument([short]),
+    viewport,
+    shortPath,
+  );
+  let result;
+  for (let i = 0; i < 20; i++) {
+    result = recorder.observe(selection, shortPath, 0.4);
+    clock += 1000;
+  }
+  assert.equal(result.history.length, 15);
+  short.video.duration = 70;
+  result = recorder.observe(selection, shortPath, 0.4);
+  assert.equal(events.at(-1).event, "duration-changed");
+  assert.equal(events.at(-1).data.previous.duration, 58);
+  assert.equal(result.sample.remaining, 22);
+  short.video.currentSrc = "blob:replacement";
+  result = recorder.observe(selection, shortPath, 0.4);
+  assert.equal(result.changed, true);
+  assert.equal(result.previous, null);
+  assert.equal(result.history.length, 1);
+  assert.equal(recorder.observe(null, shortPath, null), null);
+  assert.equal(events.at(-1).event, "selection-lost");
+  assert.equal(recorder.observe(selection, shortPath, 0.4).previous, null);
+});
+
+function makePollingHarness(shorts, extraVideos = []) {
+  const doc = makeDocument(shorts, extraVideos);
+  const originalQuery = doc.querySelectorAll;
+  let clicks = 0;
+  const logs = [];
+  const timers = new Map();
+  const button = {
+    ...makeElement({ width: 50, height: 50 }),
+    disabled: false,
+    click() {
+      clicks++;
+    },
+  };
+  doc.querySelectorAll = (selector) =>
+    selector === 'button[aria-label="Next video" i]'
+      ? [button]
+      : originalQuery(selector);
+  const window = { location: { pathname: shortPath } };
+  vm.runInNewContext(fs.readFileSync(require.resolve("./youtube.js"), "utf8"), {
+    document: doc,
+    window,
+    innerWidth: viewport.width,
+    innerHeight: viewport.height,
+    URL,
+    console: {
+      log: (...args) => logs.push(args),
+      warn: (...args) => logs.push(args),
+    },
+    setInterval: (fn, ms) => {
+      timers.set(ms, fn);
+      return ms;
+    },
+    clearInterval: (ms) => timers.delete(ms),
+    setTimeout: () => {},
+  });
+  return { tick: () => timers.get(120)(), logs, clicks: () => clicks, window };
+}
+
+test("polling ignores a hidden player's ending while the visible Short has ten seconds left", () => {
+  const hidden = makeShort({
+    layout: { top: -700 },
+    videoProps: { currentTime: 57.827 },
+  });
+  const visible = makeShort();
+  const harness = makePollingHarness([hidden, visible]);
+  harness.tick();
+  assert.equal(harness.clicks(), 0);
+  visible.video.currentTime = 57.827;
+  harness.tick();
+  assert.equal(harness.clicks(), 1);
+  const log = harness.logs.find((args) => args[1] === "advance-timing");
+  assert.equal(typeof log[2], "string");
+  const details = JSON.parse(log[2]);
+  assert.equal(details.sample.currentTime, 57.827);
+  assert.equal(details.sample.duration, 58);
+  assert.equal(details.sample.rendererPath, shortPath);
+  assert.equal(details.sample.videoId, 1);
+  assert.equal(details.history[0].currentTime, 48);
+  assert.equal(details.sample.threshold, 0.4);
+  assert.equal(details.sample.paused, false);
+  assert.ok(details.sample.timestamp);
+  assert.match(details.reason, /near-end/);
+});
+
+test("paused and seeking visible players never start a completion advance", () => {
+  for (const state of [{ paused: true }, { seeking: true }]) {
+    const harness = makePollingHarness([
+      makeShort({ videoProps: { currentTime: 57.9, ...state } }),
+    ]);
+    harness.tick();
+    assert.equal(harness.clicks(), 0);
+  }
+});
+
+test("replacing the visible player cancels a pending navigation retry", () => {
+  const first = makeShort({ videoProps: { currentTime: 57.9 } });
+  const shorts = [first];
+  const harness = makePollingHarness(shorts);
+  harness.tick();
+  assert.equal(harness.clicks(), 1);
+  shorts[0] = makeShort();
+  harness.tick();
+  assert.equal(
+    harness.window.__shortsAutoNextSafe2.flow.get_state().mode,
+    "watching",
+  );
+  assert.equal(harness.clicks(), 1);
+});
 
 function makeLikeButton({ ariaLabel, visibleLabel = "" }) {
   const root = {
@@ -63,7 +341,10 @@ test("uses one persistent verified navigation loop", () => {
   assert.match(source, /return window\.location\.pathname/);
   assert.doesNotMatch(source, /yt-navigate-finish|yt-page-data-updated/);
   assert.doesNotMatch(source, /send_arrow_down|scroll_fallback|KeyboardEvent/);
-  assert.doesNotMatch(source, /create_auto_advance_like_gate|autoAdvanceLikeGate/);
+  assert.doesNotMatch(
+    source,
+    /create_auto_advance_like_gate|autoAdvanceLikeGate/,
+  );
 });
 
 test("logs the bounded Like-check lifecycle", () => {
@@ -204,10 +485,7 @@ test("manual navigation invalidates a pending Like check", () => {
     mode: "watching",
     identity: "manual-destination",
   });
-  assert.equal(
-    flow.complete_check("auto-destination", { skip: true }),
-    false,
-  );
+  assert.equal(flow.complete_check("auto-destination", { skip: true }), false);
 });
 
 test("diagnostic callback failures do not affect flow behavior", () => {
