@@ -333,6 +333,39 @@ function create_short_timing_recorder({
   };
 }
 
+function completed_short_loop(timing) {
+  const current = timing?.sample;
+  const previous = timing?.previous;
+  if (
+    !current ||
+    !previous ||
+    !current.loop ||
+    current.paused ||
+    current.seeking ||
+    previous.paused ||
+    previous.seeking ||
+    current.duration !== previous.duration ||
+    current.playbackRate !== previous.playbackRate ||
+    !(current.playbackRate > 0) ||
+    !(previous.progress >= 0.9) ||
+    !(current.progress <= 0.1) ||
+    !(current.currentTime < previous.currentTime)
+  ) {
+    return false;
+  }
+
+  // Only infer a wrap between adjacent observations of the same player/source.
+  // Reject stale samples and backwards jumps too large to be normal playback.
+  const elapsed = (current.capturedAt - previous.capturedAt) / 1000;
+  const travelled = previous.remaining + current.currentTime;
+  return (
+    elapsed > 0 &&
+    elapsed <= 2 &&
+    travelled >= 0 &&
+    travelled <= elapsed * current.playbackRate + 0.05
+  );
+}
+
 function main() {
   installShortsAutoNextBootstrap();
   enableShortsBulkOpen();
@@ -730,18 +763,26 @@ function init_scroll_button(reason = "manual") {
 
   function click_next_button() {
     try {
-      const button = Array.from(
-        document.querySelectorAll('button[aria-label="Next video" i]'),
-      )
-        .filter(
-          (candidate) =>
-            !candidate.disabled &&
-            viewport_center_distance(candidate) !== Infinity,
-        )
+      const shortsRoot = get_active_video()?.closest("ytd-shorts");
+      if (!shortsRoot) return false;
+      const candidates = Array.from(
+        shortsRoot.querySelectorAll('button[aria-label="Next video" i]'),
+      ).filter((candidate) => !candidate.disabled);
+      const visible = candidates
+        .filter((candidate) => viewport_center_distance(candidate) !== Infinity)
         .sort(
           (first, second) =>
             viewport_center_distance(first) - viewport_center_distance(second),
-        )[0];
+        );
+      // YouTube hides the navigation container in narrow layouts. Its native
+      // button still works; use it only within the selected player's Shorts root
+      // and only when it is the one unambiguous downward navigation control.
+      const button =
+        visible[0] ||
+        (candidates.length === 1 &&
+        candidates[0].closest("#navigation-button-down")
+          ? candidates[0]
+          : null);
       if (!button) return false;
       button.click();
       return true;
@@ -818,7 +859,7 @@ function init_scroll_button(reason = "manual") {
         log("video changed", sig, "playbackRate=", v?.playbackRate);
       }
 
-      if (v.paused || v.seeking) {
+      if ((v.paused && !v.ended) || v.seeking) {
         STATE.lastRemaining = null;
         return;
       }
@@ -826,7 +867,7 @@ function init_scroll_button(reason = "manual") {
       const dur = Number(v.duration);
       const t = Number(v.currentTime);
       if (!isFinite(dur) || dur <= 0) return;
-      if (!isFinite(t) || t <= 0) return;
+      if (!isFinite(t) || t < 0) return;
 
       const remaining = dur - t;
       const progress = t / dur;
@@ -838,12 +879,14 @@ function init_scroll_button(reason = "manual") {
       STATE.lastRemaining = remaining;
 
       const trendingDown = prev == null ? true : remaining <= prev + 0.05;
+      const loopCompleted = completed_short_loop(STATE.timing);
 
       if (
-        (v.ended || (remaining <= threshold && trendingDown)) &&
-        progress >= CFG.minProgressFrac
+        loopCompleted ||
+        ((v.ended || (remaining <= threshold && trendingDown)) &&
+          progress >= CFG.minProgressFrac)
       ) {
-        const reason = `near-end(poll) rem=${remaining.toFixed(
+        const reason = `${loopCompleted ? "completed-loop" : "near-end"}(poll) rem=${remaining.toFixed(
           3,
         )} thr=${threshold.toFixed(3)} rate=${v.playbackRate}`;
         if (flow.start_advance(sig, reason)) {

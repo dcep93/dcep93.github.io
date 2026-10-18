@@ -203,16 +203,25 @@ function makePollingHarness(shorts, extraVideos = []) {
   let clicks = 0;
   const logs = [];
   const timers = new Map();
+  let clock = 1000;
   const button = {
     ...makeElement({ width: 50, height: 50 }),
     disabled: false,
+    closest: (selector) => (selector === "#navigation-button-down" ? {} : null),
     click() {
       clicks++;
     },
   };
+  const controls = [button];
+  const unrelatedControls = [];
+  const shortsRoot = { querySelectorAll: () => controls };
+  for (const short of shorts) {
+    short.video.closest = (selector) =>
+      selector === "ytd-shorts" ? shortsRoot : short.item;
+  }
   doc.querySelectorAll = (selector) =>
     selector === 'button[aria-label="Next video" i]'
-      ? [button]
+      ? [...unrelatedControls, ...controls]
       : originalQuery(selector);
   const window = { location: { pathname: shortPath } };
   vm.runInNewContext(fs.readFileSync(require.resolve("./youtube.js"), "utf8"), {
@@ -221,6 +230,11 @@ function makePollingHarness(shorts, extraVideos = []) {
     innerWidth: viewport.width,
     innerHeight: viewport.height,
     URL,
+    Date: class extends Date {
+      static now() {
+        return clock;
+      }
+    },
     console: {
       log: (...args) => logs.push(args),
       warn: (...args) => logs.push(args),
@@ -232,8 +246,108 @@ function makePollingHarness(shorts, extraVideos = []) {
     clearInterval: (ms) => timers.delete(ms),
     setTimeout: () => {},
   });
-  return { tick: () => timers.get(120)(), logs, clicks: () => clicks, window };
+  return {
+    tick: (ms = 120) => {
+      clock += ms;
+      timers.get(120)();
+    },
+    logs,
+    clicks: () => clicks,
+    window,
+    button,
+    controls,
+    unrelatedControls,
+  };
 }
+
+test("advances using the active Shorts navigation control hidden by responsive layout", () => {
+  const harness = makePollingHarness([
+    makeShort({ videoProps: { currentTime: 57.9 } }),
+  ]);
+  Object.assign(harness.button, makeElement({ width: 0, height: 0 }));
+  harness.tick();
+  assert.equal(harness.clicks(), 1);
+});
+
+test("does not click disabled, ambiguous, or unrelated hidden navigation controls", () => {
+  for (const variant of ["disabled", "ambiguous", "unrelated"]) {
+    const harness = makePollingHarness([
+      makeShort({ videoProps: { currentTime: 57.9 } }),
+    ]);
+    Object.assign(harness.button, makeElement({ width: 0, height: 0 }));
+    if (variant === "disabled") harness.button.disabled = true;
+    if (variant === "ambiguous") harness.controls.push({ ...harness.button });
+    if (variant === "unrelated") harness.button.closest = () => null;
+    harness.tick();
+    assert.equal(harness.clicks(), 0, variant);
+  }
+});
+
+test("ignores Next buttons outside the active Shorts root and retries when its control returns", () => {
+  const harness = makePollingHarness([
+    makeShort({ videoProps: { currentTime: 57.9 } }),
+  ]);
+  harness.unrelatedControls.push({ ...harness.button });
+  harness.controls.length = 0;
+  harness.tick();
+  assert.equal(harness.clicks(), 0);
+  assert.equal(
+    harness.window.__shortsAutoNextSafe2.flow.get_state().mode,
+    "advancing",
+  );
+  Object.assign(harness.button, makeElement({ width: 0, height: 0 }));
+  harness.controls.push(harness.button);
+  harness.tick(500);
+  assert.equal(harness.clicks(), 1);
+});
+
+test("advances after a looping Short skips the final polling window", () => {
+  for (const rate of [1, 2, 4]) {
+    const short = makeShort({
+      videoProps: { duration: 10, currentTime: 9.9, playbackRate: rate },
+    });
+    const harness = makePollingHarness([short]);
+    harness.tick();
+    assert.equal(harness.clicks(), 0);
+    short.video.currentTime = 9.9 + 0.12 * rate - 10;
+    harness.tick();
+    assert.equal(harness.clicks(), 1, `playback rate ${rate}`);
+  }
+});
+
+test("does not mistake rewinds, metadata changes, or interrupted observations for completed loops", () => {
+  for (const variant of [
+    "rewind", "duration", "source", "paused", "seeking", "stale", "disabled",
+  ]) {
+    const short = makeShort({
+      videoProps: { duration: 10, currentTime: variant === "rewind" ? 8 : 9.9 },
+    });
+    const harness = makePollingHarness([short]);
+    harness.tick();
+    short.video.currentTime = 0.02;
+    if (variant === "duration") short.video.duration = 12;
+    if (variant === "source") short.video.currentSrc = "blob:new";
+    if (variant === "paused") short.video.paused = true;
+    if (variant === "seeking") short.video.seeking = true;
+    if (variant === "disabled") {
+      harness.window.__shortsAutoNextSafe2.state.enabled = false;
+    }
+    harness.tick(variant === "stale" ? 10000 : 120);
+    assert.equal(harness.clicks(), 0, variant);
+  }
+});
+
+test("advances when a non-looping video ends and the browser marks it paused", () => {
+  const harness = makePollingHarness([
+    makeShort({
+      videoProps: {
+        duration: 10, currentTime: 10, loop: false, ended: true, paused: true,
+      },
+    }),
+  ]);
+  harness.tick();
+  assert.equal(harness.clicks(), 1);
+});
 
 test("polling ignores a hidden player's ending while the visible Short has ten seconds left", () => {
   const hidden = makeShort({
