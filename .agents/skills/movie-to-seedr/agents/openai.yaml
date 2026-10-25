@@ -1,4 +1,4 @@
 interface:
   display_name: "Movie to Seedr"
-  short_description: "Find movie releases and manage Seedr downloads"
+  short_description: "Find movies, download with Seedr, and play in VLC"
   default_prompt: "Use $movie-to-seedr to find five movie releases in Chrome and let me choose one for Seedr."

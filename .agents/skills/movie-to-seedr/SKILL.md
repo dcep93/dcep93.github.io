@@ -1,6 +1,6 @@
 ---
 name: movie-to-seedr
-description: Search movie torrents through pirateproxy.net in Chrome, show five ranked releases, add the user's chosen magnet to Seedr, check progress, and download a ready folder on request. Also validate the Chrome and Seedr setup.
+description: Find five movie torrent choices through pirateproxy.net in Chrome, add a selected magnet to Seedr, check readiness, and download on request. Open downloaded movies full screen in VLC, control playback, verify original audio, and toggle English subtitles. Validate browser, Seedr, and VLC setup.
 ---
 
 # Movie to Seedr
@@ -20,6 +20,7 @@ Validate relevant prerequisites before acting:
 - Seedr is signed in and its current used/total or free storage is visible before adding a torrent.
 - The magnet copy/paste path is available before submitting.
 - On a local-download request, the folder is ready and Chrome can start the download; verify its state in the downloads UI.
+- For VLC requests, VLC is installed and controllable and the chosen movie is fully downloaded. Follow [references/vlc-playback.md](references/vlc-playback.md); Chrome and Seedr need not be connected for an already-local movie.
 
 Ask the user to handle sign-in, MFA, or CAPTCHA when necessary and keep the handoff tab open. Reuse retained sessions on subsequent runs, but do not promise that login never expires. Keep credentials, cookies, account data, and download URLs out of the repository. Never disable browser security to pass setup.
 
@@ -52,4 +53,8 @@ Report the stage, observed status, and percentage only if shown or calculable fr
 
 Download a folder only when the user asks or has explicitly authorized an end-to-end test including download. Check readiness first. If fetching or preparation is incomplete, report the current status/percentage and bail out of the download attempt; do not wait indefinitely, schedule monitoring, or repeatedly trigger archive preparation. If the download action itself starts preparation, observe the response and stop if it is not ready.
 
-For a ready folder, start its folder/archive download once using Chrome's configured destination. Verify that Chrome accepted the download and report whether it is in progress or complete. If completion is requested, observe until complete or a concrete blocker, with concise progress updates. Never claim completion solely from clicking Download. Do not extract or run downloaded files.
+For a ready folder, start its folder/archive download once using Chrome's configured destination. Verify that Chrome accepted the download and report whether it is in progress or complete. If completion is requested, observe until complete or a concrete blocker, with concise progress updates. Never claim completion solely from clicking Download. Extraction is allowed when needed for requested VLC playback; do not run downloaded programs.
+
+## VLC playback
+
+When asked to open or play the downloaded movie, use [references/vlc-playback.md](references/vlc-playback.md). Default to full screen, original-language main audio, and subtitles disabled. On a subsequent Play request, resume rather than restart or accidentally pause. On an English-subtitles request, select an available English track and verify it. Navigate menus promptly using fresh state and direct controls; retain the user's latest playback settings across follow-ups.
