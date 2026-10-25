@@ -33,6 +33,16 @@ Honor explicit authorization for a complete multi-step flow: complete that scope
 
 Use the connected Chrome browser and its persistent signed-in profile through the available browser-control tools. Discover current browsers and tabs; do not assume a previous tab ID remains valid. Reuse existing task tabs where possible. Read [references/browser-workflow.md](references/browser-workflow.md) for setup and observed UI behavior.
 
+### Clear stale full screen when it blocks the next action
+
+Before navigation, tab/app switching, login handoffs, search/form entry, file opening, or menu changes, inspect the visible target window for a leftover full-screen state. Repeat this check after waking or when the expected controls/page are hidden. Apply it across Chrome, embedded players, movied8, multisport420, and VLC; a tool-accessible background tab is not necessarily what the user sees.
+
+Identify whether full screen belongs to the webpage's video player, Chrome itself, or VLC. If it obstructs the requested action, use the observed Exit full screen control or a supported escape action in that specific window, then refresh state. Exit nested layers individually if necessary. Use a toggle such as F11 only after establishing that Chrome is currently full screen; do not blindly toggle it or send keys to an unverified foreground app. A maximized window alone does not require recovery.
+
+Exiting full screen means exposing navigation and controls, not closing the tab/app, stopping playback, or discarding the current media. Preserve position, audio, subtitles, and selected games. Keep full screen when it does not block the action, such as an accessible Play/Pause command. After temporary menu work, restore the prior viewing state; after loading requested media, apply the normal full-screen playback default. Leave login/setup pages visible for user handoff. If the first exit attempt has no observable effect, re-inspect the target and full-screen layer before one supported alternate attempt; if still blocked, report it rather than repeatedly toggling.
+
+### Check relevant prerequisites
+
 Validate relevant prerequisites before acting:
 
 - Chrome is connected and controllable.
