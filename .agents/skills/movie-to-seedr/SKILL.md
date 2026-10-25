@@ -57,6 +57,8 @@ For login handoffs, distinguish a tool-accessible tab from the window visible on
 
 Ask the user to handle sign-in, MFA, or CAPTCHA when necessary and keep the handoff tab open. Reuse retained sessions on subsequent runs, but do not promise that login never expires. Keep credentials, cookies, account data, and download URLs out of the repository. Never disable browser security to pass setup.
 
+The user mainly has a mouse, no convenient keyboard, and unreliable right-click. Handle navigation, typing non-secret task data, and context-menu work with tools. For authorized routine sign-in, click the relevant login buttons through the browser and inspect the result before requesting manual help; an existing session may finish sign-in automatically. Make necessary handoffs usable with left-clicks where possible. Do not make the user perform keyboard shortcuts or right-click as the default workaround.
+
 ## Search and shortlist
 
 1. Start at https://pirateproxy.net/ and search the requested movie, episode, or season. Check the title, sequel number, year, and episode/season identifiers as applicable; ask only if ambiguity materially affects the match. For a TV episode, preserve the exact season/episode; do not substitute a season pack unless requested. If its search endpoint fails, use up to two proxy links actually listed on that directory, reporting the fallback; the user has authorized these proxies. Close unwanted ad/search popups and recover the intended page as described in the browser reference. Stop on security interstitials; do not follow ads or install suggested software.

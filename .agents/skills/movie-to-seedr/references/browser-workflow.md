@@ -5,7 +5,7 @@ Prefer the connected browser automation tool for Chrome. Follow its returned API
 ## Persistent setup
 
 - Use the user's existing connected Chrome profile. If it is missing, ask the user to connect/open Chrome instead of silently using an unrelated browser profile.
-- Open https://www.seedr.cc/ and use Login if needed. Let the user sign in and choose Keep Me Logged In. Retained cookies belong to Chrome; never export them into skill files.
+- Open https://www.seedr.cc/ and use Login if needed. For an authorized known sign-in route, use the browser's Login/Google Login controls and inspect the response. Request user input only for missing credentials, account ambiguity, MFA, CAPTCHA, or other required handoff. Let the user choose Keep Me Logged In when appropriate. Retained cookies belong to Chrome; never export them into skill files.
 - Leave a tab waiting for user login marked as a handoff when the browser tools support this. Preserve the Seedr result tab as a deliverable after a successful operation.
 - Setup validation is an observation, not a permanent guarantee. Recheck login and capacity whenever adding a torrent, and readiness whenever downloading.
 
@@ -14,6 +14,14 @@ Prefer the connected browser automation tool for Chrome. Follow its returned API
 On 2026-10-25, pirateproxy.net's home search redirected to search.dailystocks.com and returned 502. Its first listed proxy, tpb.re, opened a working Pirate Search page. Discover proxy links afresh from pirateproxy.net rather than treating this hostname as permanent.
 
 The query `mission impossible 2` returned other installments. Refining to `mission impossible 2000` isolated the intended film. Results displayed sizes in GiB/MiB, SE and LE counts, release links, and magnet icons. Some titles were truncated, and uploader groups affected default ordering, so compare actual seeder counts instead of assuming the first rows are always the best results.
+
+## Seedr submission tested
+
+During the live test, clicking Google Login through the browser completed sign-in using the existing session without extra user input. Seedr's file view showed used/total storage and a collapsed plus/add-link control. Opening it exposed `Paste link URL Here`; pasting the selected magnet and pressing Enter submitted once. Verify the resulting transfer and storage state instead of relying on the input clearing.
+
+Right-clicking the actual magnet link exposed Chrome's native Copy link address menu, but the native click failed with unavailable input geometry and copy could not be verified. The tested fallback was to dismiss the menu, take the exact magnet URL from the observed link, verify its info hash against the selected release, and paste through the browser into Seedr. Disclose this fallback; do not claim native copying succeeded or ask this user to right-click.
+
+The selected movie was accepted and showed `Collecting Seeds`; no percentage was displayed. This verifies sign-in, capacity comparison, and submission, not download completion. A reserved storage increase does not mean cloud fetching or local download is complete. Stop a download attempt at this stage and propose a later readiness check.
 
 ## Popup recovery
 
