@@ -62,6 +62,7 @@ Validate relevant prerequisites before acting:
 - On a local-download request, the folder is ready and Chrome can start the download; verify its state in the downloads UI.
 - For VLC requests, VLC is installed and controllable and the chosen movie is fully downloaded. Follow [references/vlc-playback.md](references/vlc-playback.md); Chrome and Seedr need not be connected for an already-local movie.
 - For movied8 or multisport420, validate the requested app and its current controls. Check only prerequisites relevant to the requested route.
+- Whenever opening or returning to multisport420, verify membership in the intended Firebase room and its live connection before changing games, layout, or audio; follow [references/multisport420.md](references/multisport420.md).
 
 For login handoffs, distinguish a tool-accessible tab from the window visible on the TV. Bring the login page into the visible Chrome window when supported and verify it before saying it is on screen. If a full-screen player hides it, use observed controls to exit full screen and select the login tab. If window targeting fails, say so and give a direct link; do not repeatedly claim an unseen tab is visible.
 
