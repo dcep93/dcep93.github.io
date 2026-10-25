@@ -1,0 +1,4 @@
+interface:
+  display_name: "Movie to Seedr"
+  short_description: "Find movie releases and manage Seedr downloads"
+  default_prompt: "Use $movie-to-seedr to find five movie releases in Chrome and let me choose one for Seedr."
