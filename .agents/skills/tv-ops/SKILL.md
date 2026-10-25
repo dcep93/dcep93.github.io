@@ -15,7 +15,7 @@ Before each user request, including index selection, status, and download follow
 
 - Find a movie/episode/season, add a magnet, check readiness, or download: use the Seedr workflow below and [browser-workflow.md](references/browser-workflow.md).
 - Watch a Seedr video in movied8: use [movied8.md](references/movied8.md). Local download is not required for a ready cloud video.
-- Load, focus, replace, remove, or arrange sports games in multisport420: use [multisport420.md](references/multisport420.md).
+- Load, focus, replace, remove, or arrange sports games in multisport420: use [multisport420.md](references/multisport420.md). "All games" means every available game in the requested scope, excluding RedZone and the fantasy scoreboard, with the intended Firebase room joined and Live. The room remote can select which streams are loaded when the viewer shares its catalog.
 - Play a downloaded movie/episode in VLC: use [vlc-playback.md](references/vlc-playback.md).
 - Play, pause, full screen, audio, or subtitles without naming an app: use the last verified viewing app and media in this conversation. Ask only if the target is ambiguous.
 

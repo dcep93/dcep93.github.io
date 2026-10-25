@@ -11,6 +11,20 @@ Before these actions, complete the Firebase room check below whenever opening or
 3. Focus the selected tile/body or its explicit focus control to select that game's presentation/audio. **Do not click its title as a focus shortcut: the screen title closes the screen.** Use an explicit audio button where available, especially in dual layout. Preserve another game's audio when focusing a silent scoreboard.
 4. If playback needs a player Play action, inspect the iframe/player and activate the real control. Close task-generated popup tabs as described in browser-workflow.md. Verify an actual playing state or visible game video; adding a tile alone is not successful playback.
 
+## Load all games
+
+For "all games", "load every game", or equivalent, join/verify the intended Firebase room first, then select every available game in the requested league/category. If no league is specified by the user or established task context, use the app's ALL category so the visible default NFL filter does not silently narrow the request. Inspect the full current list, including entries requiring scrolling. Use the current list rather than remembered teams or guessed URLs; refresh once if stale.
+
+Exclude **RedZone / NFL RedZone / Red Zone** and **Fantasy Scoreboard / Fantasy420Scoreboard**, including equivalent title/slug variants. These exclusions apply to this bulk workflow; an explicit later request may load either. If excluded entries are already loaded, remove them to satisfy "without RedZone and fantasy scoreboard". Select each eligible game only if not already selected; never click an already-selected toggle blindly. Deduplicate by stream identity. An available listing is not proof of live playback: report upcoming/unavailable or failed players accurately.
+
+Keep Chrome visibly foreground, dismiss unwanted popups after player-triggering actions, and recheck current selection as it changes. Preserve layout and audio unless the request includes changing them. Finish by verifying every eligible listed game is selected, the two excluded entries are absent, and the intended room still shows Live. Report the number selected and any failures separately from verified playback. Do not stop after a handful of games or declare success based only on clicks.
+
+## Select loaded streams from the room remote
+
+Open the viewer's observed **Open remote** link in the same intended room; bring the remote tab visibly forward before acting. Require **Viewer connected**, not merely a reachable remote page. Use **Loaded streams** and its **Find a stream** search to check/uncheck the requested game. These checkboxes add/remove streams on the viewing screen; the separate game bubbles only control spotlight/audio. Inspect checked state before acting, preserve other selections, and verify the resulting lineup on the viewer as well as the remote.
+
+The viewer shares its available catalog on Join and refresh. If the picker has no available catalog, refresh streams on the viewing screen; an older deployed viewer may need a reload and rejoin to publish it. Joining publishes the viewer's current lineup over the room state, so preserve/verify that lineup before rejoining. Do not use rejoin as a routine response to remote selection failures. If no viewer is connected or the deployed UI lacks the picker, report that condition instead of claiming remote stream selection worked.
+
 ## Layout and recovery
 
 Use Options > Layout for requested arrangements. Local source exposes Spotlight, Dual spotlight, Cinema, Grid wall, and other layouts; select only choices actually present in the live app. Grid wall keeps tiles in place while selection changes audio. Show stream selector exposes Stream 1 / Stream 2 when the current provider supports alternatives. On a failed stream, try one observed alternate source or the targeted Refresh screen control, then report the result instead of looping.
