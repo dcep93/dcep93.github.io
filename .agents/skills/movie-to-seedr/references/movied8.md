@@ -4,9 +4,9 @@ Use https://movied8.web.app/ in the user's connected Chrome profile. The user's 
 
 ## Select the ready Seedr file
 
-Locate the exact requested movie/episode in the signed-in Seedr file list. Confirm cloud readiness and choose the main video, excluding samples and unrelated episodes. A ready cloud video can be loaded in movied8 without downloading the folder locally. If Seedr is still fetching/processing, report actual progress, stop the playback attempt, and propose checking readiness on the next yes.
+Locate the exact requested movie/episode in the signed-in Seedr file list. Confirm cloud download readiness and choose the main video, excluding samples and unrelated episodes. A ready cloud video can be loaded in movied8 without downloading the folder locally. If the torrent is still fetching, report actual progress, stop the attempt, and propose checking readiness on the next yes. Seedr's separate web-player conversion is not a prerequisite for copying the original file's download link.
 
-Obtain a fresh direct video/playback URL using Seedr's observed video or file-link controls. Use the actual selected file link, not a magnet, folder/ZIP download, Seedr HTML page, or a constructed endpoint. Preserve the entire signed URL when pasting but do not expose it in the response. Inspect fresh page controls to distinguish a playback URL from a share link. If the URL is expired or rejected, obtain a new link once from the same file; do not edit its token or expiration parameters.
+Right-click the video file and choose **Copy Download Link** from Seedr's context menu. Do not left-click the file or choose Play Video: that opens Seedr's player, which is not the requested viewing app. Close an already-open Seedr player before copying. Verify Seedr's copied-link confirmation and the selected movie identity, then paste that exact download URL into movied8. The observed confirmation exposes the copied URL in a text entry area when clipboard access is unavailable. Use the original video file's link, not a converted stream, magnet, folder/ZIP download, Seedr HTML page, or a constructed endpoint. Preserve the entire signed URL without exposing it in the response. If the URL is expired or rejected, obtain a new link once from the same file; do not edit its token or expiration parameters.
 
 ## Load the app
 
@@ -29,4 +29,4 @@ Finish with title/episode, playing or paused, full screen, and verified audio/su
 
 ## Evidence and limits
 
-The form and player controls were observed in the user's existing movied8 Chrome tab. A signed Seedr video URL was present in its src field, showing the existing integration pattern. Loading a new Seedr movie in movied8 has not been tested; Seedr sign-in and later browser inspection were blocked during authoring. Revalidate the actual UI, source mapping, and playback at execution time.
+Tested the Seedr right-click Copy Download Link flow and saved the exact copied URL as a new movied8 title while preserving an existing title. The tested HEVC/EAC3 MKV produced movied8's "Media load failed (code 3)" after a fresh-link retry. Saving the title worked; browser playback was not established. Report those outcomes separately, and do not open Seedr's player or wait for its conversion as a workaround for this direct-download-link workflow.
