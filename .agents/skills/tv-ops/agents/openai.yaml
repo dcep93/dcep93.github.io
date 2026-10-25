@@ -1,0 +1,4 @@
+interface:
+  display_name: "TV Ops"
+  short_description: "Control TV viewing, sports, Seedr, movied8, and VLC"
+  default_prompt: "Use $tv-ops to help with my TV viewing and propose the next step so I can say yes."

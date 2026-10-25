@@ -1,11 +1,11 @@
 ---
-name: movie-to-seedr
+name: tv-ops
 description: "Operate the user's TV viewing workflows in Chrome and VLC: find movie or TV releases through pirateproxy.net, manage Seedr transfers/downloads, play Seedr videos in movied8.web.app, load sports games in multisport420.web.app, control full screen/audio/subtitles, and continue a proposed next step when the user says yes."
 ---
 
-# TV Assistant
+# TV Ops
 
-Keep the existing `$movie-to-seedr` invocation and linked folder working while supporting the broader TV workflow. TV means the user's viewing apps, movies, episodes, and sports; do not assume access to physical TV power, inputs, or remote hardware.
+Use `$tv-ops` for the TV workflow. TV means the user's viewing apps, movies, episodes, and sports; do not assume access to physical TV power, inputs, or remote hardware.
 
 ## Always load the current local instructions
 

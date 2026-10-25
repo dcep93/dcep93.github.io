@@ -1,4 +1,0 @@
-interface:
-  display_name: "TV Assistant"
-  short_description: "Control TV viewing, sports, Seedr, movied8, and VLC"
-  default_prompt: "Use $movie-to-seedr to help with my TV viewing and propose the next step so I can say yes."
