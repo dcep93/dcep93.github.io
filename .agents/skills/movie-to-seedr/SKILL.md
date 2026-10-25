@@ -33,6 +33,16 @@ Honor explicit authorization for a complete multi-step flow: complete that scope
 
 Use the connected Chrome browser and its persistent signed-in profile through the available browser-control tools. Discover current browsers and tabs; do not assume a previous tab ID remains valid. Reuse existing task tabs where possible. Read [references/browser-workflow.md](references/browser-workflow.md) for setup and observed UI behavior.
 
+### Keep every Chrome action visible
+
+The user wants to watch and debug all Chrome actions. Before inspecting or interacting with a page, activate its tab and bring its Chrome window to the visible foreground using the current tool's documented controls. Confirm the intended tab is selected in the visible window; an automation handle, successful background action, or handoff/deliverable marker alone does not prove visibility. Keep it foreground throughout the action sequence. Recheck after switching tabs/windows, opening a popup, navigating into another tab, or recovering from full screen. Inventory calls needed to find and activate the target can precede this check.
+
+If another app or stale full screen hides Chrome, recover visibility first using the guidance below. If foreground control cannot be verified, report that specific limitation and stop the affected Chrome actions rather than silently continuing in the background. Leave the requested result tab visible when finished.
+
+### Proactively clear unwanted popups
+
+During every Chrome workflow, inspect for new tabs/windows and obstructing overlays after actions that can open them and whenever focus changes unexpectedly. Close clearly identified spam, ads, fake download prompts, and unrelated search popups promptly, without waiting for the user to ask. This includes clearly unwanted popups already present at setup. Preserve legitimate sign-in, requested content, and unrelated user tabs; age or an unfamiliar hostname alone does not establish spam. Follow [references/browser-workflow.md](references/browser-workflow.md) for identification, dismissal, and bounded recovery, then restore the intended tab to the foreground before continuing. This is cleanup during active work, not an idle background monitor.
+
 ### Clear stale full screen when it blocks the next action
 
 Before navigation, tab/app switching, login handoffs, search/form entry, file opening, or menu changes, inspect the visible target window for a leftover full-screen state. Repeat this check after waking or when the expected controls/page are hidden. Apply it across Chrome, embedded players, movied8, multisport420, and VLC; a tool-accessible background tab is not necessarily what the user sees.

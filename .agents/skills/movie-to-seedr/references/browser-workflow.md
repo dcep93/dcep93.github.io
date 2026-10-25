@@ -2,6 +2,10 @@
 
 Prefer the connected browser automation tool for Chrome. Follow its returned API documentation and inspect fresh accessibility/DOM state after actions. Use current labels and observed links rather than fixed element indexes or invented endpoints.
 
+## Visible operation
+
+Apply SKILL.md's foreground requirement to every Chrome route, including searches, Seedr, movied8, sports, login, and downloads. Use the currently documented tab activation/window-focus capability and verify the selected tab in the visible Chrome window before page inspection or interaction. Do not assume acquiring a tab handle or marking a deliverable selects it on the user's screen. Once confirmed, perform consecutive actions promptly while that tab remains foreground; re-activate and verify on every target switch or unexpected focus change. Popup dismissal is also visible work: identify the unwanted surface from the tab/window inventory, bring it forward when necessary to inspect/dismiss it, then immediately restore the task tab. If the available tools cannot establish foreground visibility, explain that blocker instead of doing hidden page work.
+
 ## Persistent setup
 
 - Use the user's existing connected Chrome profile. If it is missing, ask the user to connect/open Chrome instead of silently using an unrelated browser profile.
@@ -25,9 +29,11 @@ The selected movie was accepted and showed `Collecting Seeds`; no percentage was
 
 ## Popup recovery
 
-The user authorizes following proxies listed on pirateproxy.net and closing unwanted popups generated during this workflow. A Toorgle general-search popup appeared during the development search; it was unrelated to the torrent results and was closed.
+The user authorizes following proxies listed on pirateproxy.net and proactively closing clearly unwanted popups across all TV workflows, including those already present when work starts. A Toorgle general-search popup appeared during the development search; it was unrelated to the torrent results and was closed.
 
-Before search submission and magnet interactions, know the task's current tabs. After an unexpected focus change, redirect, or failed action, list tabs and identify new unwanted tabs by their URLs, titles, and relationship to the action. Close only those task-generated ad/search tabs; preserve the user's unrelated tabs, the intended results, and Seedr. Re-observe the intended page before retrying an action. For in-page overlays, use an observed close/dismiss control. Do not click fake download buttons, accept notification permissions, or weaken popup/security settings. If the original tab was redirected, return to its last verified task URL. After two failed recovery attempts for the same action, try the next directory-listed proxy within the search fallback limit or report the blocker.
+At setup, inventory tabs/windows and establish the intended task pages. After search submission, release/magnet clicks, player interactions, or any action that opens a window/tab, check for newly opened surfaces and unexpected focus changes before continuing. Identify spam using its visible content, URL/title, and connection to the triggering action; a new tab or different domain alone is insufficient because legitimate authentication and requested content can also open there. Close confirmed unwanted surfaces immediately. Preserve unrelated user tabs, requested results, Seedr, movied8, sports, and legitimate login/MFA dialogs. If an existing tab's purpose is ambiguous, leave it alone.
+
+For in-page ads/overlays, use an observed close/dismiss control; close the whole tab/window only when that surface is confirmed unwanted. Do not click fake download buttons, accept notification permissions, or weaken popup/security settings. If an ad redirected the original task tab, return to its last verified task URL. After cleanup, activate the intended Chrome tab/window and refresh its state before retrying; first check whether the original action already succeeded to avoid duplicate submissions. After two failed recovery attempts for the same action, try the next directory-listed proxy within the search fallback limit when applicable, or report the blocker. Do not close and retry indefinitely or claim to watch for popups while idle.
 
 ## Local source installation
 
