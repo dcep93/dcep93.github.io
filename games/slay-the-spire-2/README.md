@@ -1,10 +1,11 @@
 # spire420
 
-Personal Slay the Spire 2 mod, built from source in this repository. Draft **0.1.0**, targeting the installed **v0.114.0 public beta** on macOS. One installed mod contains independent internal modules; every module defaults to enabled.
+Personal Slay the Spire 2 mod, built from source in this repository. Draft **0.2.0**, targeting the installed **v0.114.0 public beta** on macOS. One installed mod contains independent internal modules; every module defaults to enabled.
 
 | Module | Draft behavior |
 | --- | --- |
 | MapColors | Recolors map room icons and the six legend icons. Keeps existing shapes, dark artwork, hover/selection outlines, animations, paths, and votes. |
+| MapControls | Primary (one-finger) click-drag draws on the map background; secondary (two-finger) click-drag scrolls. Room clicks remain native. |
 | Autoplay | Enabled but inert. No timers, input, map navigation, card play, or gameplay hooks. Waiting for your explicit rules. |
 
 ## Try the installed draft
@@ -13,7 +14,7 @@ The installer only copies files. It never launches, focuses, quits, restarts, or
 
 1. Finish playing, then restart the game with mods enabled when convenient.
 2. Accept the game's first-use mod prompt if shown; enable **spire420** in the game's mod settings and follow any restart prompt.
-3. Open the map and use the visual checklist below.
+3. Open the map and use the visual and map-control checklists below.
 
 The game's own mod loader maintains separate modded/unmodded saves. This installer does not edit or migrate saves, change Steam launch options, or accept the mod prompt for you.
 
@@ -35,10 +36,10 @@ Install location on macOS:
 Edit the **installed** `settings.json.txt`. Settings take effect at the next game start; there is no live settings menu in this draft. The `.json.txt` suffix is intentional: the game's loader treats every `.json` under `mods/` as a mod manifest.
 
 ```json
-"modules": { "MapColors": true, "Autoplay": true }
+"modules": { "MapColors": true, "MapControls": true, "Autoplay": true }
 ```
 
-Set either value to `false` to disable that module. Missing module keys default to `true`, including modules added later. Missing palette entries keep their defaults. Invalid settings are reported in the log and are never rewritten by the mod. Installation preserves your existing settings file.
+Set any value to `false` to disable that module. Missing module keys default to `true`, including modules added later. Missing palette entries keep their defaults. Invalid settings are reported in the log and are never rewritten by the mod. Installation preserves your existing settings file.
 
 | Room | Draft color | Hex |
 | --- | --- | --- |
@@ -71,7 +72,7 @@ python3 scripts/mod.py check
 python3 scripts/mod.py install
 ```
 
-`check` builds Release, verifies six scene/shader contracts directly from the local PCK, runs managed configuration/module/API tests, and tests the installer with temporary directories. It does not start Godot or contact the game process. Loading the managed game assembly for reflection may print a Sentry message saying its native extension is not loaded; this is expected outside the game.
+`check` builds Release, verifies six scene/shader contracts directly from the local PCK, runs managed configuration/module/API and map-input IL tests, and tests the installer with temporary directories. It does not start Godot or contact the game process. Loading the managed game assembly for reflection may print a Sentry message saying its native extension is not loaded; this is expected outside the game.
 
 `install` runs the checks before deploying. An existing copy of this mod is backed up under `Contents/MacOS/mod-backups/spire420/<timestamp>/`, outside the loader's recursive `mods/` scan. A failed directory swap restores the previous copy. The installed DLL's SHA-256 is verified against the build.
 
@@ -81,7 +82,21 @@ Custom installation example:
 python3 scripts/mod.py install --game-dir '/Volumes/Games/steamapps/common/Slay the Spire 2'
 ```
 
-To remove, quit the game at your convenience and move only `mods/spire420/` outside `mods/`. Do not keep a renamed backup inside `mods/`: the loader scans recursively. To roll back, replace that directory with one of the installer backups while the game is closed. Disabling MapColors and Autoplay does not itself remove the package from the game's mod list; disable the package in game settings for unmodded play.
+To remove, quit the game at your convenience and move only `mods/spire420/` outside `mods/`. Do not keep a renamed backup inside `mods/`: the loader scans recursively. To roll back, replace that directory with one of the installer backups while the game is closed. Disabling all modules does not itself remove the package from the game's mod list; disable the package in game settings for unmodded play.
+
+## Map controls and manual checklist
+
+MapControls interprets the mouse buttons supplied by macOS; it does not detect raw fingers. With primary click configured for one finger and secondary click for two fingers, hold primary on the map background to draw and hold secondary to scroll. Room points keep ordinary primary-click selection; begin strokes in the background, then draw across points if desired. Two-finger pan gestures and wheel scrolling remain native, separate from secondary click-drag. Drawing, erasing, animation guards, scroll bounds, toolbar controls, and controller behavior stay owned by the game.
+
+**Native input acceptance is pending your next restart.** Offline checks verify signatures, button values, instruction preservation, and the node-hit policy without creating native input events or running the game. After restarting:
+
+- Primary click-drag on the background draws; primary release stops the line immediately.
+- Secondary click-drag scrolls without drawing; release ends dragging, including at scroll limits.
+- Primary click on a reachable room selects it without starting a line. A drag beginning on a room keeps native click/drag cancellation and does not begin a background stroke.
+- Two-finger pan and mouse-wheel scrolling still work. Check the start-of-act animation and reopening the map.
+- Middle-button hold erases; middle release stops erasing.
+- Toolbar draw, erase, clear, and stopping a toolbar stroke still work; controller navigation remains usable.
+- Set `"MapControls": false`, restart, and confirm native primary-scroll/secondary-draw behavior returns while MapColors remains independent. Restore `true` and restart to re-enable.
 
 ## Visual checklist
 
@@ -97,7 +112,7 @@ Logs: `~/Library/Application Support/SlayTheSpire2/logs/godot.log`; search for `
 
 ## Extending the mod
 
-Add an `IModule` under `Modules/`, then register it in `Entry.Initialize`. Missing settings mean enabled. Each module owns its hooks and reports initialization failure independently. MapColors validates all hooks before patching and removes its patches if patch installation fails. Unsupported scene visuals are skipped and logged rather than guessed. Unknown/custom map node subclasses remain vanilla.
+Add an `IModule` under `Modules/`, then register it in `Entry.Initialize`. Missing settings mean enabled. Each module owns its hooks and reports initialization failure independently. MapColors and MapControls validate all their hooks before patching and remove only their own patches if patch installation fails. Unsupported scene visuals are skipped and logged rather than guessed. MapColors leaves unknown/custom map node visuals vanilla.
 
 Future autoplay work must encode only user-supplied conditions and reassess `affects_gameplay`, multiplayer behavior, and save assumptions before shipping. There is no rule engine hidden in this draft.
 

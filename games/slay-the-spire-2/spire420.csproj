@@ -7,7 +7,7 @@
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <AssemblyName>spire420</AssemblyName>
     <RootNamespace>Spire420</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
     <GameDir Condition="'$(GameDir)' == ''">$(HOME)/Library/Application Support/Steam/steamapps/common/Slay the Spire 2</GameDir>
     <GameDataDir Condition="'$(GameDataDir)' == ''">$(GameDir)/SlayTheSpire2.app/Contents/Resources/data_sts2_macos_arm64</GameDataDir>

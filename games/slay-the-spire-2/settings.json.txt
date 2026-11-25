@@ -1,5 +1,5 @@
 {
-  "modules": { "MapColors": true, "Autoplay": true },
+  "modules": { "MapColors": true, "MapControls": true, "Autoplay": true },
   "mapColors": {
     "Monster": "#687680",
     "Elite": "#F07836",
