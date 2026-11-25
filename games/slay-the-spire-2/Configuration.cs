@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 
-namespace DcepSpire;
+namespace Spire420;
 
 public readonly record struct Rgb(float R, float G, float B)
 {

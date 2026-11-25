@@ -1,4 +1,4 @@
-namespace DcepSpire.Modules;
+namespace Spire420.Modules;
 
 public static class ModuleHost
 {

@@ -1,4 +1,4 @@
-# Daniel's Spire Modules
+# spire420
 
 Personal Slay the Spire 2 mod, built from source in this repository. Draft **0.1.0**, targeting the installed **v0.114.0 public beta** on macOS. One installed mod contains independent internal modules; every module defaults to enabled.
 
@@ -12,7 +12,7 @@ Personal Slay the Spire 2 mod, built from source in this repository. Draft **0.1
 The installer only copies files. It never launches, focuses, quits, restarts, or sends input to the game. Your running game will not pick up the draft until you choose to quit and relaunch.
 
 1. Finish playing, then restart the game with mods enabled when convenient.
-2. Accept the game's first-use mod prompt if shown; enable **Daniel's Spire Modules** in the game's mod settings and follow any restart prompt.
+2. Accept the game's first-use mod prompt if shown; enable **spire420** in the game's mod settings and follow any restart prompt.
 3. Open the map and use the visual checklist below.
 
 The game's own mod loader maintains separate modded/unmodded saves. This installer does not edit or migrate saves, change Steam launch options, or accept the mod prompt for you.
@@ -21,9 +21,9 @@ Install location on macOS:
 
 ```text
 ~/Library/Application Support/Steam/steamapps/common/Slay the Spire 2/
-  SlayTheSpire2.app/Contents/MacOS/mods/DcepSpire/
-    DcepSpire.dll
-    DcepSpire.json
+  SlayTheSpire2.app/Contents/MacOS/mods/spire420/
+    spire420.dll
+    spire420.json
     settings.json.txt
     README.md
 ```
@@ -71,7 +71,7 @@ python3 scripts/mod.py install
 
 `check` builds Release, verifies six scene/shader contracts directly from the local PCK, runs managed configuration/module/API tests, and tests the installer with temporary directories. It does not start Godot or contact the game process. Loading the managed game assembly for reflection may print a Sentry message saying its native extension is not loaded; this is expected outside the game.
 
-`install` runs the checks before deploying. An existing copy of this mod is backed up under `Contents/MacOS/mod-backups/DcepSpire/<timestamp>/`, outside the loader's recursive `mods/` scan. A failed directory swap restores the previous copy. The installed DLL's SHA-256 is verified against the build.
+`install` runs the checks before deploying. An existing copy of this mod is backed up under `Contents/MacOS/mod-backups/spire420/<timestamp>/`, outside the loader's recursive `mods/` scan. A failed directory swap restores the previous copy. The installed DLL's SHA-256 is verified against the build.
 
 Custom installation example:
 
@@ -79,7 +79,7 @@ Custom installation example:
 python3 scripts/mod.py install --game-dir '/Volumes/Games/steamapps/common/Slay the Spire 2'
 ```
 
-To remove, quit the game at your convenience and move only `mods/DcepSpire/` outside `mods/`. Do not keep a renamed backup inside `mods/`: the loader scans recursively. To roll back, replace that directory with one of the installer backups while the game is closed. Disabling MapColors and Autoplay does not itself remove the package from the game's mod list; disable the package in game settings for unmodded play.
+To remove, quit the game at your convenience and move only `mods/spire420/` outside `mods/`. Do not keep a renamed backup inside `mods/`: the loader scans recursively. To roll back, replace that directory with one of the installer backups while the game is closed. Disabling MapColors and Autoplay does not itself remove the package from the game's mod list; disable the package in game settings for unmodded play.
 
 ## Visual checklist
 
@@ -91,7 +91,7 @@ To remove, quit the game at your convenience and move only `mods/DcepSpire/` out
 - Reopen the map and change acts; colors should persist.
 - Autoplay should never take an action in this draft.
 
-Logs: `~/Library/Application Support/SlayTheSpire2/logs/godot.log`; search for `[DcepSpire]`. Report any `skipped incompatible` or `could not initialize` line. The draft has not been loaded into the running game by the authoring session.
+Logs: `~/Library/Application Support/SlayTheSpire2/logs/godot.log`; search for `[spire420]`. Report any `skipped incompatible` or `could not initialize` line. The draft has not been loaded into the running game by the authoring session.
 
 ## Extending the mod
 

@@ -1,4 +1,4 @@
-namespace DcepSpire.Modules.MapColors;
+namespace Spire420.Modules.MapColors;
 
 public static class VisualContract
 {

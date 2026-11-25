@@ -1,10 +1,10 @@
 using Godot;
 using MegaCrit.Sts2.Core.Modding;
-using DcepSpire.Modules;
-using DcepSpire.Modules.Autoplay;
-using DcepSpire.Modules.MapColors;
+using Spire420.Modules;
+using Spire420.Modules.Autoplay;
+using Spire420.Modules.MapColors;
 
-namespace DcepSpire;
+namespace Spire420;
 
 [ModInitializer(nameof(Initialize))]
 public static class Entry
@@ -21,5 +21,5 @@ public static class Entry
         Log("Draft 0.1.0 initialized. Settings apply at game startup.");
     }
 
-    private static void Log(string message) => GD.Print($"[DcepSpire] {message}");
+    private static void Log(string message) => GD.Print($"[spire420] {message}");
 }

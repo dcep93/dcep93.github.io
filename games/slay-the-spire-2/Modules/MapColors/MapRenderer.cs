@@ -5,7 +5,7 @@ using MegaCrit.Sts2.Core.Bindings.MegaSpine;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 
-namespace DcepSpire.Modules.MapColors;
+namespace Spire420.Modules.MapColors;
 
 public sealed class MapRenderer(Configuration configuration)
 {

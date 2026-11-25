@@ -38,7 +38,7 @@ Ancient scenes use `Icon` and `Icon/Outline`, with native getter-driven color tw
 
 ## Failure and ownership rules
 
-Validate all six hook signatures before patching. Use the owner `dcep93.DcepSpire.MapColors`; rollback that owner's patches if initialization fails. Per-point scene mismatches log once per distinct error and keep unsupported visuals vanilla. Exact runtime types only: custom subclasses are not modified. A per-owner weak table holds cloned materials so nodes cannot recolor each other. No root-level tint, gameplay callbacks, or per-frame work.
+Validate all six hook signatures before patching. Use the owner `dcep93.spire420.MapColors`; rollback that owner's patches if initialization fails. Per-point scene mismatches log once per distinct error and keep unsupported visuals vanilla. Exact runtime types only: custom subclasses are not modified. A per-owner weak table holds cloned materials so nodes cannot recolor each other. No root-level tint, gameplay callbacks, or per-frame work.
 
 API signature checks cannot prove shader output or Harmony runtime behavior. They catch missing/renamed/type-changed hooks; game updates can preserve signatures while changing meaning. Offline tests and a successful build are prerequisites, not in-game acceptance. The user's visual testing remains pending, including f.lux warmth, boss artwork, availability cues, and co-op display.
 

@@ -3,7 +3,7 @@ using Godot;
 using MegaCrit.Sts2.Core.Bindings.MegaSpine;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 
-namespace DcepSpire.Modules.MapColors;
+namespace Spire420.Modules.MapColors;
 
 // Exact, inspected v0.114.0 contracts. Shared with the offline contract checker.
 public static class MapApi

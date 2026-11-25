@@ -1,4 +1,4 @@
-namespace DcepSpire.Modules.Autoplay;
+namespace Spire420.Modules.Autoplay;
 
 // Deliberately has no game, input, timer, or Harmony dependencies.
 // User-defined conditions belong here in a future change, not implicit heuristics.

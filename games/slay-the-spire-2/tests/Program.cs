@@ -1,10 +1,10 @@
 using System.Reflection;
 using System.Runtime.Loader;
 using System.Text.Json;
-using DcepSpire;
-using DcepSpire.Modules;
-using DcepSpire.Modules.Autoplay;
-using DcepSpire.Modules.MapColors;
+using Spire420;
+using Spire420.Modules;
+using Spire420.Modules.Autoplay;
+using Spire420.Modules.MapColors;
 
 var gameData = args[0];
 var project = args[1];
@@ -93,10 +93,10 @@ Check("shipped settings match enabled defaults and have eight unique colors", ()
 });
 Check("manifest and actual assembly entry point agree", () =>
 {
-    using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(project, "DcepSpire.json")));
+    using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(project, "spire420.json")));
     Require(manifest.RootElement.GetProperty("id").GetString() == typeof(Configuration).Assembly.GetName().Name, "assembly ID mismatch");
     Require(!manifest.RootElement.GetProperty("has_pck").GetBoolean() && manifest.RootElement.GetProperty("has_dll").GetBoolean(), "wrong package kind");
-    var entry = typeof(Configuration).Assembly.GetType("DcepSpire.Entry")!;
+    var entry = typeof(Configuration).Assembly.GetType("Spire420.Entry")!;
     var attribute = entry.CustomAttributes.Single(x => x.AttributeType.Name == "ModInitializerAttribute");
     Require(entry.GetMethod((string)attribute.ConstructorArguments[0].Value!, BindingFlags.Public | BindingFlags.Static)?.GetParameters().Length == 0, "invalid initializer");
 });
@@ -117,14 +117,14 @@ Check("legend scene contract rejects existing materials and missing shader unifo
 });
 Check("all six patch targets and four private field signatures match installed game", () =>
 {
-    var api = typeof(Configuration).Assembly.GetType("DcepSpire.Modules.MapColors.MapApi")!;
+    var api = typeof(Configuration).Assembly.GetType("Spire420.Modules.MapColors.MapApi")!;
     var targets = (IReadOnlyList<MethodInfo>)api.GetMethod("Validate")!.Invoke(null, null)!;
     Require(targets.Count == 6 && targets.All(x => !x.IsStatic && !x.IsAbstract && x.GetParameters().Length == 0), "unsupported patch targets");
     foreach (var method in targets) Console.WriteLine($"  {method.DeclaringType!.Name}.{method.Name} -> {method.ReturnType.Name}");
 });
 Check("ancient color keeps configured hue and differentiates availability without losing source alpha", () =>
 {
-    var rendererType = typeof(Configuration).Assembly.GetType("DcepSpire.Modules.MapColors.MapRenderer")!;
+    var rendererType = typeof(Configuration).Assembly.GetType("Spire420.Modules.MapColors.MapRenderer")!;
     var renderer = Activator.CreateInstance(rendererType, new Configuration());
     var method = rendererType.GetMethod("AncientColor")!;
     var colorType = method.ReturnType;

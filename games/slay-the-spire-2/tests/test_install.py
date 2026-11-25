@@ -15,12 +15,12 @@ class InstallTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.project = self.root / "source"
         self.project.mkdir()
-        (self.project / "DcepSpire.json").write_text('{"id":"DcepSpire"}')
+        (self.project / "spire420.json").write_text('{"id":"spire420"}')
         (self.project / mod.SETTINGS).write_text("default settings")
         (self.project / "README.md").write_text("instructions")
-        self.dll = self.project / "DcepSpire.dll"
+        self.dll = self.project / "spire420.dll"
         self.dll.write_bytes(b"draft 1")
-        self.dest = self.root / "MacOS/mods/DcepSpire"
+        self.dest = self.root / "MacOS/mods/spire420"
 
     def tearDown(self):
         self.temp.cleanup()
@@ -32,8 +32,8 @@ class InstallTests(unittest.TestCase):
         backup, digest = self.install()
         self.assertIsNone(backup)
         self.assertEqual(len(digest), 64)
-        self.assertEqual([p.name for p in self.dest.glob("*.json")], ["DcepSpire.json"])
-        self.assertEqual((self.dest / "DcepSpire.dll").read_bytes(), b"draft 1")
+        self.assertEqual([p.name for p in self.dest.glob("*.json")], ["spire420.json"])
+        self.assertEqual((self.dest / "spire420.dll").read_bytes(), b"draft 1")
 
     def test_upgrade_preserves_settings_and_backs_up_outside_mods(self):
         self.install()
@@ -41,7 +41,7 @@ class InstallTests(unittest.TestCase):
         self.dll.write_bytes(b"draft 2")
         backup, _ = self.install()
         self.assertEqual((self.dest / mod.SETTINGS).read_text(), "my colors")
-        self.assertEqual((backup / "DcepSpire.dll").read_bytes(), b"draft 1")
+        self.assertEqual((backup / "spire420.dll").read_bytes(), b"draft 1")
         self.assertNotIn(self.dest.parent, backup.parents)
 
     def test_failed_swap_restores_previous_version(self):
@@ -49,15 +49,15 @@ class InstallTests(unittest.TestCase):
         replace = mod.os.replace
 
         def fail_stage(src, dst):
-            if Path(src).name.startswith(".dcepspire-stage-"):
+            if Path(src).name.startswith(".spire420-stage-"):
                 raise OSError("simulated swap failure")
             return replace(src, dst)
 
         self.dll.write_bytes(b"draft 2")
         with patch.object(mod.os, "replace", side_effect=fail_stage):
             with self.assertRaises(OSError): self.install()
-        self.assertEqual((self.dest / "DcepSpire.dll").read_bytes(), b"draft 1")
-        self.assertFalse(list(self.dest.parent.parent.glob(".dcepspire-stage-*")))
+        self.assertEqual((self.dest / "spire420.dll").read_bytes(), b"draft 1")
+        self.assertFalse(list(self.dest.parent.parent.glob(".spire420-stage-*")))
 
     def test_unrecognized_existing_folder_is_preserved(self):
         self.dest.mkdir(parents=True)
@@ -71,18 +71,18 @@ class InstallTests(unittest.TestCase):
         original_read = Path.read_bytes
 
         def corrupt_installed(path):
-            if path == self.dest / "DcepSpire.dll": return b"corrupt"
+            if path == self.dest / "spire420.dll": return b"corrupt"
             return original_read(path)
 
         with patch.object(Path, "read_bytes", corrupt_installed):
             with self.assertRaises(RuntimeError): self.install()
-        self.assertEqual((self.dest / "DcepSpire.dll").read_bytes(), b"draft 1")
+        self.assertEqual((self.dest / "spire420.dll").read_bytes(), b"draft 1")
 
     def test_post_install_hash_failure_removes_failed_fresh_install(self):
         original_read = Path.read_bytes
 
         def corrupt_installed(path):
-            if path == self.dest / "DcepSpire.dll": return b"corrupt"
+            if path == self.dest / "spire420.dll": return b"corrupt"
             return original_read(path)
 
         with patch.object(Path, "read_bytes", corrupt_installed):

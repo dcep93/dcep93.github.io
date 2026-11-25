@@ -2,7 +2,7 @@ using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 
-namespace DcepSpire.Modules.MapColors;
+namespace Spire420.Modules.MapColors;
 
 public sealed class MapColorsModule : IModule
 {
@@ -14,7 +14,7 @@ public sealed class MapColorsModule : IModule
     public void Initialize(Configuration configuration, Action<string> log)
     {
         var targets = MapApi.Validate(); // Validate everything before installing any patches.
-        var harmony = new Harmony("dcep93.DcepSpire.MapColors");
+        var harmony = new Harmony("dcep93.spire420.MapColors");
         _renderer = new MapRenderer(configuration);
         _log = log;
         try

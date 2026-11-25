@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build/check/install DcepSpire. Deliberately contains no game process control."""
+"""Build/check/install spire420. Deliberately contains no game process control."""
 import argparse
 import hashlib
 import json
@@ -13,7 +13,7 @@ import tempfile
 from datetime import datetime, timezone
 
 PROJECT = Path(__file__).resolve().parents[1]
-MOD_ID = "DcepSpire"
+MOD_ID = "spire420"
 SETTINGS = "settings.json.txt"
 
 
@@ -94,7 +94,7 @@ def check_scenes(game):
 def install_files(dll, destination, project=PROJECT):
     """Stage then atomically rename only this mod. Backups live OUTSIDE the loader's mods tree."""
     if destination.name != MOD_ID or destination.is_symlink():
-        raise RuntimeError("Destination must be a real DcepSpire directory.")
+        raise RuntimeError("Destination must be a real spire420 directory.")
     manifest = project / f"{MOD_ID}.json"
     if json.loads(manifest.read_text())["id"] != MOD_ID or not dll.is_file():
         raise RuntimeError("Build/manifest missing or mismatched.")
@@ -106,7 +106,7 @@ def install_files(dll, destination, project=PROJECT):
     destination.parent.mkdir(parents=True, exist_ok=True)
     # Sibling of mods, so even a simultaneous later launch cannot discover staging/backup manifests.
     stage_parent = destination.parent.parent
-    stage = Path(tempfile.mkdtemp(prefix=".dcepspire-stage-", dir=stage_parent))
+    stage = Path(tempfile.mkdtemp(prefix=".spire420-stage-", dir=stage_parent))
     backup = None
     try:
         for source in [dll, manifest, project / SETTINGS, project / "README.md"]:
@@ -148,13 +148,13 @@ def main():
     data, destination = game_paths(args.game_dir.resolve())
     sdk = sdk_path(args.dotnet)
     properties = f"-p:GameDataDir={data}"
-    dotnet(sdk, "build", "DcepSpire.csproj", "-c", "Release", properties)
+    dotnet(sdk, "build", "spire420.csproj", "-c", "Release", properties)
     if args.command in ("check", "install"):
         check_scenes(args.game_dir)
         dotnet(sdk, "run", "--project", "tests/Checks.csproj", "-c", "Release", properties, "--", data, PROJECT)
         subprocess.run([os.sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v"], cwd=PROJECT, check=True)
     if args.command == "install":
-        backup, digest = install_files(PROJECT / "bin/Release/net9.0/DcepSpire.dll", destination)
+        backup, digest = install_files(PROJECT / "bin/Release/net9.0/spire420.dll", destination)
         print(f"Installed: {destination}\nSHA-256: {digest}")
         if backup: print(f"Previous version: {backup}")
         print("Game process untouched. Load on a later user-controlled restart with mods enabled.")

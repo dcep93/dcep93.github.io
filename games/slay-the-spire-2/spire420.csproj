@@ -5,8 +5,8 @@
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnableDynamicLoading>true</EnableDynamicLoading>
-    <AssemblyName>DcepSpire</AssemblyName>
-    <RootNamespace>DcepSpire</RootNamespace>
+    <AssemblyName>spire420</AssemblyName>
+    <RootNamespace>Spire420</RootNamespace>
     <Version>0.1.0</Version>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
     <GameDir Condition="'$(GameDir)' == ''">$(HOME)/Library/Application Support/Steam/steamapps/common/Slay the Spire 2</GameDir>
