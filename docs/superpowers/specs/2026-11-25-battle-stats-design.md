@@ -1,0 +1,23 @@
+# BattleStats design
+
+Approved with `yesi` on 2026-11-25. No further design, planning or implementation checkpoints are required for this task.
+
+## User behavior
+
+Add default-enabled independent BattleStats to spire420 0.3.0. During active combat show one compact noninteractive line under the top bar: `今7 σ12.4 中10 #23`. 今 is the local player's cumulative game damage-taken counter for this battle; block prevents damage, healing does not subtract, and self-damage counts. σ is mean (the user's chosen symbol, not standard deviation), 中 median, # sample count for the exact encounter ID, pooled across characters and difficulties. No historical samples displays `今0 σ— 中— #0`. Historical numbers are from completed battles (wins and deaths), exclude the current fight until completion, include zero-damage battles, format mean/median to at most one decimal with invariant decimal point, and never change game mechanics.
+
+## Historical data and persistence
+
+Read only the active modded profile's `*.run` history files. Import a record only when its map-point entry contains exactly one combat room with an ENCOUNTER ID, player damage is a nonnegative integer, and the local player is identifiable (sole player for single-player history or exact local ID in multiplayer). Earlier entries are complete; final entries require win or matching killed_by_encounter and not was_abandoned. Exclude ambiguous multi-room entries, incomplete abandoned final fights, missing or malformed records. Keep a count/report of imported and skipped data. File corruption must not stop other files from importing.
+
+A battle key combines run start timestamp, seed, player ID, zero-based act/history-entry/room indices and encounter ID. Use the same key for imported and live records. Re-imports and completion retries upsert one record; replays are excluded, and current battle key is excluded from comparison even if replaying a previously recorded attempt. Store original integer samples to calculate exact median; do not average averages. Separate profile databases using absolute profile path plus Progress.UniqueId. Store under `user://spire420/battle-stats/` outside native account/profile/cloud trees and outside installed mod binaries. The database is local, not Steam-synced. Write atomically with backup; preserve and refuse to overwrite an unreadable/unsupported database rather than silently lose accumulated history. I/O failures must leave gameplay unaffected and log a concise diagnostic.
+
+## Runtime and UI
+
+Use validated native signatures and read-only state. Capture local player, run identity and map-point damage baseline at CombatManager.CombatSetUp (before start-of-combat damage). Multi-room live battles subtract their captured baseline; ordinary single-room resumed combats use the room counter. Subscribe completion events with key-based deduplication; read newly saved run history as a fallback for deaths whose CombatEnded event is delayed. Do not count scene teardown or quit as combat completion. Skip replays and unknown contexts.
+
+Attach native Label and Timer nodes after NCombatRoom._Ready; use no custom Node subclasses/source generation. Refresh up to four times per second, caching historical aggregate until database/context changes. Hide outside active combat, behind map/overlay/gameover, and when the combat is not the current screen. Handle VisualOnly event rooms transitioning to ActiveCombat. Use a font with CJK coverage/system fallback for 今/中, readable outlined text, and MouseFilter.Ignore. Dispose per-view UI naturally with the combat scene; prevent duplicate attachment and stale subscriptions. Module initialization failures roll back only BattleStats and leave other modules enabled.
+
+## Validation and delivery
+
+Pure tests cover exact statistics, formatting, zero samples, dedup/upsert, current exclusion, run/profile/player isolation, history filtering including multi-room/abandoned/deaths, malformed inputs, atomic persistence and corruption preservation. Native contract checks validate hook signatures, counters, identity, enums, events and UI members without calling live game code. Exercise Harmony patch generation in the isolated managed checker where safe. Dry-run import on real local history, then seed only the separate BattleStats database using the same importer implementation. Never modify native saves or interrupt/focus/restart the user's game. Run existing checks, independent spec/quality reviews, install through the atomic installer preserving settings and backup, commit/push task changes. Native text placement/gesture/gameplay acceptance remains a user test at their next restart.
