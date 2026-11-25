@@ -1,6 +1,6 @@
 # API contract and evidence
 
-Inspected 2026-11-25 against local STS2 **v0.114.0**, commit **a7b9a9c0**, Steam build **26909018**, public-beta, Apple Silicon. Game assembly targets .NET 9; installed game runtime is 9.0.7. Draft build SDK: 9.0.321. IL inspection: ILSpyCmd 9.1.0.7988. Game remains running and was never started/stopped or contacted for these checks.
+Inspected 2026-11-25 against local STS2 **v0.114.0**, commit **a7b9a9c0**, Steam build **26909018**, public-beta, Apple Silicon. Game assembly targets .NET 9; installed game runtime is 9.0.7. Draft build SDK: 9.0.321. IL inspection: ILSpyCmd 9.1.0.7988. The initial API checks were offline and did not control the running game. Subsequent save-recovery evidence is documented below.
 
 ## Existing mod references
 
@@ -14,6 +14,19 @@ Read as API usage references; implementation here is original, not a vendored co
 ## Loader
 
 Inspected `ModManager`, `ModManifest`, and `ModInitializerAttribute` in the installed assembly. The loader recursively reads `.json` manifests below the executable's `mods/` directory. It resolves the DLL by mod ID and invokes the method named by `[ModInitializer]`. Our initializer is public/static/no-argument. Settings are `settings.json.txt` to avoid manifest discovery. No `.pck` is needed because all art/shaders are already provided by the installed game.
+
+## Save migration and cloud sync
+
+First-use logs on 2026-11-25 showed `ModManager` copying unmodded saves into `modded/`, followed by cloud sync deleting the copied progress, current run, preferences, and history because those paths did not exist remotely. The game then created fresh modded progress. The original unmodded files remained intact. The same log confirmed successful initialization of spire420 and all six MapColors hooks; this save loss occurred in the game's migration/synchronization path.
+
+Read-only inspection of `SaveManager`, `CloudSaveStore`, and `SteamRemoteSaveStore` confirmed:
+
+- Cloud-to-local synchronization treats remote absence as deletion of the local file and its backup. A newer local timestamp alone does not protect a restored file.
+- Local-only run history is retained when the local and cloud progress files have the same readable `unique_id`; absent or mismatched IDs permit its removal.
+- Steam save filenames use paths such as `modded/profile1/saves/progress.save`, without the local Steam account directory prefix. Writes use `SteamRemoteStorage.FileWrite`, with batch begin/end support.
+- `ShouldOverwriteCloudWithLocal` selects upload when cloud sync is disabled, or when local profile data exists and the entire cloud backend has no files. An empty modded profile does not imply that the entire backend is empty.
+
+Recovery was performed with the game closed, after backing up local saves and Steam's cache. The original profile was copied into the separate modded profile; a temporary helper outside this repository restored its non-backup files through Steam's save API and verified every file by read-back. Vanilla files were checked for byte equality before and after. No recovery logic or save-writing hooks were added to spire420.
 
 ## Hooks and state
 

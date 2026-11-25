@@ -17,6 +17,8 @@ The installer only copies files. It never launches, focuses, quits, restarts, or
 
 The game's own mod loader maintains separate modded/unmodded saves. This installer does not edit or migrate saves, change Steam launch options, or accept the mod prompt for you.
 
+**Observed first-use save migration issue in v0.114.0:** the game copied the original profile into `modded/`, then cloud synchronization deleted those new local files because the modded cloud profile was empty. The original profile remained intact. Before enabling mods for the first time, close the game and back up `~/Library/Application Support/SlayTheSpire2/`. If the modded profile appears empty, keep the original files and close the game before recovery. Restoring local files alone is insufficient when the empty cloud profile remains authoritative; recovery must also reconcile the modded Steam save copy. See [the verified save contract](docs/api-contract.md#save-migration-and-cloud-sync).
+
 Install location on macOS:
 
 ```text
