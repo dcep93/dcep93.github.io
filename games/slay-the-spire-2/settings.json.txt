@@ -1,0 +1,13 @@
+{
+  "modules": { "MapColors": true, "Autoplay": true },
+  "mapColors": {
+    "Monster": "#687680",
+    "Elite": "#F07836",
+    "RestSite": "#35B85A",
+    "Shop": "#FFD166",
+    "Treasure": "#CC83D8",
+    "Unknown": "#48D5CF",
+    "Boss": "#B92B41",
+    "Ancient": "#463D72"
+  }
+}
