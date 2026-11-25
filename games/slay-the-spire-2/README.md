@@ -1,11 +1,12 @@
 # spire420
 
-Personal Slay the Spire 2 mod, built from source in this repository. Draft **0.2.0**, targeting the installed **v0.114.0 public beta** on macOS. One installed mod contains independent internal modules; every module defaults to enabled.
+Personal Slay the Spire 2 mod, built from source in this repository. Draft **0.3.0**, targeting the installed **v0.114.0 public beta** on macOS. One installed mod contains independent internal modules; every module defaults to enabled.
 
 | Module | Draft behavior |
 | --- | --- |
 | MapColors | Recolors map room icons and the six legend icons. Keeps existing shapes, dark artwork, hover/selection outlines, animations, paths, and votes. |
 | MapControls | Primary (one-finger) click-drag draws on the map background; secondary (two-finger) click-drag scrolls. Room clicks remain native. |
+| BattleStats | During combat, shows local damage taken, historical mean/median, and sample count for the exact encounter. |
 | Autoplay | Enabled but inert. No timers, input, map navigation, card play, or gameplay hooks. Waiting for your explicit rules. |
 
 ## Try the installed draft
@@ -14,7 +15,7 @@ The installer only copies files. It never launches, focuses, quits, restarts, or
 
 1. Finish playing, then restart the game with mods enabled when convenient.
 2. Accept the game's first-use mod prompt if shown; enable **spire420** in the game's mod settings and follow any restart prompt.
-3. Open the map and use the visual and map-control checklists below.
+3. Use the BattleStats, visual, and map-control checklists below.
 
 The game's own mod loader maintains separate modded/unmodded saves. This installer does not edit or migrate saves, change Steam launch options, or accept the mod prompt for you.
 
@@ -36,7 +37,7 @@ Install location on macOS:
 Edit the **installed** `settings.json.txt`. Settings take effect at the next game start; there is no live settings menu in this draft. The `.json.txt` suffix is intentional: the game's loader treats every `.json` under `mods/` as a mod manifest.
 
 ```json
-"modules": { "MapColors": true, "MapControls": true, "Autoplay": true }
+"modules": { "MapColors": true, "MapControls": true, "BattleStats": true, "Autoplay": true }
 ```
 
 Set any value to `false` to disable that module. Missing module keys default to `true`, including modules added later. Missing palette entries keep their defaults. Invalid settings are reported in the log and are never rewritten by the mod. Installation preserves your existing settings file.
@@ -72,7 +73,7 @@ python3 scripts/mod.py check
 python3 scripts/mod.py install
 ```
 
-`check` builds Release, verifies six scene/shader contracts directly from the local PCK, runs managed configuration/module/API and map-input IL tests, and tests the installer with temporary directories. It does not start Godot or contact the game process. Loading the managed game assembly for reflection may print a Sentry message saying its native extension is not loaded; this is expected outside the game.
+`check` builds Release, verifies six scene/shader contracts directly from the local PCK, runs managed configuration/module/API, map-input IL, BattleStats data/lifecycle, and isolated Harmony patch tests, and tests the installer with temporary directories. It does not start Godot or contact the game process. Loading the managed game assembly for reflection may print a Sentry message saying its native extension is not loaded; this is expected outside the game.
 
 `install` runs the checks before deploying. An existing copy of this mod is backed up under `Contents/MacOS/mod-backups/spire420/<timestamp>/`, outside the loader's recursive `mods/` scan. A failed directory swap restores the previous copy. The installed DLL's SHA-256 is verified against the build.
 
@@ -117,3 +118,22 @@ Add an `IModule` under `Modules/`, then register it in `Entry.Initialize`. Missi
 Future autoplay work must encode only user-supplied conditions and reassess `affects_gameplay`, multiplayer behavior, and save assumptions before shipping. There is no rule engine hidden in this draft.
 
 See [the inspected API contract](docs/api-contract.md) for references, verified methods, rendering choices, and limitations. Source and docs belong in Git; build outputs, local SDKs, decompiled game code, and extracted assets do not.
+
+## BattleStats (0.3.0)
+
+The line under the combat top bar is `今7 σ12.4 中10 #23`: current battle damage taken, historical mean, historical median, and historical sample count. **σ means mean**, as requested, not standard deviation. Damage uses the game's local-player `DamageTaken` counter: block prevents damage, healing does not subtract it, and self-damage counts. Histories pool all characters and difficulty levels for the exact encounter ID. The current battle is excluded; completed zero-damage battles and deaths count. Without history the line reads `今0 σ— 中— #0`.
+
+The module reads the active modded profile's `.run` files once when its local player identity is available, imports earlier completed points in the current run, and merges newly saved histories. Single-player files use their sole player; multiplayer files require the exact local player ID. Incomplete abandoned final fights, ambiguous multi-room history points, missing counters and malformed records are skipped. Live nested combats use their captured starting counter to separate battle damage from earlier rooms. Re-imports and repeated completion callbacks do not duplicate battles. Imports report new/changed samples and skipped records in the log.
+
+The separate local database is stored at `user://spire420/battle-stats/` (on this Mac, `~/Library/Application Support/SlayTheSpire2/spire420/battle-stats/`). Its filename hashes the absolute native profile path and the profile's `Progress.UniqueId`; profiles never share samples. This folder is outside native account/profile/cloud trees and installed mod binaries. It is **not Steam-synced**; back it up separately if desired. Writes are atomic with a `.bak` backup. An unreadable or unsupported database is preserved without overwrite, while that session can still collect samples in memory. No native save files are written by BattleStats.
+
+At your next restart, check:
+
+- The line sits below the top bar without clipping, uses readable 今/中 glyphs, and does not intercept clicks.
+- Taking damage increases 今; healing leaves it unchanged; block and a zero-damage victory behave as expected.
+- Historical mean, median and count remain stable during a fight, including a previously recorded retry. After completion, a later battle against the same encounter includes that sample once.
+- Open the map, deck or another overlay: the line hides and returns on closing it. Check an event that transitions into combat and an ordinary resumed fight.
+- A death is included after the run history saves; abandoning or quitting an unfinished fight does not count it. Restart and revisit an encounter to confirm persistence.
+- Changing profiles uses separate history. `"BattleStats": false` disables the line and its hooks after restart. Autoplay remains inert.
+
+Offline checks validate contracts and lifecycle decisions, but native rendering, CJK fallback, placement, overlay transitions and gameplay acceptance remain pending your test. No game launch or restart is performed by the build or installer.

@@ -153,6 +153,9 @@ Check("ancient color keeps configured hue and differentiates availability withou
 // Delay JIT of methods using Godot/Harmony types until the resolver above is registered.
 typeof(FakeModule).Assembly.GetType("MapControlsChecks")!.GetMethod("Run")!.Invoke(null,
     [(Action<string, Action>)Check, (Action<bool, string>)Require]);
+BattleStatsChecks.Run(Check, Require);
+typeof(FakeModule).Assembly.GetType("BattleStatsRuntimeChecks")!.GetMethod("Run")!.Invoke(null,
+    [(Action<string, Action>)Check, (Action<bool, string>)Require]);
 Console.WriteLine($"{passed} checks passed. No game process launched or contacted.");
 
 sealed class FakeModule(string id, bool fail) : IModule
