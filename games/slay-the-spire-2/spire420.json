@@ -3,7 +3,7 @@
   "name": "spire420",
   "author": "dcep93",
   "description": "Personal modular draft: map icon colors, primary-draw/secondary-scroll map controls, and encounter damage statistics; autoplay reserved for user-defined rules (currently inert).",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "min_game_version": "0.114.0",
   "has_dll": true,
   "has_pck": false,

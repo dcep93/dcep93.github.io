@@ -32,7 +32,7 @@ public static class BattleStatsIdentity
 public static class BattleStatsFormatter
 {
     public static string Format(int current, BattleSummary summary, long? attack) =>
-        $"今{current.ToString(CultureInfo.InvariantCulture)} σ{Number(summary.Mean)} 中{Number(summary.Median)} #{summary.Count.ToString(CultureInfo.InvariantCulture)} 力{attack?.ToString(CultureInfo.InvariantCulture) ?? "?"}";
+        $"今{current.ToString(CultureInfo.InvariantCulture)} σ{Number(summary.Mean)} 中{Number(summary.Median)} #{summary.Count.ToString(CultureInfo.InvariantCulture)} Σ{attack?.ToString(CultureInfo.InvariantCulture) ?? "?"}";
 
     private static string Number(decimal? value) => value?.ToString("0.#", CultureInfo.InvariantCulture) ?? "—";
 }

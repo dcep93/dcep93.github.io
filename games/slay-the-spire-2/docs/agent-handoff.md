@@ -66,7 +66,7 @@ Next useful evidence is Daniel's screenshot/short recording when the square appe
 
 ## Native acceptance and pending scope
 
-0.3.0 was observed live by Daniel. Its label overlapped top-left relics; 0.4.0 moves it below build information at his request. New placement, glyph rendering, mode buckets and intent totals need his next in-game check. Offline contracts/tests do not replace that acceptance. `力?` during hidden or frozen/fading intent transitions is deliberate; the native intent display freezes before some enemy actions, so recalculating through that interval can disagree with the displayed values. The black rectangle remains unresolved, with no rendering workaround shipped. Autoplay is enabled but inert until Daniel supplies conditions.
+0.3.0 was observed live by Daniel. Its label overlapped top-left relics; 0.4.0 moves it below build information at his request. New placement, glyph rendering, mode buckets and intent totals need his next in-game check. Offline contracts/tests do not replace that acceptance. `Σ?` during hidden or frozen/fading intent transitions is deliberate; the native intent display freezes before some enemy actions, so recalculating through that interval can disagree with the displayed values. The black rectangle remains unresolved, with no rendering workaround shipped. Autoplay is enabled but inert until Daniel supplies conditions.
 
 ## 0.4.0 migration verification (November 26, 2026)
 

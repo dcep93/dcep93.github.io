@@ -13,14 +13,14 @@ public static class BattleStatsRuntimeChecks
             require(typeof(BattleStatsApi).Assembly.GetType("Spire420.Modules.BattleStats.BattleStatsIntents") is not null, "intent preview helper missing");
             require(typeof(BattleStatsApi).Assembly.GetType("Spire420.Modules.BattleStats.BattleStatsLayout") is not null, "build-label layout helper missing");
         });
-        check("BattleStats defaults on, respects explicit disable, and ships version 0.4.0", () =>
+        check("BattleStats defaults on, respects explicit disable, and ships version 0.4.1", () =>
         {
             require(new Configuration().IsEnabled("BattleStats"), "default off");
             require(Configuration.Parse("""{"modules":{"MapColors":true}}""", _ => { }).IsEnabled("BattleStats"), "older settings disable new module");
             var logs = new List<string>();
             ModuleHost.Start([new BattleStatsModule()], Configuration.Parse("""{"modules":{"BattleStats":false}}""", _ => { }), logs.Add);
             require(logs.Count == 1 && logs[0].Contains("disabled by settings"), "disabled module initialized");
-            require(typeof(Configuration).Assembly.GetName().Version == new Version(0, 4, 0, 0), "assembly version mismatch");
+            require(typeof(Configuration).Assembly.GetName().Version == new Version(0, 4, 1, 0), "assembly version mismatch");
         });
         check("BattleStats native lifecycle, identity, persistence and UI signatures match installed game", () =>
         {

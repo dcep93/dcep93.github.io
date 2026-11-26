@@ -10,7 +10,7 @@ static class BattleStatsChecks
         {
             var store = new BattleStatsStore(Path.Combine(dir, "stats.json"));
             require(store.Load(), "new database failed");
-            require(BattleStatsFormatter.Format(0, store.Summary("ENCOUNTER.A", BattleMode.Standard), null) == "今0 σ— 中— #0 力?", "empty format");
+            require(BattleStatsFormatter.Format(0, store.Summary("ENCOUNTER.A", BattleMode.Standard), null) == "今0 σ— 中— #0 Σ?", "empty format");
             foreach (var (key, damage) in new[] { ("a", 0), ("b", 10), ("c", 20), ("d", 21) })
                 require(store.Upsert(new(key, "ENCOUNTER.A", damage, BattleMode.Standard)), "sample not inserted");
             var version = store.Version;
@@ -24,7 +24,7 @@ static class BattleStatsChecks
             try
             {
                 CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
-                require(BattleStatsFormatter.Format(7, new(23, 12.4m, 10m), 30) == "今7 σ12.4 中10 #23 力30", "format not invariant");
+                require(BattleStatsFormatter.Format(7, new(23, 12.4m, 10m), 30) == "今7 σ12.4 中10 #23 Σ30", "format not invariant");
             }
             finally { CultureInfo.CurrentCulture = oldCulture; }
             var large = new BattleStatsStore(Path.Combine(dir, "large.json"));

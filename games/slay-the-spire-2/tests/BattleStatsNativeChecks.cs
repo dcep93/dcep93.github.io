@@ -102,7 +102,7 @@ public static class BattleStatsNativeChecks
             require(BattleStatsIntents.Sum(new long?[] { 12, null, 8 }, _ => true, n => n) is null, "partial known sum shown");
             require(BattleStatsIntents.Sum(new long[] { long.MaxValue, 1 }, _ => true, n => n) is null, "wide overflow accepted");
             require(BattleStatsIntents.Sum(new long[] { -1 }, _ => true, n => n) is null, "invalid native damage accepted");
-            require(BattleStatsFormatter.Format(0, new(0, null, null), 0).EndsWith("力0") && BattleStatsFormatter.Format(0, new(0, null, null), null).EndsWith("力?"), "zero and unknown indistinguishable");
+            require(BattleStatsFormatter.Format(0, new(0, null, null), 0).EndsWith("Σ0") && BattleStatsFormatter.Format(0, new(0, null, null), null).EndsWith("Σ?"), "zero and unknown indistinguishable");
         });
         check("build label geometry transforms scaled and translated parents and stays below on resize", () =>
         {
