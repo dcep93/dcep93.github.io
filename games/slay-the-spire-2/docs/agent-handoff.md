@@ -80,3 +80,13 @@ The production importer was exercised on a **scratch copy**, not the active data
 - Installed manifest is 0.4.0; settings remained byte-identical. Active stats JSON hashes were unchanged across this installation; migration is deferred to the new runtime. Native saves were not written and the running game was not controlled.
 - Installation evidence: `/Users/danielcepeda/.cache/sts2-draft/battle-update/install.log`, `install-before.json`, `install-verification.json`.
 - Activation and native visual acceptance remain pending Daniel's next normal restart. Do not mistake this installed binary verification for a verified in-game layout or a black-rectangle fix.
+
+## Installed release: 0.4.1 — November 26, 2026
+
+Daniel requested sigma instead of the power glyph for enemy attack total. Display now reads `今7 σ12.4 中10 #23 Σ30`: uppercase `Σ` is the attack sum; lowercase `σ` remains historical mean. Unknown attack preview is `Σ?`. This is a label-only change; calculation, layout, database schema and lifecycle remain unchanged.
+
+- Installed/build DLL SHA-256: `27ac7cbb1cde5d2eefd523b5e700bd762c75eec50c4f59610a99f86570c34b1a`.
+- Previous 0.4.0 package backup: `/Users/danielcepeda/Library/Application Support/Steam/steamapps/common/Slay the Spire 2/SlayTheSpire2.app/Contents/MacOS/mod-backups/spire420/20261126T194829.568200Z`; old DLL verified against preinstall hash.
+- 43 managed checks, 7 scene contracts, 6 installer tests passed. Installed settings preserved byte-for-byte; no game process control or save/database writes.
+- Evidence: `/Users/danielcepeda/.cache/sts2-draft/sigma-label/install.log` and `verification.json`.
+- Implementation commit: `4e2e96d`. Next user-controlled restart activates the updated label. Black-rectangle investigation remains unresolved as documented above.
