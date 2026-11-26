@@ -47,6 +47,14 @@ public static class BattleHistoryImporter
                 !Array(root, "players", out var players) || !Player(players, localPlayerId, out var playerId) ||
                 !Array(root, "map_point_history", out var acts)) return new(1, 0, 1);
 
+            // Native RunHistory defaults omitted game_mode to Standard. Explicit invalid values are not defaults.
+            var mode = BattleMode.Standard;
+            if (Property(root, "game_mode", out var rawMode))
+            {
+                mode = rawMode.ValueKind == JsonValueKind.String ? BattleModes.Parse(rawMode.GetString()) : BattleMode.Unknown;
+                if (mode == BattleMode.Unknown) return new(1, 0, 1);
+            }
+
             // Preserve physical positions, including malformed entries, when finding the terminal point.
             var points = new List<(int Act, int Point, JsonElement Entry)>();
             var skipped = 0;
@@ -75,7 +83,7 @@ public static class BattleHistoryImporter
                     !Array(entry, "player_stats", out var stats) || !Damage(stats, playerId, out var damage)) { skipped++; continue; }
                 if (i == points.Count - 1 && !Completed(root, encounter)) { skipped++; continue; }
                 var key = BattleStatsIdentity.BattleKey(startTime, seed, playerId, act, point, 0, encounter);
-                if (store.Upsert(new(key, encounter, damage))) imported++;
+                if (store.Upsert(new(key, encounter, damage, mode))) imported++;
             }
             return new(1, imported, skipped);
         }

@@ -3,6 +3,10 @@ using Godot;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Entities.Players;
+using MegaCrit.Sts2.Core.Entities.Creatures;
+using MegaCrit.Sts2.Core.MonsterMoves.Intents;
+using MegaCrit.Sts2.Core.Nodes;
+using MegaCrit.Sts2.Core.Nodes.Combat;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
@@ -20,6 +24,42 @@ public static class BattleStatsApi
     private const BindingFlags Instance = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
     private static FieldInfo? _startTime;
     private static FieldInfo? _visuals;
+    private static FieldInfo? _intent;
+    private static FieldInfo? _isFrozen;
+
+    public static BattleMode Mode(GameMode mode) => mode switch
+    {
+        GameMode.Standard => BattleMode.Standard, GameMode.Daily => BattleMode.Daily,
+        GameMode.Dread => BattleMode.Dread, GameMode.Blitz => BattleMode.Blitz, _ => BattleMode.Unknown
+    };
+
+    public static RunHistory ProjectHistory(long start, string seed, GameMode mode, IEnumerable<ulong> playerIds,
+        IEnumerable<IEnumerable<MapPointHistoryEntry>> history) => new()
+    {
+        StartTime = start, Seed = seed, GameMode = mode, WasAbandoned = true,
+        Players = playerIds.Select(id => new RunHistoryPlayer { Id = id }).ToList(),
+        MapPointHistory = history.Select(a => a.ToList()).ToList()
+    };
+
+    public static bool IntentIsFresh(AbstractIntent? displayed, AbstractIntent current, bool frozen) =>
+        !frozen && displayed is not null && ReferenceEquals(displayed, current);
+
+    public static bool IntentsVisible(NCombatRoom room, Creature creature)
+    {
+        if (NCombatUi.IsDebugHidingIntent || creature.Monster is not { } monster) return false;
+        var container = room.GetCreatureNode(creature)?.IntentContainer;
+        if (container is null || !container.IsVisibleInTree() || container.Modulate.A <= 0) return false;
+        var displayed = container.GetChildren().OfType<NIntent>().ToArray();
+        var intents = monster.NextMove.Intents;
+        if (displayed.Length != intents.Count) return false;
+        // During transitions, NextMove can precede its display or the native display can freeze before fading.
+        // Recomputing either state would expose numbers the native intent is not currently showing.
+        for (var i = 0; i < displayed.Length; i++)
+            if (!displayed[i].IsVisibleInTree() || displayed[i].Modulate.A <= 0 ||
+                !IntentIsFresh(_intent!.GetValue(displayed[i]) as AbstractIntent, intents[i],
+                    (bool)_isFrozen!.GetValue(displayed[i])!)) return false;
+        return true;
+    }
 
     public static long StartTime(RunManager manager) => (long)_startTime!.GetValue(manager)!;
     public static CombatState? RoomState(NCombatRoom room) => (_visuals!.GetValue(room) as CombatRoom)?.CombatState;
@@ -28,6 +68,34 @@ public static class BattleStatsApi
     {
         var ready = Method(typeof(NCombatRoom), "_Ready", typeof(void), false);
         var save = Method(typeof(RunHistorySaveManager), "SaveHistory", typeof(void), false, typeof(RunHistory));
+        _intent = Field(typeof(NIntent), "_intent", typeof(AbstractIntent));
+        _isFrozen = Field(typeof(NIntent), "_isFrozen", typeof(bool));
+        Property(typeof(IRunState), "GameMode", typeof(GameMode));
+        Property(typeof(RunHistory), "GameMode", typeof(GameMode));
+        foreach (var value in new[] { "Standard", "Daily", "Dread", "Blitz" }) RequireEnum<GameMode>(value);
+        Property(typeof(AbstractIntent), "IntentType", typeof(IntentType));
+        foreach (var value in new[] { "Attack", "DeathBlow", "Hidden", "Unknown" }) RequireEnum<IntentType>(value);
+        Property(typeof(CombatState), "Enemies", typeof(IReadOnlyList<Creature>));
+        Property(typeof(Creature), "IsEnemy", typeof(bool));
+        Property(typeof(Creature), "IsAlive", typeof(bool));
+        Property(typeof(Creature), "Monster", typeof(MonsterModel));
+        Property(typeof(Player), "Creature", typeof(Creature));
+        var move = Property(typeof(MonsterModel), "NextMove").PropertyType;
+        Property(move, "Intents", typeof(IReadOnlyList<AbstractIntent>));
+        var total = typeof(AttackIntent).GetMethod("GetTotalDamage", [typeof(IEnumerable<Creature>), typeof(Creature)]);
+        if (total is not { IsPublic: true, IsAbstract: true } || total.ReturnType != typeof(int))
+            throw new MissingMethodException("AttackIntent.GetTotalDamage");
+        Method(typeof(MultiAttackIntent), "GetTotalDamage", typeof(int), false, typeof(IEnumerable<Creature>), typeof(Creature));
+        Property(typeof(NCombatUi), "IsDebugHidingIntent", typeof(bool), true);
+        Property(typeof(NCreature), "IntentContainer", typeof(Control));
+        Method(typeof(NCombatRoom), "GetCreatureNode", typeof(NCreature), false, typeof(Creature));
+        Property(typeof(NRun), "Instance", typeof(NRun), true);
+        Property(typeof(CanvasItem), "Modulate", typeof(Color));
+        Method(typeof(CanvasItem), "IsVisibleInTree", typeof(bool), false);
+        Method(typeof(CanvasItem), "GetGlobalTransformWithCanvas", typeof(Transform2D), false);
+        Method(typeof(CanvasItem), "GetViewportRect", typeof(Rect2), false);
+        Method(typeof(Control), "GetCombinedMinimumSize", typeof(Vector2), false);
+        Property(typeof(Label), "HorizontalAlignment", typeof(HorizontalAlignment), writable: true);
         _startTime = Field(typeof(RunManager), "_startTime", typeof(long));
         _visuals = Field(typeof(NCombatRoom), "_visuals", typeof(ICombatRoomVisuals));
         Event(typeof(CombatManager), "CombatSetUp", typeof(Action<CombatState>));

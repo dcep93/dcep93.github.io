@@ -20,7 +20,7 @@ public static class Entry
         var folder = Path.GetDirectoryName(typeof(Entry).Assembly.Location)!;
         var config = Configuration.Load(Path.Combine(folder, Configuration.FileName), Log);
         ModuleHost.Start([new MapColorsModule(), new MapControlsModule(), new BattleStatsModule(), new AutoplayModule()], config, Log);
-        Log("Draft 0.3.0 initialized. Settings apply at game startup.");
+        Log("Draft 0.4.0 initialized. Settings apply at game startup.");
     }
 
     private static void Log(string message) => GD.Print($"[spire420] {message}");

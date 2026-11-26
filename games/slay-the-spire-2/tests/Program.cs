@@ -156,6 +156,8 @@ typeof(FakeModule).Assembly.GetType("MapControlsChecks")!.GetMethod("Run")!.Invo
 BattleStatsChecks.Run(Check, Require);
 typeof(FakeModule).Assembly.GetType("BattleStatsRuntimeChecks")!.GetMethod("Run")!.Invoke(null,
     [(Action<string, Action>)Check, (Action<bool, string>)Require]);
+typeof(FakeModule).Assembly.GetType("BattleStatsNativeChecks")!.GetMethod("Run")!.Invoke(null,
+    [(Action<string, Action>)Check, (Action<bool, string>)Require]);
 Console.WriteLine($"{passed} checks passed. No game process launched or contacted.");
 
 sealed class FakeModule(string id, bool fail) : IModule

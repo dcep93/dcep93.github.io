@@ -1,12 +1,12 @@
 # spire420
 
-Personal Slay the Spire 2 mod, built from source in this repository. Draft **0.3.0**, targeting the installed **v0.114.0 public beta** on macOS. One installed mod contains independent internal modules; every module defaults to enabled.
+Personal Slay the Spire 2 mod, built from source in this repository. Draft **0.4.0**, targeting the installed **v0.114.0 public beta** on macOS. One installed mod contains independent internal modules; every module defaults to enabled.
 
 | Module | Draft behavior |
 | --- | --- |
 | MapColors | Recolors map room icons and the six legend icons. Keeps existing shapes, dark artwork, hover/selection outlines, animations, paths, and votes. |
 | MapControls | Primary (one-finger) click-drag draws on the map background; secondary (two-finger) click-drag scrolls. Room clicks remain native. |
-| BattleStats | During combat, shows local damage taken, historical mean/median, and sample count for the exact encounter. |
+| BattleStats | During combat, shows local damage taken, historical mean/median/count per encounter and game mode, plus total enemy attack intent. |
 | Autoplay | Enabled but inert. No timers, input, map navigation, card play, or gameplay hooks. Waiting for your explicit rules. |
 
 ## Try the installed draft
@@ -61,6 +61,8 @@ This first draft uses the game's existing shader mask: normal-room colors are ac
 
 ## Build, check, install
 
+**Codex agents own installation for Daniel.** Future agents: start with [AGENTS.md](AGENTS.md) and the [operational handoff](docs/agent-handoff.md), then build, verify and install authorized changes yourself. The source checkout on this Mac is `/Users/danielcepeda/repos/dcep93.github.io/games/slay-the-spire-2`; if reading this README in the installed package, open that checkout’s `AGENTS.md` and `docs/agent-handoff.md` (those documents are not copied into the package). The commands below are agent/developer reference, not a task to hand back to Daniel.
+
 Prerequisites: Python 3.9+, .NET 9 SDK, and a local macOS game installation. No Godot editor, BaseLib, or ModConfig installation is required. The project references the game's own managed assemblies and does not redistribute them.
 
 The SDK prepared on this Mac is at `~/.local/share/sts2-dev/dotnet/dotnet`. The helper finds it automatically, or uses `dotnet` on PATH. Elsewhere, install the SDK from [Microsoft](https://dotnet.microsoft.com/download/dotnet/9.0) and pass `--dotnet` if needed.
@@ -73,7 +75,7 @@ python3 scripts/mod.py check
 python3 scripts/mod.py install
 ```
 
-`check` builds Release, verifies six scene/shader contracts directly from the local PCK, runs managed configuration/module/API, map-input IL, BattleStats data/lifecycle, and isolated Harmony patch tests, and tests the installer with temporary directories. It does not start Godot or contact the game process. Loading the managed game assembly for reflection may print a Sentry message saying its native extension is not loaded; this is expected outside the game.
+`check` builds Release, verifies seven scene/shader contracts directly from the local PCK, runs managed configuration/module/API, map-input IL, BattleStats data/lifecycle, and isolated Harmony patch tests, and tests the installer with temporary directories. It does not start Godot or contact the game process. Loading the managed game assembly for reflection may print a Sentry message saying its native extension is not loaded; this is expected outside the game.
 
 `install` runs the checks before deploying. An existing copy of this mod is backed up under `Contents/MacOS/mod-backups/spire420/<timestamp>/`, outside the loader's recursive `mods/` scan. A failed directory swap restores the previous copy. The installed DLL's SHA-256 is verified against the build.
 
@@ -119,21 +121,26 @@ Future autoplay work must encode only user-supplied conditions and reassess `aff
 
 See [the inspected API contract](docs/api-contract.md) for references, verified methods, rendering choices, and limitations. Source and docs belong in Git; build outputs, local SDKs, decompiled game code, and extracted assets do not.
 
-## BattleStats (0.3.0)
+## BattleStats (0.4.0)
 
-The line under the combat top bar is `今7 σ12.4 中10 #23`: current battle damage taken, historical mean, historical median, and historical sample count. **σ means mean**, as requested, not standard deviation. Damage uses the game's local-player `DamageTaken` counter: block prevents damage, healing does not subtract it, and self-damage counts. Histories pool all characters and difficulty levels for the exact encounter ID. The current battle is excluded; completed zero-damage battles and deaths count. Without history the line reads `今0 σ— 中— #0`.
+The line immediately below the top-right build/version/modded information is `今7 σ12.4 中10 #23 力30`: current battle damage taken, historical mean, historical median, historical sample count, and total enemy attack intent. **σ means mean**, as requested, not standard deviation. Damage uses the game's local-player `DamageTaken` counter: block prevents damage, healing does not subtract it, and self-damage counts. Histories pool all characters and difficulty levels for the exact encounter ID **within the current game mode**. Standard, Daily, Dread and Blitz have separate buckets. The current battle is excluded; completed zero-damage battles and deaths count. Without history, the historical portion reads `今0 σ— 中— #0`; `力` still shows the current attack preview. The attack total sums living enemies’ native modified damage and hit counts (for example `6×3 + 12 = 力30`) before player block. Nonattack intents contribute zero; hidden/unknown intents or unavailable calculations show `力?`. This is the game’s current intent preview, not a simulation of the eventual enemy turn.
 
 The module reads the active modded profile's `.run` files once when its local player identity is available, imports earlier completed points in the current run, and merges newly saved histories. Single-player files use their sole player; multiplayer files require the exact local player ID. Incomplete abandoned final fights, ambiguous multi-room history points, missing counters and malformed records are skipped. Live nested combats use their captured starting counter to separate battle damage from earlier rooms. Re-imports and repeated completion callbacks do not duplicate battles. Imports report new/changed samples and skipped records in the log.
 
-The separate local database is stored at `user://spire420/battle-stats/` (on this Mac, `~/Library/Application Support/SlayTheSpire2/spire420/battle-stats/`). Its filename hashes the absolute native profile path and the profile's `Progress.UniqueId`; profiles never share samples. This folder is outside native account/profile/cloud trees and installed mod binaries. It is **not Steam-synced**; back it up separately if desired. Writes are atomic with a `.bak` backup. An unreadable or unsupported database is preserved without overwrite, while that session can still collect samples in memory. No native save files are written by BattleStats.
+The separate local database is stored at `user://spire420/battle-stats/` (on this Mac, `~/Library/Application Support/SlayTheSpire2/spire420/battle-stats/`). Its filename hashes the absolute native profile path and the profile's `Progress.UniqueId`; profiles never share samples. This folder is outside native account/profile/cloud trees and installed mod binaries. It is **not Steam-synced**; back it up separately if desired. Writes are atomic with a `.bak` backup. An unreadable or unsupported database is preserved without overwrite, while that session can still collect samples in memory. No native save files are written by BattleStats. On the first 0.4.0 combat after restart, the runtime upgrades its old samples to mode-aware storage and reimports history to recover their modes without duplicating battles. Unrecoverable legacy samples remain preserved but excluded from known-mode summaries. Do not run an external database import while the game is running; see the handoff for migration and rollback details.
 
 At your next restart, check:
 
-- The line sits below the top bar without clipping, uses readable 今/中 glyphs, and does not intercept clicks.
+- The line sits below the top-right build information without clipping (including after resizing), uses readable 今/中/力 glyphs, and does not intercept clicks.
 - Taking damage increases 今; healing leaves it unchanged; block and a zero-damage victory behave as expected.
 - Historical mean, median and count remain stable during a fight, including a previously recorded retry. After completion, a later battle against the same encounter includes that sample once.
 - Open the map, deck or another overlay: the line hides and returns on closing it. Check an event that transitions into combat and an ordinary resumed fight.
 - A death is included after the run history saves; abandoning or quitting an unfinished fight does not count it. Restart and revisit an encounter to confirm persistence.
+- Compare the same encounter in Standard and Dread: historical counts come from separate buckets. Check `力` against displayed enemy damage × hit count, including multiple enemies, changes in modifiers, dead enemies, and hidden intents.
 - Changing profiles uses separate history. `"BattleStats": false` disables the line and its hooks after restart. Autoplay remains inert.
 
 Offline checks validate contracts and lifecycle decisions, but native rendering, CJK fallback, placement, overlay transitions and gameplay acceptance remain pending your test. No game launch or restart is performed by the build or installer.
+
+## Open visual report
+
+Daniel reported an intermittent black rectangle, especially during Defect orb evocations. Its cause is **unconfirmed**; 0.4.0 does not claim to fix it. Local inspection found native glass-orb screen-copy/chromatic-aberration effects, but no causal link to the mod. No renderer settings or effects were changed. See [the investigation and next capture steps](docs/agent-handoff.md#black-rectangle-report-unresolved).

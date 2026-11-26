@@ -70,6 +70,12 @@ def read_pck_texts(path, wanted):
 
 def check_scenes(game):
     contracts = {
+        "scenes/run.tscn": [
+            '[node name="DebugInfo" type="VBoxContainer" parent="GlobalUi"]',
+            '[node name="ReleaseInfo" type="Label" parent="GlobalUi/DebugInfo"]',
+            '[node name="DebugSeed" type="Label" parent="GlobalUi/DebugInfo"]',
+            '[node name="ModdedWarning" type="Label" parent="GlobalUi/DebugInfo"]',
+        ],
         "scenes/ui/normal_map_point.tscn": [
             '[node name="Icon" type="TextureRect" parent="IconContainer"]',
             '[node name="Outline" type="TextureRect" parent="IconContainer/Icon"]',

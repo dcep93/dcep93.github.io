@@ -106,16 +106,12 @@ internal sealed class BattleStatsRuntime(Action<string> log) : IDisposable
         if (stats.DamageTaken < 0 || start <= 0 || string.IsNullOrWhiteSpace(seed)) return;
         // A mid-run upgrade may have earlier completed points that are not in any saved .run yet.
         // Project read-only history with an incomplete final point; this never calls native save APIs.
-        var prior = new RunHistory
-        {
-            StartTime = start, Seed = seed, WasAbandoned = true,
-            Players = state.RunState.Players.Select(p => new RunHistoryPlayer { Id = p.NetId }).ToList(),
-            MapPointHistory = state.RunState.MapPointHistory.Select(a => a.ToList()).ToList()
-        };
+        var prior = BattleStatsApi.ProjectHistory(start, seed, state.RunState.GameMode,
+            state.RunState.Players.Select(p => p.NetId), state.RunState.MapPointHistory);
         BattleHistoryImporter.ImportJson(JsonSerializationUtility.ToJson(prior), player.NetId, _store!);
         _store!.Flush();
         var key = BattleStatsIdentity.BattleKey(start, seed, player.NetId, act, point, room, encounter);
-        _current = new(state, entry, stats, _profile!, key, encounter, start, seed, player.NetId, act, point, room,
+        _current = new(state, entry, stats, _profile!, key, encounter, BattleStatsApi.Mode(state.RunState.GameMode), start, seed, player.NetId, act, point, room,
             new BattleStatsLifecycle(state, _profile!, BattleStatsLifecycle.Baseline(entry.Rooms.Count, stats.DamageTaken)));
     });
 
@@ -133,7 +129,7 @@ internal sealed class BattleStatsRuntime(Action<string> log) : IDisposable
     {
         if (RunManager.Instance.IsCleaningUp) return;
         if (!sample.Lifecycle.TryComplete(state, _profile!, RunManager.Instance.IsAbandoned, IsReplay, counter, out var damage)) return;
-        _store!.Upsert(new(sample.Key, sample.Encounter, damage));
+        _store!.Upsert(new(sample.Key, sample.Encounter, damage, sample.Mode));
         _store.Flush();
     }
 
@@ -164,11 +160,11 @@ internal sealed class BattleStatsRuntime(Action<string> log) : IDisposable
         if (_views.TryGetValue(room, out _)) return;
         var label = new Label
         {
-            Name = "Spire420BattleStats", Position = new Vector2(16, 108), Size = new Vector2(700, 30),
+            Name = "Spire420BattleStats", HorizontalAlignment = HorizontalAlignment.Right,
             MouseFilter = Control.MouseFilterEnum.Ignore, Visible = false
         };
         label.AddThemeFontOverride("font", new SystemFont { FontNames = ["Hiragino Sans", "Noto Sans CJK JP", "Microsoft YaHei", "sans-serif"] });
-        label.AddThemeFontSizeOverride("font_size", 22);
+        label.AddThemeFontSizeOverride("font_size", BattleStatsLayout.FontSize);
         label.AddThemeColorOverride("font_color", Colors.White);
         label.AddThemeColorOverride("font_outline_color", Colors.Black);
         label.AddThemeConstantOverride("outline_size", 4);
@@ -202,20 +198,24 @@ internal sealed class BattleStatsRuntime(Action<string> log) : IDisposable
                 ActiveScreenContext.Instance.IsCurrent(room), sameState, IsReplay)) return;
         var damage = sample.Lifecycle.Damage(sample.Stats.DamageTaken);
         if (damage < 0) return;
-        if (view.Version != _store!.Version || view.Key != sample.Key || view.Encounter != sample.Encounter || view.Profile != _profile)
+        if (view.Version != _store!.Version || view.Key != sample.Key || view.Encounter != sample.Encounter || view.Mode != sample.Mode || view.Profile != _profile)
         {
-            view.Summary = _store.Summary(sample.Encounter, sample.Key);
+            view.Summary = _store.Summary(sample.Encounter, sample.Mode, sample.Key);
             view.Version = _store.Version;
             view.Key = sample.Key;
             view.Encounter = sample.Encounter;
+            view.Mode = sample.Mode;
             view.Profile = _profile;
         }
-        view.Label.Text = BattleStatsFormatter.Format(damage, view.Summary);
+        var attack = BattleStatsIntents.Current(sample.State, c => BattleStatsApi.IntentsVisible(room, c));
+        view.Label.Text = BattleStatsFormatter.Format(damage, view.Summary, attack);
+        if (!BattleStatsLayout.Place(room, view.Label) && _reported.Add("build label unavailable"))
+            log("BattleStats: native build label unavailable; using top-right fallback.");
         view.Label.Visible = true;
     }
 
     private sealed record Snapshot(CombatState State, MapPointHistoryEntry Entry, PlayerMapPointHistoryEntry Stats,
-        string Profile, string Key, string Encounter, long Start, string Seed, ulong Player, int Act, int Point, int Room,
+        string Profile, string Key, string Encounter, BattleMode Mode, long Start, string Seed, ulong Player, int Act, int Point, int Room,
         BattleStatsLifecycle Lifecycle);
     private sealed class View(Label label, Godot.Timer timer)
     {
@@ -224,6 +224,7 @@ internal sealed class BattleStatsRuntime(Action<string> log) : IDisposable
         public long Version { get; set; } = -1;
         public string? Key { get; set; }
         public string? Encounter { get; set; }
+        public BattleMode Mode { get; set; }
         public string? Profile { get; set; }
         public BattleSummary Summary { get; set; } = new(0, null, null);
     }
